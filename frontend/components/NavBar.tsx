@@ -1,13 +1,20 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BarChart2, Camera, TrendingUp, LayoutDashboard, Search } from 'lucide-react'
+import {
+  BarChart2, Camera, TrendingUp, LayoutDashboard,
+  Search, Bookmark, FileText, AreaChart, History,
+} from 'lucide-react'
 
 const links = [
-  { href: '/',         label: 'Dashboard',  icon: LayoutDashboard },
-  { href: '/gainers',  label: 'Gainers',    icon: TrendingUp },
-  { href: '/charts',   label: 'Charts',     icon: Camera },
-  { href: '/research', label: 'Research',   icon: Search },
+  { href: '/',             label: 'Dashboard',    icon: LayoutDashboard },
+  { href: '/gainers',      label: 'Gainers',      icon: TrendingUp },
+  { href: '/history',      label: 'History',      icon: History },
+  { href: '/daily-charts', label: 'Daily Charts', icon: AreaChart },
+  { href: '/charts',       label: 'Charts',       icon: Camera },
+  { href: '/research',     label: 'Research',     icon: Search },
+  { href: '/watchlist',    label: 'Watchlist',    icon: Bookmark },
+  { href: '/observations', label: 'Observations', icon: FileText },
 ]
 
 export default function NavBar() {

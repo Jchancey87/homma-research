@@ -68,8 +68,67 @@ export const getGainers = (params?: {
   sector?: string
 }) => api.get<Gainer[]>('/api/gainers', { params }).then(r => r.data)
 
-export const getHeatmap = () =>
-  api.get('/api/gainers/heatmap').then(r => r.data)
+export interface GainerSummary {
+  date: string | null
+  total: number
+  gainers: Array<{
+    ticker: string
+    gap_pct: number | null
+    float_shares: number | null
+    rvol_15m: number | null
+    sector: string | null
+    news_headline: string | null
+    news_fresh: boolean | null
+    close_price: number | null
+    open_price: number | null
+  }>
+}
+
+export const getGainersSummary = () =>
+  api.get<GainerSummary>('/api/gainers/summary').then(r => r.data)
+
+export interface TickerHistoryItem {
+  ticker:       string
+  sector:       string | null
+  appearances:  number
+  last_seen:    string
+  first_seen:   string
+  avg_gap_pct:  number | null
+  avg_rvol:     number | null
+  avg_float_m:  number | null
+  max_gap_pct:  number | null
+}
+
+export interface TickerAppearance {
+  id:            number
+  date:          string
+  ticker:        string
+  gap_pct:       number | null
+  float_shares:  number | null
+  rvol_15m:      number | null
+  sector:        string | null
+  news_headline: string | null
+  news_fresh:    boolean | null
+  close_price:   number | null
+  open_price:    number | null
+}
+
+export const getTickerHistory = (params?: {
+  period?:  'week' | 'month' | 'year' | 'all'
+  search?:  string
+  sort?:    'appearances' | 'last_seen' | 'avg_gap' | 'first_seen'
+  limit?:   number
+}) => api.get<TickerHistoryItem[]>('/api/gainers/ticker-history', { params }).then(r => r.data)
+
+export const getTickerAppearances = (ticker: string, period?: string) =>
+  api.get<TickerAppearance[]>(`/api/gainers/ticker/${ticker}`, {
+    params: period ? { period } : undefined
+  }).then(r => r.data)
+
+export const getHeatmap = (period?: string, view?: string) =>
+  api.get('/api/gainers/heatmap', {
+    params: { ...(period ? { period } : {}), ...(view ? { view } : {}) }
+  }).then(r => r.data)
 
 export const getGainersExportUrl = (params?: Record<string, string | number>) => {
   const q = new URLSearchParams(
@@ -156,6 +215,9 @@ export const listJobs = (type?: string, limit = 50) =>
 export const getArchetypes = () =>
   api.get<ArchetypeStat[]>('/api/archetypes').then(r => r.data)
 
+export const retryJob = (jobId: string) =>
+  api.post<{ job_id: string; status: string }>(`/api/jobs/${jobId}/retry`).then(r => r.data)
+
 // ── Health ────────────────────────────────────────────────────────────────
 
 export const getHealth = () => api.get('/api/health').then(r => r.data)
@@ -164,3 +226,88 @@ export const getHealth = () => api.get('/api/health').then(r => r.data)
 
 export const chartImageUrl = (imagePath: string) =>
   `${BASE}/storage/charts/${imagePath.split('/charts/').pop()}`
+
+// ── Watchlist ─────────────────────────────────────────────────────────────
+
+export interface WatchlistItem {
+  id: number
+  ticker: string
+  sector: string | null
+  notes: string | null
+  tags: string          // JSON array string
+  added_at: string
+  last_viewed_at: string | null
+}
+
+export const getWatchlist = () =>
+  api.get<WatchlistItem[]>('/api/watchlist').then(r => r.data)
+
+export const addToWatchlist = (data: {
+  ticker: string
+  sector?: string
+  notes?: string
+  tags?: string[]
+}) => api.post<{ ticker: string }>('/api/watchlist', data).then(r => r.data)
+
+export const updateWatchlistItem = (
+  ticker: string,
+  data: { notes?: string; tags?: string[]; sector?: string }
+) => api.put(`/api/watchlist/${ticker}`, data).then(r => r.data)
+
+export const removeFromWatchlist = (ticker: string) =>
+  api.delete(`/api/watchlist/${ticker}`).then(r => r.data)
+
+export const markWatchlistViewed = (ticker: string) =>
+  api.post(`/api/watchlist/${ticker}/viewed`).then(r => r.data)
+
+// ── Observations ──────────────────────────────────────────────────────────
+
+export interface Observation {
+  id: number
+  ticker: string
+  date: string
+  title: string | null
+  body: string
+  sentiment: 'bullish' | 'bearish' | 'neutral'
+  tags: string          // JSON array string
+  linked_chart_id: number | null
+  created_at: string
+  updated_at: string
+}
+
+export const getObservations = (params?: {
+  ticker?: string
+  sentiment?: string
+  tag?: string
+  date_from?: string
+  date_to?: string
+  limit?: number
+}) => api.get<Observation[]>('/api/observations', { params }).then(r => r.data)
+
+export const getObservationsForTicker = (ticker: string) =>
+  api.get<Observation[]>(`/api/observations/${ticker}`).then(r => r.data)
+
+export const createObservation = (data: {
+  ticker: string
+  date: string
+  body: string
+  title?: string
+  sentiment?: 'bullish' | 'bearish' | 'neutral'
+  tags?: string[]
+  linked_chart_id?: number
+}) => api.post<{ id: number }>('/api/observations', data).then(r => r.data)
+
+export const updateObservation = (
+  id: number,
+  data: Partial<{
+    title: string
+    body: string
+    sentiment: 'bullish' | 'bearish' | 'neutral'
+    tags: string[]
+    date: string
+    linked_chart_id: number
+  }>
+) => api.put(`/api/observations/${id}`, data).then(r => r.data)
+
+export const deleteObservation = (id: number) =>
+  api.delete(`/api/observations/${id}`).then(r => r.data)

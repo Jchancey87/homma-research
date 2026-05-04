@@ -15,13 +15,21 @@ def create_app() -> Flask:
     init_db()
 
     # Register route blueprints
-    from routes.gainers  import gainers_bp
-    from routes.charts   import charts_bp
-    from routes.analysis import analysis_bp
+    from routes.gainers       import gainers_bp
+    from routes.charts        import charts_bp
+    from routes.analysis      import analysis_bp
+    from routes.watchlist     import watchlist_bp
+    from routes.observations  import observations_bp
 
-    app.register_blueprint(gainers_bp,  url_prefix='/api')
-    app.register_blueprint(charts_bp,   url_prefix='/api')
-    app.register_blueprint(analysis_bp, url_prefix='/api')
+    app.register_blueprint(gainers_bp,      url_prefix='/api')
+    app.register_blueprint(charts_bp,       url_prefix='/api')
+    app.register_blueprint(analysis_bp,     url_prefix='/api')
+    app.register_blueprint(watchlist_bp,    url_prefix='/api')
+    app.register_blueprint(observations_bp, url_prefix='/api')
+
+    # Start background job watchdog (resets stale 'running' jobs)
+    from jobs.job_watchdog import start_watchdog
+    start_watchdog()
 
     @app.route('/api/health')
     def health():

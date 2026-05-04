@@ -8,7 +8,7 @@ This platform automates the process of identifying, analyzing, and journaling ma
 
 ## 🛠️ Technology Stack
 
-- **Backend**: Python 3.11, Flask (Modular Blueprints), SQLite
+- **Backend**: Python 3.11, Flask (Modular Blueprints), SQLite (local, zero-config)
 - **Frontend**: Next.js 14 (App Router), Tailwind CSS, [Lightweight Charts](https://tradingview.github.io/lightweight-charts/)
 - **AI/LLM**:
   - **Text**: Groq (Llama 3) for rapid structured analysis reports.
@@ -20,18 +20,23 @@ This platform automates the process of identifying, analyzing, and journaling ma
 
 - **Daily Market Intelligence**:
   - Automated ingestion of top 100+ gainers at market close.
-  - Automated "End of Day" email reports with top 10 gainers and deep-dive AI analysis of the top 3 runners.
+  - **Today's Overview**: A "morning briefing" dashboard showing top movers, active watchlists, and recent observations.
+  - **Daily Chart Grid**: A high-performance, lazy-loaded responsive grid of the top 10 gainers for any date, featuring interactive candles + EMA 21.
+- **Ticker History & Tracking**:
+  - **Historical Lookup**: Searchable archive of every ticker that has ever appeared as a gainer.
+  - **Repeat Appearance Tracking**: Automatically flags "repeat runners" with multi-period filtering (Week/Month/Year).
+  - **Expanded Context**: Deep dive into every historical date a ticker ran — see its old news headlines, float, and catalyst freshness.
 - **Interactive Deep Research** (4 parallel analysis modules):
   - **Full Report**: AI-generated analyst report with fundamental health, ownership, catalysts, and technical context.
-  - **🚨 Risk Detection**: Scans SEC EDGAR for reverse splits, S-3 shelf registrations, 424B ATM offerings, toxic financing language (convertible notes, variable-rate conversion), and short interest traps.
-  - **⚡ Catalyst Analysis**: Rates the quality of the move's narrative — Tier 1 (binary event), Tier 2 (soft catalyst), or Tier 3 (no real catalyst) — using Polygon news, SEC 8-K items, earnings calendar, and per-headline freshness scoring.
-  - **📊 Deep Context**: Produces a Setup Score (1–10) by combining SMA levels, Relative Strength vs SPY, options put/call sentiment, float rotation, and the ticker's own historical gainer appearances from your journal.
-  - All four modules fire in parallel when you click **ANALYZE**.
-- **Visual Analytics Dashboard**:
-  - **Dynamic Heatmaps**: Cross-referencing Float vs. RVOL to identify high-conviction setups.
-  - **Archetype Tracking**: Categorize trades by pattern (e.g., "Parabolic Gapper", "Low Float Runner").
+  - **🚨 Risk Detection**: Scans SEC EDGAR for reverse splits, S-3 shelf registrations, 424B ATM offerings, toxic financing language, and short interest traps.
+  - **⚡ Catalyst Analysis**: Event-date-aware rating — Tier 1 (binary), Tier 2 (soft), or Tier 3 (none) — with SEC 8-K item code parsing and full-text keyword search.
+  - **📊 Deep Context**: Produces a Setup Score (1–10) by combining SMA levels, RS vs SPY, float rotation, and historical appearance density.
+- **Visual Analytics & Heatmaps**:
+  - **Multi-View Heatmap**: Interactive "Float vs. RVOL" and "Avg Gap by Sector" visualizations to identify high-conviction momentum pockets.
+  - **Period Filtering**: Heatmaps automatically update based on the selected historical period (Week/Month/Year/All Time).
 - **Asset Management**:
-  - Local storage for trade screenshots with AI-assisted annotation.
+  - Local storage for trade screenshots with AI-assisted annotation and pattern tagging.
+- **📋 Watchlist & Notes**: Quick-access tracking with bullish/bearish sentiment tagging and historical observation feeds.
 
 ## ⚙️ Setup & Installation
 

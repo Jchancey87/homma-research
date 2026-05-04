@@ -146,6 +146,51 @@ def start_deep_context():
     return jsonify({'job_id': job_id, 'status': 'pending'})
 
 
+@analysis_bp.route('/jobs/<job_id>/retry', methods=['POST'])
+def retry_job(job_id):
+    """Re-fire a job that is in 'error' status or stale 'running' status."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM llm_jobs WHERE id = ?", (job_id,)
+        ).fetchone()
+    if not row:
+        return jsonify({'error': 'Job not found'}), 404
+
+    job = dict(row)
+    if job['status'] not in ('error', 'running'):
+        return jsonify({'error': f"Cannot retry a job with status '{job['status']}'"}), 400
+
+    jtype     = job['type']
+    input_ref = job.get('input_ref', '')
+
+    # Reset the existing job to pending so the frontend can poll it
+    now = datetime.now(timezone.utc).isoformat()
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE llm_jobs SET status='pending', output=NULL, updated_at=? WHERE id=?",
+            (now, job_id),
+        )
+
+    base_url = request.host_url.rstrip('/')
+
+    if jtype == 'continuation':
+        threading.Thread(target=_run_continuation, args=(job_id, input_ref), daemon=True).start()
+    elif jtype == 'sentiment':
+        threading.Thread(target=_run_sentiment, args=(job_id, input_ref), daemon=True).start()
+    elif jtype == 'research':
+        threading.Thread(target=_run_deep_research, args=(job_id, input_ref, '', base_url), daemon=True).start()
+    elif jtype == 'risk_detection':
+        threading.Thread(target=_run_risk_detection, args=(job_id, input_ref), daemon=True).start()
+    elif jtype == 'catalyst_analysis':
+        threading.Thread(target=_run_catalyst_analysis, args=(job_id, input_ref, ''), daemon=True).start()
+    elif jtype == 'deep_context':
+        threading.Thread(target=_run_deep_context, args=(job_id, input_ref), daemon=True).start()
+    else:
+        return jsonify({'error': f"Unknown job type '{jtype}' — cannot retry"}), 400
+
+    return jsonify({'job_id': job_id, 'status': 'pending'})
+
+
 
 @analysis_bp.route('/research/chart-data', methods=['GET'])
 def get_chart_data():
@@ -188,10 +233,15 @@ def get_chart_data():
 
     df = bars_df[['open', 'high', 'low', 'close', 'volume']].copy()
 
-    # 2. Convert index to Unix seconds (lightweight-charts requires seconds)
+    # 2. Convert index to Unix seconds (lightweight-charts requires integer seconds).
+    # Use pd.Timestamp epoch subtraction which is resolution-safe: works whether the
+    # DatetimeIndex has dtype datetime64[s], datetime64[ms], or datetime64[ns, UTC].
     if hasattr(df.index, 'tz') and df.index.tz is not None:
         df.index = df.index.tz_convert('UTC')
-    df['time'] = (df.index.astype('int64') // 1000).astype(int)
+    else:
+        df.index = df.index.tz_localize('UTC', ambiguous='infer', nonexistent='shift_forward')
+    epoch = pd.Timestamp('1970-01-01', tz='UTC')
+    df['time'] = ((df.index - epoch).total_seconds()).astype(int)
 
     # 3. Calculate EMA Ribbon
     for span in [8, 13, 21, 34, 55]:

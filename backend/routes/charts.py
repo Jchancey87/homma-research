@@ -8,6 +8,18 @@ from config import Config
 charts_bp = Blueprint('charts', __name__)
 
 
+def _sync_chart_tags(conn, chart_id: int, tags: list):
+    """Replace all chart_tags rows for chart_id with the new tag list."""
+    conn.execute("DELETE FROM chart_tags WHERE chart_id = ?", (chart_id,))
+    for tag in tags:
+        tag = str(tag).strip()
+        if tag:
+            conn.execute(
+                "INSERT OR IGNORE INTO chart_tags (chart_id, tag) VALUES (?, ?)",
+                (chart_id, tag),
+            )
+
+
 @charts_bp.route('/charts', methods=['POST'])
 def upload_chart():
     if 'image' not in request.files:
@@ -51,6 +63,7 @@ def upload_chart():
              setup_type, score, json.dumps(tags), notes),
         )
         chart_id = cur.lastrowid
+        _sync_chart_tags(conn, chart_id, tags)
 
     return jsonify({'id': chart_id, 'image_path': image_path}), 201
 
@@ -64,23 +77,27 @@ def list_charts():
     date_to    = request.args.get('date_to')
     min_clean  = request.args.get('min_cleanliness', type=int)
 
-    query  = "SELECT * FROM chart_captures WHERE 1=1"
+    query  = "SELECT DISTINCT cc.* FROM chart_captures cc"
     params = []
 
-    if ticker:
-        query += " AND ticker = ?";     params.append(ticker)
-    if setup_type:
-        query += " AND setup_type = ?"; params.append(setup_type)
     if tag:
-        query += " AND tags LIKE ?";    params.append(f'%{tag}%')
-    if date_from:
-        query += " AND capture_date >= ?"; params.append(date_from)
-    if date_to:
-        query += " AND capture_date <= ?"; params.append(date_to)
-    if min_clean is not None:
-        query += " AND cleanliness_score >= ?"; params.append(min_clean)
+        query += " JOIN chart_tags ct ON ct.chart_id = cc.id AND ct.tag = ?"
+        params.append(tag)
 
-    query += " ORDER BY capture_date DESC, created_at DESC"
+    query += " WHERE 1=1"
+
+    if ticker:
+        query += " AND cc.ticker = ?";     params.append(ticker)
+    if setup_type:
+        query += " AND cc.setup_type = ?"; params.append(setup_type)
+    if date_from:
+        query += " AND cc.capture_date >= ?"; params.append(date_from)
+    if date_to:
+        query += " AND cc.capture_date <= ?"; params.append(date_to)
+    if min_clean is not None:
+        query += " AND cc.cleanliness_score >= ?"; params.append(min_clean)
+
+    query += " ORDER BY cc.capture_date DESC, cc.created_at DESC"
 
     with get_connection() as conn:
         rows = conn.execute(query, params).fetchall()
@@ -117,11 +134,18 @@ def update_chart(chart_id):
     if not updates:
         return jsonify({'error': 'No valid fields to update'}), 400
 
+    tag_list = None
+    if 'tags' in updates:
+        # Already validated above; decode for junction table sync
+        tag_list = json.loads(updates['tags'])
+
     set_clause = ', '.join(f'{k} = ?' for k in updates)
     values     = list(updates.values()) + [chart_id]
 
     with get_connection() as conn:
         conn.execute(f"UPDATE chart_captures SET {set_clause} WHERE id = ?", values)
+        if tag_list is not None:
+            _sync_chart_tags(conn, chart_id, tag_list)
 
     return jsonify({'success': True})
 
@@ -144,6 +168,7 @@ def delete_chart(chart_id):
                 except OSError:
                     pass
 
+        # chart_tags rows deleted by CASCADE
         conn.execute("DELETE FROM chart_captures WHERE id = ?", (chart_id,))
 
     return jsonify({'success': True})

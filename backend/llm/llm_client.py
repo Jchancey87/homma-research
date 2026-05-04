@@ -312,13 +312,22 @@ CATALYST_ANALYSIS_SYSTEM = """\
 You are a catalyst quality analyst for a momentum day trader focused on small-cap gap stocks.
 Your job: determine whether this ticker's recent price move has a real, durable catalyst or is likely to fade.
 
-You are given: recent news, SEC 8-K filings, earnings calendar, and analyst activity.
-Analyze the freshness, specificity, and durability of the catalyst narrative.
+You are given:
+  - news_articles: headlines with 'days_from_event' (negative = before event, 0 = event day, positive = after)
+  - news_freshness: per-headline classification (FRESH = within 2 days of event, RECENT = within 7 days, STALE = older)
+  - sec_8k_filings: 8-K filings with parsed 'catalyst_items' (item codes like 1.01, 8.01) and 'keyword_hits'
+  - sec_fulltext_hits: EDGAR full-text search results for catalyst keywords
+  - earnings_calendar: next earnings date and EPS estimates
+  - analyst_activity: recent upgrades/downgrades
+
+IMPORTANT: freshness is evaluated relative to event_date, NOT today.
+A headline published on or up to 2 days before the event date is FRESH regardless of how long ago that was.
+An 8-K filed on or near the event date with item 8.01 (FDA/other) or 2.02 (earnings) is a strong primary catalyst signal.
 
 Classify the catalyst as:
 🟢 TIER 1 — Binary event with clear resolution (FDA approval/rejection, earnings surprise, acquisition, clinical trial result)
-🟡 TIER 2 — Soft catalyst (contract win, partnership, MOU, analyst upgrade with new data)
-🔴 TIER 3 — No real catalyst (vague press release, general sector hype, price target update, unknown)
+🟡 TIER 2 — Soft catalyst (contract win, partnership, MOU, analyst upgrade with new data, guidance raise)
+🔴 TIER 3 — No real catalyst (vague press release, general sector hype, price target update, no filing, unknown)
 
 Output EXACTLY this format:
 
@@ -327,18 +336,19 @@ Output EXACTLY this format:
 
 | Field | Value |
 |---|---|
-| Primary Catalyst | [headline or "None identified"] |
+| Primary Catalyst | [headline or SEC filing description, or "None identified"] |
 | Catalyst Date | [YYYY-MM-DD or "Unknown"] |
-| Catalyst Freshness | [FRESH / STALE / UNKNOWN] |
-| Catalyst Type | [FDA / Earnings / Contract / Partnership / Other / None] |
+| Catalyst Freshness | [FRESH / RECENT / STALE / UNKNOWN — relative to event_date] |
+| Catalyst Type | [FDA / Earnings / Contract / Partnership / Clinical Trial / Other / None] |
+| SEC Filing Signal | [8-K item code + description if present, else "None"] |
 | Expected Duration | [Intraday / 1–3 days / Multi-week / Binary] |
 | Next Earnings Date | [date or "Unknown"] |
 
 ### 📰 News & Filing Summary
-[Bullet points: 3–5 most relevant news items or SEC items, each 1 line]
+[Bullet points: 3–5 most relevant items. For each, include the source (Polygon/yfinance/SEC), published date, and days_from_event if available.]
 
 ### 🔬 Catalyst Quality Assessment
-[2–3 sentences: Why this tier? Is the narrative specific and verifiable? What's the resolution event?]
+[2–3 sentences: Why this tier? Is there an SEC filing that confirms the narrative? Is the catalyst specific and verifiable?]
 
 ### ⚠️ Risk to Catalyst Thesis
 [1–2 sentences: What could invalidate or reverse the narrative?]
@@ -348,12 +358,37 @@ Output EXACTLY this format:
 def get_catalyst_analysis(ticker: str, data: dict) -> tuple[str, str]:
     """Produce a structured Catalyst Analysis report from gathered news and filing data."""
     import json
+
+    # Build a concise summary section the LLM can reason about
+    event_date   = data.get('event_date', 'unknown')
+    fresh_counts = {}
+    for label in data.get('news_freshness', {}).values():
+        fresh_counts[label] = fresh_counts.get(label, 0) + 1
+
+    freshness_summary = ', '.join(f'{v}× {k}' for k, v in sorted(fresh_counts.items()))
+
+    # Surface 8-K catalyst signals prominently
+    catalyst_8k_signals = []
+    for f in data.get('sec_8k_filings', []):
+        if f.get('catalyst_items') or f.get('keyword_hits'):
+            catalyst_8k_signals.append({
+                'filed':           f['filed'],
+                'days_from_event': f.get('days_from_event'),
+                'catalyst_items':  f.get('catalyst_items', []),
+                'keyword_hits':    f.get('keyword_hits', []),
+            })
+
     user_msg = (
-        f"Ticker: {ticker}\n\n"
-        f"Catalyst Signal Data:\n{json.dumps(data, indent=2, default=str)}"
+        f"Ticker: {ticker}\n"
+        f"Event Date: {event_date}\n"
+        f"News freshness summary (relative to event date): {freshness_summary or 'no articles found'}\n"
+        f"8-K filings with catalyst signals: {len(catalyst_8k_signals)} found\n\n"
+        f"Full Catalyst Signal Data:\n{json.dumps(data, indent=2, default=str)}"
     )
+
     result = _chat(CATALYST_ANALYSIS_SYSTEM, user_msg, max_tokens=2000)
     return result, Config.LLM_MODEL
+
 
 
 # ---------------------------------------------------------------------------

@@ -8,16 +8,24 @@ RVOL_BINS    = [0, 3, 5, 10, float('inf')]
 RVOL_LABELS  = ['<3x', '3–5x', '5–10x', '10x+']
 
 
-def build_heatmap_spec() -> dict:
+def build_heatmap_spec(cutoff_date: str | None = None) -> dict:
     """
     Query daily_gainers, bucket float and RVOL, compute average gap_pct per cell.
     Returns a Plotly-compatible figure dict ready to JSON-serialize.
+
+    Args:
+        cutoff_date: Optional ISO date string (YYYY-MM-DD). If set, only rows
+                     with date >= cutoff_date are included.
     """
+    query  = ("SELECT float_shares, rvol_15m, gap_pct FROM daily_gainers "
+              "WHERE float_shares IS NOT NULL AND rvol_15m IS NOT NULL AND gap_pct IS NOT NULL")
+    params = []
+    if cutoff_date:
+        query += " AND date >= ?"
+        params.append(cutoff_date)
+
     with get_connection() as conn:
-        rows = conn.execute(
-            "SELECT float_shares, rvol_15m, gap_pct FROM daily_gainers "
-            "WHERE float_shares IS NOT NULL AND rvol_15m IS NOT NULL AND gap_pct IS NOT NULL"
-        ).fetchall()
+        rows = conn.execute(query, params).fetchall()
 
     if not rows:
         return _empty_heatmap()
@@ -28,43 +36,206 @@ def build_heatmap_spec() -> dict:
 
     pivot = (
         df.groupby(['rvol_bucket', 'float_bucket'], observed=True)['gap_pct']
-        .mean()
-        .unstack(fill_value=None)
-        .reindex(index=RVOL_LABELS[::-1], columns=FLOAT_LABELS)
+        .agg(['mean', 'count'])
+        .unstack()
     )
 
-    z      = pivot.values.tolist()
-    x      = FLOAT_LABELS
-    y      = RVOL_LABELS[::-1]
+    mean_pivot  = pivot['mean'].reindex(index=RVOL_LABELS[::-1], columns=FLOAT_LABELS)
+    count_pivot = pivot['count'].reindex(index=RVOL_LABELS[::-1], columns=FLOAT_LABELS)
+
+    z     = mean_pivot.values.tolist()
+    count = count_pivot.values.tolist()
+    x     = FLOAT_LABELS
+    y     = RVOL_LABELS[::-1]
+
+    # Build hover text with count + avg gap
+    hover_text = []
+    for ri, row_y in enumerate(y):
+        row_texts = []
+        for ci, col_x in enumerate(x):
+            val = z[ri][ci]
+            cnt = count[ri][ci]
+            if val is None or (isinstance(val, float) and val != val):
+                row_texts.append(f'Float: {col_x}<br>RVOL: {row_y}<br>No data')
+            else:
+                row_texts.append(
+                    f'<b>Float:</b> {col_x}<br>'
+                    f'<b>RVOL:</b> {row_y}<br>'
+                    f'<b>Avg Gap:</b> +{val:.1f}%<br>'
+                    f'<b>Samples:</b> {int(cnt) if cnt == cnt else 0}'
+                )
+        hover_text.append(row_texts)
 
     return {
         'data': [{
-            'type':        'heatmap',
-            'z':           z,
-            'x':           x,
-            'y':           y,
-            'colorscale':  [
-                [0.0,  '#c0392b'],
-                [0.4,  '#f39c12'],
-                [0.7,  '#27ae60'],
-                [1.0,  '#1a5e36'],
+            'type':         'heatmap',
+            'z':            z,
+            'x':            x,
+            'y':            y,
+            'text':         hover_text,
+            'hoverinfo':    'text',
+            'colorscale':   [
+                [0.00, '#0f2027'],   # very dark teal-black (low gap)
+                [0.20, '#1a3a4a'],   # dark slate
+                [0.40, '#1a5c4e'],   # dark emerald
+                [0.60, '#16a085'],   # medium teal
+                [0.80, '#22d3a7'],   # bright emerald
+                [1.00, '#86efcf'],   # pale mint (highest gap)
             ],
-            'colorbar': {'title': 'Avg Gap %'},
-            'hovertemplate': 'Float: %{x}<br>RVOL: %{y}<br>Avg Gap: %{z:.1f}%<extra></extra>',
+            'colorbar': {
+                'title':       {'text': 'Avg Gap %', 'font': {'color': '#94a3b8', 'size': 11}},
+                'tickfont':    {'color': '#94a3b8', 'size': 10},
+                'outlinecolor': 'rgba(0,0,0,0)',
+                'bgcolor':     'rgba(0,0,0,0)',
+                'thickness':   14,
+                'len':         0.85,
+            },
+            'xgap': 3,
+            'ygap': 3,
+            'zsmooth': False,
         }],
         'layout': {
-            'title': 'Float × RVOL Avg Gap % Heatmap',
-            'xaxis': {'title': 'Float Size'},
-            'yaxis': {'title': 'RVOL at 15-min'},
+            'title': None,
+            'xaxis': {
+                'title':     {'text': 'Float Size', 'font': {'color': '#64748b', 'size': 11}},
+                'tickfont':  {'color': '#94a3b8', 'size': 11},
+                'gridcolor': 'rgba(0,0,0,0)',
+                'linecolor': 'rgba(0,0,0,0)',
+                'showline':  False,
+            },
+            'yaxis': {
+                'title':     {'text': 'RVOL at 15-min', 'font': {'color': '#64748b', 'size': 11}},
+                'tickfont':  {'color': '#94a3b8', 'size': 11},
+                'gridcolor': 'rgba(0,0,0,0)',
+                'linecolor': 'rgba(0,0,0,0)',
+                'showline':  False,
+            },
             'paper_bgcolor': 'rgba(0,0,0,0)',
             'plot_bgcolor':  'rgba(0,0,0,0)',
-            'font': {'color': '#e2e8f0'},
+            'font':          {'color': '#94a3b8', 'family': 'Inter, system-ui, sans-serif', 'size': 11},
+            'margin':        {'t': 10, 'b': 50, 'l': 65, 'r': 10},
         },
     }
 
 
 def _empty_heatmap() -> dict:
     return {
-        'data': [{'type': 'heatmap', 'z': [], 'x': FLOAT_LABELS, 'y': RVOL_LABELS}],
-        'layout': {'title': 'No data yet — run the ingestion job first'},
+        'data':   [{'type': 'heatmap', 'z': [], 'x': FLOAT_LABELS, 'y': RVOL_LABELS}],
+        'layout': {'title': None, 'paper_bgcolor': 'rgba(0,0,0,0)', 'plot_bgcolor': 'rgba(0,0,0,0)'},
+    }
+
+
+def get_sector_spec(cutoff_date: str | None = None) -> dict:
+    """
+    Return a Plotly horizontal bar chart of average gap % per sector.
+    Bars are sorted descending, coloured on the same emerald scale.
+
+    Args:
+        cutoff_date: Optional ISO date string. If set, only rows >= this date.
+    """
+    query  = ("SELECT sector, gap_pct FROM daily_gainers "
+              "WHERE sector IS NOT NULL AND gap_pct IS NOT NULL AND sector != ''")
+    params = []
+    if cutoff_date:
+        query += " AND date >= ?"
+        params.append(cutoff_date)
+
+    with get_connection() as conn:
+        rows = conn.execute(query, params).fetchall()
+
+    if not rows:
+        return _empty_sector()
+
+    import pandas as pd
+    df = pd.DataFrame([dict(r) for r in rows])
+
+    agg = (
+        df.groupby('sector')['gap_pct']
+        .agg(avg_gap='mean', count='count')
+        .reset_index()
+        .sort_values('avg_gap', ascending=True)   # ascending → highest on top in horizontal bar
+    )
+
+    sectors  = agg['sector'].tolist()
+    avg_gaps = [round(v, 1) for v in agg['avg_gap'].tolist()]
+    counts   = agg['count'].tolist()
+
+    # Map avg_gap to a shade from the same emerald palette
+    max_gap = max(avg_gaps) if avg_gaps else 1.0
+    bar_colors = [
+        _gap_to_color(g / max_gap) for g in avg_gaps
+    ]
+
+    hover = [
+        f'<b>{s}</b><br>Avg Gap: +{g:.1f}%<br>Samples: {c}'
+        for s, g, c in zip(sectors, avg_gaps, counts)
+    ]
+
+    return {
+        'data': [{
+            'type':        'bar',
+            'orientation': 'h',
+            'x':           avg_gaps,
+            'y':           sectors,
+            'text':        [f'+{g:.1f}%' for g in avg_gaps],
+            'textposition': 'outside',
+            'textfont':    {'color': '#94a3b8', 'size': 10},
+            'hovertext':   hover,
+            'hoverinfo':   'text',
+            'marker': {
+                'color':     bar_colors,
+                'line':      {'color': 'rgba(0,0,0,0)', 'width': 0},
+            },
+        }],
+        'layout': {
+            'title': None,
+            'xaxis': {
+                'title':    {'text': 'Avg Gap %', 'font': {'color': '#64748b', 'size': 11}},
+                'tickfont': {'color': '#94a3b8', 'size': 10},
+                'gridcolor': 'rgba(255,255,255,0.05)',
+                'linecolor': 'rgba(0,0,0,0)',
+                'ticksuffix': '%',
+                'zeroline': False,
+            },
+            'yaxis': {
+                'tickfont':  {'color': '#94a3b8', 'size': 10},
+                'gridcolor': 'rgba(0,0,0,0)',
+                'linecolor': 'rgba(0,0,0,0)',
+                'automargin': True,
+            },
+            'paper_bgcolor': 'rgba(0,0,0,0)',
+            'plot_bgcolor':  'rgba(0,0,0,0)',
+            'font':          {'color': '#94a3b8', 'family': 'Inter, system-ui, sans-serif', 'size': 11},
+            'margin':        {'t': 8, 'b': 50, 'l': 10, 'r': 60},
+            'bargap':        0.28,
+        },
+    }
+
+
+def _gap_to_color(ratio: float) -> str:
+    """Map a 0–1 ratio to the emerald gradient used in the heatmap."""
+    stops = [
+        (0.00, (15,  32,  39)),
+        (0.25, (26,  58,  74)),
+        (0.50, (26,  92,  78)),
+        (0.75, (22, 163, 133)),
+        (1.00, (34, 211, 167)),
+    ]
+    ratio = max(0.0, min(1.0, ratio))
+    for i in range(len(stops) - 1):
+        lo_r, lo_c = stops[i]
+        hi_r, hi_c = stops[i + 1]
+        if ratio <= hi_r:
+            t = (ratio - lo_r) / (hi_r - lo_r)
+            r = int(lo_c[0] + t * (hi_c[0] - lo_c[0]))
+            g = int(lo_c[1] + t * (hi_c[1] - lo_c[1]))
+            b = int(lo_c[2] + t * (hi_c[2] - lo_c[2]))
+            return f'rgba({r},{g},{b},0.85)'
+    return 'rgba(34,211,167,0.85)'
+
+
+def _empty_sector() -> dict:
+    return {
+        'data':   [{'type': 'bar', 'x': [], 'y': [], 'orientation': 'h'}],
+        'layout': {'paper_bgcolor': 'rgba(0,0,0,0)', 'plot_bgcolor': 'rgba(0,0,0,0)'},
     }
