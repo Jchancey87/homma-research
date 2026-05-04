@@ -40,12 +40,25 @@ This platform automates the process of identifying, analyzing, and journaling ma
 
 ## ⚙️ Setup & Installation
 
-### 1. Prerequisites
+### Option 1: Docker (Recommended) 🐳
+The easiest way to get the journal running is using Docker Compose.
+
+1. **Configuration**: Fill in your API keys in `backend/.env`.
+2. **Start**:
+   ```bash
+   docker compose up -d --build
+   ```
+3. **Access**:
+   - Frontend: `http://localhost:3000`
+   - Backend API: `http://localhost:5000`
+
+### Option 2: Manual Setup
+#### 1. Prerequisites
 - Python 3.11+
 - Node.js 18+
 - API Keys: Polygon.io, Groq, and Gemini.
 
-### 2. Configuration
+#### 2. Configuration
 Copy the example environment file and fill in your credentials:
 ```bash
 cp .env.example backend/.env
@@ -92,25 +105,22 @@ python scripts/import_historical.py /path/to/your_data.csv
 ```
 trading-journal/
 ├── backend/
-│   ├── routes/         # Flask API blueprints (gainers, charts, analysis)
+│   ├── Dockerfile      # Backend container definition
+│   ├── routes/         # Flask API blueprints
 │   ├── services/       # Data gathering services
-│   │   ├── sec_service.py          # SEC EDGAR (filings, EFTS search, XBRL)
-│   │   ├── risk_service.py         # Risk Detection data pipeline
-│   │   ├── catalyst_service.py     # Catalyst Analysis data pipeline
-│   │   ├── context_service.py      # Deep Context data pipeline
-│   │   └── ...
-│   ├── llm/            # LLM clients (Groq text, Gemini vision)
-│   ├── jobs/           # Cron automation (ingestion, daily email)
+│   ├── llm/            # LLM clients
+│   ├── jobs/           # Cron automation
 │   └── models/         # SQLite schema
 ├── frontend/
+│   ├── Dockerfile      # Frontend container definition
 │   ├── app/            # Next.js pages
-│   │   └── research/   # Deep Research tabbed interface
-│   ├── components/
-│   │   └── research/   # FeaturePanel and research-specific components
-│   └── lib/            # API client (api.ts)
-├── scripts/            # Data import and enrichment utilities
-├── data/               # SQLite database
-└── storage/            # Generated charts and screenshots
+│   ├── components/     # UI components
+│   └── lib/            # API client
+├── scripts/            # Data import utilities
+├── data/               # SQLite database (mounted volume)
+├── storage/            # Screenshots (mounted volume)
+├── docker-compose.yml  # Multi-container orchestration
+└── ecosystem.config.js # PM2 config
 ```
 
 ## 📖 Documentation
