@@ -12,14 +12,22 @@ import {
   HistogramSeries,
   CrosshairMode,
   LineStyle,
+  Time,
 } from 'lightweight-charts'
 import { Loader2, TrendingUp, BarChart2, Activity, Zap, Eye, EyeOff, Settings2 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface OhlcBar  { time: number; open: number; high: number; low: number; close: number }
-interface LinePt   { time: number; value: number }
-interface HistoPt  { time: number; value: number; color?: string }
+interface OhlcBar  { time: Time; open: number; high: number; low: number; close: number }
+interface LinePt   { time: Time; value: number }
+interface HistoPt  { time: Time; value: number; color?: string }
+
+/** Sort ascending by time and remove duplicate timestamps (keep last occurrence). */
+function dedupSort<T extends { time: Time }>(data: T[]): T[] {
+  const map = new Map<any, T>()
+  for (const bar of data) map.set(bar.time, bar)
+  return Array.from(map.values()).sort((a, b) => (a.time as any) - (b.time as any))
+}
 
 export interface ChartData {
   ohlcv:   OhlcBar[]
@@ -134,7 +142,7 @@ export default function InteractiveSessionChart({ ticker, date }: Props) {
       wickUpColor:     UP_COLOR,
       wickDownColor:   DOWN_COLOR,
     })
-    candles.setData(data.ohlcv)
+    candles.setData(dedupSort(data.ohlcv))
 
     // EMA Ribbon
     emaSeriesRefs.current = []
@@ -151,7 +159,7 @@ export default function InteractiveSessionChart({ ticker, date }: Props) {
         crosshairMarkerVisible: false,
         visible: showEma,
       })
-      line.setData(pts)
+      line.setData(dedupSort(pts))
       emaSeriesRefs.current.push(line)
     })
 
@@ -165,7 +173,7 @@ export default function InteractiveSessionChart({ ticker, date }: Props) {
       visible:            showVol,
     })
     mc.priceScale('volume').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } })
-    volSeries.setData(data.volume)
+    volSeries.setData(dedupSort(data.volume))
     volSeriesRef.current = volSeries
 
     // RVOL line on volume scale
@@ -179,7 +187,7 @@ export default function InteractiveSessionChart({ ticker, date }: Props) {
       visible:          showVol,
     })
     mc.priceScale('rvol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 }, visible: false })
-    rvolSeries.setData(data.rvol)
+    rvolSeries.setData(dedupSort(data.rvol))
     rvolSeriesRef.current = rvolSeries
 
     // Crosshair data readout
@@ -205,26 +213,26 @@ export default function InteractiveSessionChart({ ticker, date }: Props) {
       color: '#a78bfa', lineWidth: 2, title: 'ADX',
       priceLineVisible: false, lastValueVisible: true,
     })
-    adxSeries.setData(data.adx)
+    adxSeries.setData(dedupSort(data.adx))
 
     const plusDiSeries = ac.addSeries(LineSeries, {
       color: UP_COLOR, lineWidth: 1, lineStyle: LineStyle.Dashed,
       title: '+DI', priceLineVisible: false, lastValueVisible: false,
     })
-    plusDiSeries.setData(data.plus_di)
+    plusDiSeries.setData(dedupSort(data.plus_di))
 
     const minusDiSeries = ac.addSeries(LineSeries, {
       color: DOWN_COLOR, lineWidth: 1, lineStyle: LineStyle.Dashed,
       title: '-DI', priceLineVisible: false, lastValueVisible: false,
     })
-    minusDiSeries.setData(data.minus_di)
+    minusDiSeries.setData(dedupSort(data.minus_di))
 
     // ADX 25 reference line
     const refLine = ac.addSeries(LineSeries, {
       color: 'rgba(255,255,255,0.15)', lineWidth: 1, lineStyle: LineStyle.Dotted,
       priceLineVisible: false, lastValueVisible: false,
     })
-    refLine.setData(data.adx.map(p => ({ time: p.time, value: 25 })))
+    refLine.setData(dedupSort(data.adx.map(p => ({ time: p.time, value: 25 }))))
 
     adxSeriesRefs.current = [adxSeries, plusDiSeries, minusDiSeries, refLine]
 
@@ -241,7 +249,7 @@ export default function InteractiveSessionChart({ ticker, date }: Props) {
       color: '#fb923c', lineWidth: 2, title: 'ATR',
       priceLineVisible: false, lastValueVisible: true,
     })
-    atrSeries.setData(data.atr)
+    atrSeries.setData(dedupSort(data.atr))
     atrSeriesRef.current = atrSeries
 
     // ── Sync timescale across all panes ────────────────────────────────────
