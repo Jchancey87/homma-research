@@ -168,10 +168,10 @@ def ticker_history():
                 COUNT(*)                            AS appearances,
                 MAX(date)                           AS last_seen,
                 MIN(date)                           AS first_seen,
-                ROUND(AVG(gap_pct),  2)             AS avg_gap_pct,
-                ROUND(AVG(rvol_15m), 2)             AS avg_rvol,
-                ROUND(AVG(float_shares) / 1e6, 2)  AS avg_float_m,
-                MAX(gap_pct)                        AS max_gap_pct
+                ROUND(AVG(gap_pct)::numeric,  2)             AS avg_gap_pct,
+                ROUND(AVG(rvol_15m)::numeric, 2)             AS avg_rvol,
+                ROUND((AVG(float_shares) / 1e6)::numeric, 2) AS avg_float_m,
+                MAX(gap_pct)                                  AS max_gap_pct
             FROM daily_gainers
             {where}
             GROUP BY ticker
