@@ -92,4 +92,29 @@ CREATE TABLE IF NOT EXISTS observations (
 );
 
 CREATE INDEX IF NOT EXISTS idx_observations_ticker ON observations(ticker);
-CREATE INDEX IF NOT EXISTS idx_observations_date   ON observations(date)
+CREATE INDEX IF NOT EXISTS idx_observations_date   ON observations(date);
+
+-- PIPE Filing Detection: caches 8-K private placement scan results per ticker/event date
+CREATE TABLE IF NOT EXISTS pipe_filings (
+    id                SERIAL PRIMARY KEY,
+    ticker            TEXT    NOT NULL,
+    anchor_date       TEXT    NOT NULL,          -- YYYY-MM-DD gainer event date
+    filing_date       TEXT,                      -- actual 8-K filing date
+    accession_number  TEXT,
+    is_pipe           BOOLEAN  DEFAULT FALSE,
+    security_type     TEXT,                      -- common_stock | preferred_stock | convertible_note | warrant
+    pricing_type      TEXT,                      -- fixed | variable | unknown
+    proceeds_amount   DOUBLE PRECISION,          -- gross proceeds in USD
+    use_of_proceeds   TEXT,                      -- keyword summary
+    investor_names    TEXT,
+    toxic_signals     TEXT     DEFAULT '[]',     -- JSON array of matched toxic keywords
+    deal_score        INTEGER  CHECK(deal_score BETWEEN 1 AND 5),
+    raw_items         TEXT,                      -- raw 8-K item codes e.g. "1.01,3.02"
+    filing_url        TEXT,
+    scanned_at        TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(ticker, anchor_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pipe_ticker ON pipe_filings(ticker);
+CREATE INDEX IF NOT EXISTS idx_pipe_date   ON pipe_filings(anchor_date);
+CREATE INDEX IF NOT EXISTS idx_pipe_is_pipe ON pipe_filings(is_pipe)

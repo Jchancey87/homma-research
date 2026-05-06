@@ -109,6 +109,27 @@ def archetypes():
     return jsonify(get_archetype_stats())
 
 
+@gainers_bp.route('/gainers/pipe-scan', methods=['GET'])
+def pipe_scan():
+    """
+    Batch-scan all gainers for a given date for PIPE/private placement activity.
+    Results are cached in pipe_filings table; only hits EDGAR for new scans.
+
+    Query params:
+      date — YYYY-MM-DD (required)
+    """
+    date = (request.args.get('date') or '').strip()
+    if not date:
+        return jsonify({'error': 'date is required'}), 400
+
+    try:
+        from services.pipe_service import batch_scan_gainers
+        results = batch_scan_gainers(date)
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @gainers_bp.route('/gainers/ticker-history', methods=['GET'])
 def ticker_history():
     """

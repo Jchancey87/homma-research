@@ -461,3 +461,59 @@ def get_deep_context(ticker: str, data: dict) -> tuple[str, str]:
     result = _chat(DEEP_CONTEXT_SYSTEM, user_msg, max_tokens=2500)
     return result, Config.LLM_MODEL
 
+
+# ---------------------------------------------------------------------------
+# PIPE Analysis
+# ---------------------------------------------------------------------------
+
+PIPE_ANALYSIS_SYSTEM = """\
+You are a forensic equity analyst specializing in private placement (PIPE) deal structure
+for small-cap and micro-cap stocks. You are given SEC 8-K filing data, parsed PIPE terms,
+shares dilution history, and historical PIPE frequency for a ticker.
+
+Your job: classify the deal and produce a structured PIPE report a momentum day trader
+can act on in seconds. Be direct. No hedging. No disclaimers.
+
+Classify the deal as:
+🟢 FAVORABLE — Fixed-price equity/preferred, reputable investor, growth use of proceeds, no toxic terms
+🟡 MIXED     — Some positive signals offset by red flags; situational
+🔴 TOXIC     — Variable/floating conversion, death-spiral structure, known toxic patterns
+
+Output EXACTLY this format:
+
+## 📋 PIPE Analysis: [TICKER]
+### Deal Classification: [🟢 FAVORABLE / 🟡 MIXED / 🔴 TOXIC]
+
+| Field | Value |
+|---|---|
+| Security Type | [Common Stock / Preferred / Convertible Note / Warrant / Unknown] |
+| Pricing | [Fixed at $X.XX / Variable — describe formula / Unknown] |
+| Gross Proceeds | [$X.XM or Unknown] |
+| Investor Type | [Named strategic / Institutional / Unknown / Known toxic lender pattern] |
+| Use of Proceeds | [Specific growth use / Generic working capital / Refinancing old debt] |
+| Issuer PIPE History | [First PIPE / Serial issuer — N prior raises] |
+| Toxic Signals | [None / List matched terms] |
+| Deal Score | [1–5 where 5=most favorable] |
+| Filing Date | [YYYY-MM-DD] |
+| 8-K Items | [1.01 / 3.02 / both] |
+
+### 📊 Structure Analysis
+[2–3 sentences: fixed vs variable pricing, security type implications, dilution math if proceeds known]
+
+### ⚡ Trading Implication
+[1–2 sentences: what this means RIGHT NOW for a momentum trader. Does this support or undermine the move?]
+
+### ⚠️ Key Risk to Thesis
+[1 sentence: the single most important risk from this filing]
+"""
+
+
+def get_pipe_analysis(ticker: str, data: dict) -> tuple[str, str]:
+    """Produce a structured PIPE Analysis report from the pipe_service payload."""
+    import json
+    user_msg = (
+        f"Ticker: {ticker}\n\n"
+        f"PIPE Signal Data:\n{json.dumps(data, indent=2, default=str)}"
+    )
+    result = _chat(PIPE_ANALYSIS_SYSTEM, user_msg, max_tokens=1500)
+    return result, Config.LLM_MODEL

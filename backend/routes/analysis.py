@@ -146,6 +146,20 @@ def start_deep_context():
     return jsonify({'job_id': job_id, 'status': 'pending'})
 
 
+@analysis_bp.route('/research/pipe', methods=['POST'])
+def start_pipe_analysis():
+    data   = request.get_json(silent=True) or {}
+    ticker = (data.get('ticker') or '').strip().upper()
+    date   = (data.get('date') or '').strip()
+    if not ticker:
+        return jsonify({'error': 'ticker is required'}), 400
+
+    job_id = str(uuid.uuid4())
+    _create_job(job_id, 'pipe_analysis', ticker)
+    threading.Thread(target=_run_pipe_analysis, args=(job_id, ticker, date), daemon=True).start()
+    return jsonify({'job_id': job_id, 'status': 'pending'})
+
+
 @analysis_bp.route('/jobs/<job_id>/retry', methods=['POST'])
 def retry_job(job_id):
     """Re-fire a job that is in 'error' status or stale 'running' status."""
@@ -185,6 +199,8 @@ def retry_job(job_id):
         threading.Thread(target=_run_catalyst_analysis, args=(job_id, input_ref, ''), daemon=True).start()
     elif jtype == 'deep_context':
         threading.Thread(target=_run_deep_context, args=(job_id, input_ref), daemon=True).start()
+    elif jtype == 'pipe_analysis':
+        threading.Thread(target=_run_pipe_analysis, args=(job_id, input_ref, ''), daemon=True).start()
     else:
         return jsonify({'error': f"Unknown job type '{jtype}' — cannot retry"}), 400
 
@@ -618,6 +634,22 @@ def _run_deep_context(job_id: str, ticker: str):
 
         payload = build_context_payload(ticker)
         output, model = get_deep_context(ticker, payload)
+        _set_status(job_id, 'done', output=output, model_used=model)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        _set_status(job_id, 'error', output=str(e))
+
+
+def _run_pipe_analysis(job_id: str, ticker: str, date: str):
+    """Background worker: scan 8-K filings for PIPE signals and generate PIPE Analysis report."""
+    _set_status(job_id, 'running')
+    try:
+        from services.pipe_service import build_pipe_payload
+        from llm.llm_client import get_pipe_analysis
+
+        payload = build_pipe_payload(ticker, date or None)
+        output, model = get_pipe_analysis(ticker, payload)
         _set_status(job_id, 'done', output=output, model_used=model)
     except Exception as e:
         import traceback

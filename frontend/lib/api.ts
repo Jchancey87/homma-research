@@ -311,3 +311,27 @@ export const updateObservation = (
 
 export const deleteObservation = (id: number) =>
   api.delete(`/api/observations/${id}`).then(r => r.data)
+
+// ── PIPE Detection ────────────────────────────────────────────────────────
+
+export interface PipeScanResult {
+  ticker:           string
+  anchor_date:      string
+  is_pipe:          boolean
+  filing_date:      string | null
+  filing_url:       string | null
+  security_type:    string | null     // common_stock | preferred_stock | convertible_note | warrant
+  pricing_type:     string | null     // fixed | variable | unknown
+  proceeds_amount:  number | null
+  use_of_proceeds:  string | null
+  toxic_signals:    string[]
+  deal_score:       number | null     // 1–5
+  item_codes:       string[]
+}
+
+export const startPipeAnalysis = (ticker: string, date?: string) =>
+  api.post<{ job_id: string; status: string }>('/api/research/pipe', { ticker, date }).then(r => r.data)
+
+export const getPipeScan = (date: string) =>
+  api.get<PipeScanResult[]>('/api/gainers/pipe-scan', { params: { date } }).then(r => r.data)
+

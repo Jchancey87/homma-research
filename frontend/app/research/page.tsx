@@ -2,13 +2,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Search, Loader2, AlertCircle, FileText,
-  TrendingUp, ShieldAlert, BarChart3, CalendarDays,
+  TrendingUp, ShieldAlert, BarChart3, CalendarDays, Landmark,
   type LucideIcon,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import {
   startResearch, startRiskDetection, startCatalystAnalysis, startDeepContext,
-  getJobStatus,
+  startPipeAnalysis, getJobStatus,
 } from '@/lib/api'
 import FeaturePanel, {
   type FeatureState, EMPTY_FEATURE,
@@ -16,7 +16,7 @@ import FeaturePanel, {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'report' | 'risk' | 'catalyst' | 'context'
+type Tab = 'report' | 'risk' | 'catalyst' | 'context' | 'pipe'
 
 interface MainState {
   jobId:   string | null
@@ -89,6 +89,7 @@ const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'risk',     label: 'Risk',        icon: ShieldAlert },
   { id: 'catalyst', label: 'Catalyst',    icon: TrendingUp },
   { id: 'context',  label: 'Context',     icon: BarChart3 },
+  { id: 'pipe',     label: 'PIPE',        icon: Landmark },
 ]
 
 const TAB_ACCENT: Record<Tab, string> = {
@@ -96,6 +97,7 @@ const TAB_ACCENT: Record<Tab, string> = {
   risk:     'text-orange-400 border-orange-500',
   catalyst: 'text-emerald-400 border-emerald-500',
   context:  'text-blue-400 border-blue-500',
+  pipe:     'text-violet-400 border-violet-500',
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -112,6 +114,7 @@ export default function ResearchPage() {
   const [risk,     setRisk]     = useState<FeatureState>(EMPTY_FEATURE)
   const [catalyst, setCatalyst] = useState<FeatureState>(EMPTY_FEATURE)
   const [context,  setContext]  = useState<FeatureState>(EMPTY_FEATURE)
+  const [pipe,     setPipe]     = useState<FeatureState>(EMPTY_FEATURE)
 
   // ── Polling hooks ──────────────────────────────────────────────────────────
 
@@ -134,6 +137,11 @@ export default function ResearchPage() {
     context.jobId,
     (output) => setContext(s => ({ ...s, loading: false, report: output, jobId: null })),
     (msg)    => setContext(s => ({ ...s, loading: false, error: msg,    jobId: null })),
+  )
+  useFeatureJob(
+    pipe.jobId,
+    (output) => setPipe(s => ({ ...s, loading: false, report: output, jobId: null })),
+    (msg)    => setPipe(s => ({ ...s, loading: false, error: msg,    jobId: null })),
   )
 
   // ── Trigger individual features ────────────────────────────────────────────
@@ -171,6 +179,17 @@ export default function ResearchPage() {
     }
   }, [ticker])
 
+  const runPipe = useCallback(async () => {
+    if (!ticker) return
+    setPipe({ ...EMPTY_FEATURE, loading: true, status: 'Scanning SEC 8-K filings for PIPE signals…' })
+    try {
+      const { job_id } = await startPipeAnalysis(ticker, date || undefined)
+      setPipe(s => ({ ...s, jobId: job_id }))
+    } catch (e: any) {
+      setPipe({ ...EMPTY_FEATURE, error: e?.response?.data?.error ?? 'Failed to start PIPE analysis' })
+    }
+  }, [ticker, date])
+
   // ── Main search — fires all 4 jobs in parallel ─────────────────────────────
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -183,15 +202,17 @@ export default function ResearchPage() {
     setRisk({ ...EMPTY_FEATURE, loading: true, status: 'Scanning SEC filings & corporate actions…' })
     setCatalyst({ ...EMPTY_FEATURE, loading: true, status: 'Parsing news & regulatory events…' })
     setContext({ ...EMPTY_FEATURE, loading: true, status: 'Building multi-timeframe technical picture…' })
+    setPipe({ ...EMPTY_FEATURE, loading: true, status: 'Scanning SEC 8-K filings for PIPE signals…' })
     setActiveTab('report')
 
     // Fire all 4 in parallel
     try {
-      const [mainRes, riskRes, catRes, ctxRes] = await Promise.allSettled([
+      const [mainRes, riskRes, catRes, ctxRes, pipeRes] = await Promise.allSettled([
         startResearch(sym, date || undefined),
         startRiskDetection(sym),
         startCatalystAnalysis(sym, date || undefined),
         startDeepContext(sym),
+        startPipeAnalysis(sym, date || undefined),
       ])
 
       if (mainRes.status === 'fulfilled')
@@ -214,16 +235,22 @@ export default function ResearchPage() {
       else
         setContext({ ...EMPTY_FEATURE, error: 'Failed to start deep context' })
 
+      if (pipeRes.status === 'fulfilled')
+        setPipe(s => ({ ...s, jobId: pipeRes.value.job_id }))
+      else
+        setPipe({ ...EMPTY_FEATURE, error: 'Failed to start PIPE analysis' })
+
     } catch (err) {
       setMain({ ...EMPTY_MAIN, error: 'Unexpected error starting research' })
       setRisk({ ...EMPTY_FEATURE, error: 'Unexpected error' })
       setCatalyst({ ...EMPTY_FEATURE, error: 'Unexpected error' })
       setContext({ ...EMPTY_FEATURE, error: 'Unexpected error' })
+      setPipe({ ...EMPTY_FEATURE, error: 'Unexpected error' })
     }
   }
 
-  const anyActive = main.loading || risk.loading || catalyst.loading || context.loading
-  const anyReport = main.report || risk.report || catalyst.report || context.report
+  const anyActive = main.loading || risk.loading || catalyst.loading || context.loading || pipe.loading
+  const anyReport = main.report || risk.report || catalyst.report || context.report || pipe.report
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-20">
@@ -301,12 +328,14 @@ export default function ResearchPage() {
                 id === 'report'   ? main.loading     :
                 id === 'risk'     ? risk.loading      :
                 id === 'catalyst' ? catalyst.loading  :
-                                    context.loading
+                id === 'context'  ? context.loading   :
+                                    pipe.loading
               const hasReport =
                 id === 'report'   ? !!main.report     :
                 id === 'risk'     ? !!risk.report      :
                 id === 'catalyst' ? !!catalyst.report  :
-                                    !!context.report
+                id === 'context'  ? !!context.report   :
+                                    !!pipe.report
 
               return (
                 <button
@@ -410,6 +439,19 @@ export default function ResearchPage() {
                 ticker={ticker || null}
               />
             )}
+
+            {/* PIPE Detection tab */}
+            {activeTab === 'pipe' && (
+              <FeaturePanel
+                title="PIPE Detection"
+                description="Scans SEC 8-K filings (Items 1.01 & 3.02) for private placement signals and classifies the deal as favorable or toxic."
+                Icon={Landmark}
+                accentColor="violet"
+                state={pipe}
+                onTrigger={runPipe}
+                ticker={ticker || null}
+              />
+            )}
           </div>
         </>
       ) : (
@@ -433,6 +475,12 @@ export default function ResearchPage() {
               color: 'text-blue-400',
               title: 'Deep Context',
               desc: 'Combines technical SMA levels with fundamental EPS and float data.',
+            },
+            {
+              Icon: Landmark,
+              color: 'text-violet-400',
+              title: 'PIPE Detection',
+              desc: 'Scans 8-K filings for private placement signals and classifies deals as favorable or toxic.',
             },
           ].map(({ Icon, color, title, desc }) => (
             <div key={title} className="bg-gray-900/50 border border-gray-800 p-6 rounded-2xl space-y-3">

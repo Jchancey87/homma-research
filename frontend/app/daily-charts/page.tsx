@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { getGainersSummary, GainerSummary } from '@/lib/api'
+import { getGainersSummary, GainerSummary, getPipeScan, PipeScanResult } from '@/lib/api'
 import MiniSessionChart from '@/components/MiniSessionChart'
 import { BarChart2, RefreshCw, ChevronLeft, ChevronRight, Search } from 'lucide-react'
 
@@ -28,6 +28,8 @@ function DailyChartsContent() {
   const [activeDate, setActiveDate] = useState<string>(
     searchParams.get('date') || ''
   )
+  const [pipeMap, setPipeMap]   = useState<Record<string, PipeScanResult>>({})
+  const [pipeLoading, setPipeLoading] = useState(false)
 
   // ── Fetch summary for the active date ──────────────────────────────────────
   const load = useCallback(async () => {
@@ -73,6 +75,20 @@ function DailyChartsContent() {
   }, [activeDate])
 
   useEffect(() => { load() }, [load])
+
+  // Auto-scan for PIPE activity whenever the date and gainers are loaded
+  useEffect(() => {
+    if (!activeDate || loading) return
+    setPipeLoading(true)
+    getPipeScan(activeDate)
+      .then(results => {
+        const map: Record<string, PipeScanResult> = {}
+        results.forEach(r => { map[r.ticker] = r })
+        setPipeMap(map)
+      })
+      .catch(() => {/* silent — PIPE badges are non-critical */})
+      .finally(() => setPipeLoading(false))
+  }, [activeDate, loading])
 
   // ── Date navigation ────────────────────────────────────────────────────────
   const goDate = (date: string) => {
@@ -186,22 +202,40 @@ function DailyChartsContent() {
       {/* ── Chart grid ── */}
       {!loading && summary && summary.gainers.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {summary.gainers.map((g, idx) => (
-            <div key={g.ticker} className="relative">
-              {/* Rank badge */}
-              <span className="absolute top-2.5 left-[52px] z-10 text-[10px] text-gray-600 font-mono">
-                #{idx + 1}
-              </span>
-              <MiniSessionChart
-                ticker={g.ticker}
-                date={summary.date!}
-                gapPct={g.gap_pct}
-                float={g.float_shares}
-                rvol={g.rvol_15m}
-                onExpand={handleExpand}
-              />
-            </div>
-          ))}
+          {summary.gainers.map((g, idx) => {
+            const pipe = pipeMap[g.ticker]
+            const pipeColor =
+              !pipe || !pipe.is_pipe ? null
+              : (pipe.deal_score ?? 0) >= 4 ? 'bg-emerald-500 text-white'
+              : (pipe.deal_score ?? 0) <= 2 ? 'bg-red-500 text-white'
+              : 'bg-yellow-500 text-black'
+
+            return (
+              <div key={g.ticker} className="relative">
+                {/* Rank badge */}
+                <span className="absolute top-2.5 left-[52px] z-10 text-[10px] text-gray-600 font-mono">
+                  #{idx + 1}
+                </span>
+                {/* PIPE badge */}
+                {pipe?.is_pipe && pipeColor && (
+                  <span
+                    className={`absolute top-2.5 right-2 z-10 text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${pipeColor}`}
+                    title={`PIPE detected · score ${pipe.deal_score}/5 · ${pipe.pricing_type ?? 'unknown'} pricing`}
+                  >
+                    PIPE {pipe.deal_score}/5
+                  </span>
+                )}
+                <MiniSessionChart
+                  ticker={g.ticker}
+                  date={summary.date!}
+                  gapPct={g.gap_pct}
+                  float={g.float_shares}
+                  rvol={g.rvol_15m}
+                  onExpand={handleExpand}
+                />
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
