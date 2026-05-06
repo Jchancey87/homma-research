@@ -30,7 +30,7 @@ def list_observations():
         query += " AND sentiment = %s"; params.append(sentiment)
     if tag:
         # PostgreSQL LIKE is case-sensitive by default — use ILIKE or keep LIKE
-        query += " AND tags LIKE %s";   params.append(f'%{tag}%')
+        query += " AND tags ILIKE %s";  params.append(f'%{tag}%')
     if date_from:
         query += " AND date >= %s";     params.append(date_from)
     if date_to:

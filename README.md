@@ -8,13 +8,13 @@ This platform automates the process of identifying, analyzing, and journaling ma
 
 ## 🛠️ Technology Stack
 
-- **Backend**: Python 3.11, Flask (Modular Blueprints), SQLite (local, zero-config)
+- **Backend**: Python 3.11, Flask (Modular Blueprints), PostgreSQL
 - **Frontend**: Next.js 14 (App Router), Tailwind CSS, [Lightweight Charts](https://tradingview.github.io/lightweight-charts/)
 - **AI/LLM**:
   - **Text**: Groq (Llama 3) for rapid structured analysis reports.
   - **Vision**: Gemini 1.5 Pro/Flash for automated chart annotation and pattern recognition.
 - **Data Pipeline**: Polygon.io (Primary), yfinance (Fallback/Historical), SEC EDGAR (Free, no key required), finviz
-- **Deployment**: PM2 (Process Management), Nginx Proxy Manager (Self-hosting)
+- **Deployment**: Manual (Ubuntu/Proxmox LXC), PM2 (Process Management), Nginx Proxy Manager
 
 ## ✨ Core Features
 
@@ -38,89 +38,134 @@ This platform automates the process of identifying, analyzing, and journaling ma
   - Local storage for trade screenshots with AI-assisted annotation and pattern tagging.
 - **📋 Watchlist & Notes**: Quick-access tracking with bullish/bearish sentiment tagging and historical observation feeds.
 
-## ⚙️ Setup & Installation
+## ⚙️ Setup & Installation (Manual — Proxmox/Ubuntu LXC)
 
-### Option 1: Docker (Recommended) 🐳
-The easiest way to get the journal running is using Docker Compose.
+This app runs manually on an Ubuntu LXC container on Proxmox with a shared PostgreSQL database.
 
-1. **Configuration**: Fill in your API keys in `backend/.env`.
-2. **Start**:
-   ```bash
-   docker compose up -d --build
-   ```
-3. **Access**:
-   - Frontend: `http://localhost:3000`
-   - Backend API: `http://localhost:5000`
+### Infrastructure
 
-### Option 2: Manual Setup
-#### 1. Prerequisites
-- Python 3.11+
-- Node.js 18+
-- API Keys: Polygon.io, Groq, and Gemini.
+| Component  | Address              | Notes                          |
+|------------|----------------------|--------------------------------|
+| App Server | `192.168.0.202`      | Ubuntu LXC — Flask + Next.js   |
+| Database   | `192.168.0.201:5432` | Proxmox — PostgreSQL instance  |
+| Proxy      | Nginx Proxy Manager  | Separate LXC — handles routing |
 
-#### 2. Configuration
-Copy the example environment file and fill in your credentials:
+### 1. Prerequisites (Ubuntu LXC)
 ```bash
-cp .env.example backend/.env
+sudo apt update
+sudo apt install python3 python3-pip python3-venv nodejs npm git -y
+```
+
+### 2. Clone the Repository
+```bash
+git clone https://github.com/YOUR_USERNAME/Analysis-App.git /opt/trading-journal
+cd /opt/trading-journal
+```
+
+### 3. Configure Environment
+```bash
+cp backend/.env.example backend/.env
+nano backend/.env
 ```
 
 **Required variables:**
 
 | Variable | Purpose |
 |---|---|
+| `DATABASE_URL` | PostgreSQL DSN: `postgresql://user:pass@host:5432/trading_journal` |
 | `POLYGON_API_KEY` | Market data (news, OHLCV, aggregates) |
 | `LLM_API_KEY` | Groq API key for text analysis |
 | `GEMINI_API_KEY` | Gemini vision API key for chart annotation |
 | `SEC_USER_AGENT` | Your name + email (e.g. `John Doe john@email.com`) — required by SEC EDGAR (free) |
 | `SMTP_*` | Email credentials for daily reports |
 
-### 3. Backend Setup
+### 4. PostgreSQL Setup
 ```bash
-cd backend
+# On your PostgreSQL server
+sudo -u postgres psql
+CREATE DATABASE trading_journal;
+CREATE USER journal WITH PASSWORD 'yourpassword';
+GRANT ALL PRIVILEGES ON DATABASE trading_journal TO journal;
+\c trading_journal
+GRANT ALL ON SCHEMA public TO journal;
+\q
+```
+
+### 5. Backend Setup
+```bash
+cd /opt/trading-journal/backend
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-python app.py
+
+# Schema is created automatically on first run
+python3 app.py
 ```
 
-### 4. Frontend Setup
+### 6. Frontend Setup
 ```bash
-cd frontend
+cd /opt/trading-journal/frontend
 npm install
-npm run dev
+export NEXT_PUBLIC_API_URL=http://192.168.0.202:5000
+npm run dev -- -H 0.0.0.0
 ```
+
+### 7. Start Everything with Tmux (Recommended)
+```bash
+cd /opt/trading-journal
+chmod +x start_journal.sh
+./start_journal.sh
+```
+
+| Tmux Window | Purpose | Shortcut |
+|---|---|---|
+| `0: backend` | Flask API | `Ctrl+b`, `0` |
+| `1: frontend` | Next.js UI | `Ctrl+b`, `1` |
+| `2: scripts` | Ingestion / Enrichment | `Ctrl+b`, `2` |
+
+**Detach** (keep running in background): `Ctrl+b`, then `d`
+**Re-attach**: `./start_journal.sh`
 
 ## 📊 Historical Data Management
 
-The system supports importing historical trade data from CSV files for backtesting and pattern analysis.
-
-1. Ensure your CSV follows the schema: `Date, Ticker, Gap %, Float, RVOL, Sector, Market Cap, News, Close, Open`.
-2. Run the ingestion script:
+### Step 1: Pull the raw gainer list
 ```bash
-python scripts/import_historical.py /path/to/your_data.csv
+source backend/venv/bin/activate
+python3 scripts/pull_historical.py
 ```
+
+### Step 2: Enrich with Yahoo Finance data
+```bash
+python3 scripts/enrich_historical.py --limit 500
+```
+
+> **Note**: Yahoo Finance is rate-limited. Use `--limit 50` for quick tests, `--limit 500+` for full history. Delisted tickers are automatically removed.
+
+## 🔒 Security
+
+- This app is intended for **local network use only**.
+- Do **not** forward ports 3000 or 5000 to the public internet.
+- For remote access, use **[Tailscale](https://tailscale.com/)** — it creates a private encrypted tunnel and is free for personal use.
+- For pretty local URLs (e.g. `http://trading.local`), use **Nginx Proxy Manager** on a separate LXC.
 
 ## 📁 Project Structure
 
 ```
 trading-journal/
 ├── backend/
-│   ├── Dockerfile      # Backend container definition
 │   ├── routes/         # Flask API blueprints
 │   ├── services/       # Data gathering services
 │   ├── llm/            # LLM clients
 │   ├── jobs/           # Cron automation
-│   └── models/         # SQLite schema
+│   └── models/         # PostgreSQL schema
 ├── frontend/
-│   ├── Dockerfile      # Frontend container definition
 │   ├── app/            # Next.js pages
 │   ├── components/     # UI components
 │   └── lib/            # API client
-├── scripts/            # Data import utilities
-├── data/               # SQLite database (mounted volume)
-├── storage/            # Screenshots (mounted volume)
-├── docker-compose.yml  # Multi-container orchestration
-└── ecosystem.config.js # PM2 config
+├── scripts/            # Data import & enrichment utilities
+├── storage/            # Screenshots & chart images
+├── start_journal.sh    # Tmux startup script
+└── ecosystem.config.js # PM2 config (production process manager)
 ```
 
 ## 📖 Documentation
@@ -128,7 +173,6 @@ trading-journal/
 - **[Backend Architecture & API](backend/README.md)**
 - **[Frontend & Charting Components](frontend/README.md)**
 - **[Data Pipeline & Scripts](scripts/README.md)**
-- **[Full System Architecture](docs/ARCHITECTURE.md)**
 
 ---
 *Built for traders who value data-driven edge and automated workflows.*
