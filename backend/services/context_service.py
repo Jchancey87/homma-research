@@ -4,7 +4,7 @@ context_service.py — Data gatherer for the Deep Context feature.
 Aggregates signals from:
   - Polygon.io: 1Y daily OHLCV (for SMA/RS calculations)
   - yfinance: 52-week high/low, float, options chain, sector info
-  - Our SQLite DB: historical gainer appearances for this ticker
+  - Our database: historical gainer appearances for this ticker
 """
 import logging
 import requests
@@ -270,9 +270,9 @@ def _get_journal_history(ticker: str, limit: int = 20) -> list[dict]:
                 """SELECT date, gap_pct, float_shares, rvol_15m, sector,
                           news_headline, news_fresh, open_price, close_price
                    FROM daily_gainers
-                   WHERE ticker = ?
+                   WHERE ticker = %s
                    ORDER BY date DESC
-                   LIMIT ?""",
+                   LIMIT %s""",
                 (ticker.upper(), limit)
             ).fetchall()
         return [dict(r) for r in rows]

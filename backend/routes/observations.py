@@ -25,17 +25,18 @@ def list_observations():
     params = []
 
     if ticker:
-        query += " AND ticker = ?";    params.append(ticker)
+        query += " AND ticker = %s";    params.append(ticker)
     if sentiment:
-        query += " AND sentiment = ?"; params.append(sentiment)
+        query += " AND sentiment = %s"; params.append(sentiment)
     if tag:
-        query += " AND tags LIKE ?";   params.append(f'%{tag}%')
+        # PostgreSQL LIKE is case-sensitive by default — use ILIKE or keep LIKE
+        query += " AND tags LIKE %s";   params.append(f'%{tag}%')
     if date_from:
-        query += " AND date >= ?";     params.append(date_from)
+        query += " AND date >= %s";     params.append(date_from)
     if date_to:
-        query += " AND date <= ?";     params.append(date_to)
+        query += " AND date <= %s";     params.append(date_to)
 
-    query += " ORDER BY date DESC, created_at DESC LIMIT ?"
+    query += " ORDER BY date DESC, created_at DESC LIMIT %s"
     params.append(limit)
 
     with get_connection() as conn:
@@ -49,7 +50,7 @@ def get_observations_for_ticker(ticker):
     ticker = ticker.upper().strip()
     with get_connection() as conn:
         rows = conn.execute(
-            "SELECT * FROM observations WHERE ticker = ? ORDER BY date DESC, created_at DESC",
+            "SELECT * FROM observations WHERE ticker = %s ORDER BY date DESC, created_at DESC",
             (ticker,),
         ).fetchall()
     return jsonify([dict(r) for r in rows])
@@ -89,10 +90,11 @@ def create_observation():
         cur = conn.execute(
             """INSERT INTO observations
                (ticker, date, title, body, sentiment, tags, linked_chart_id, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+               RETURNING id""",
             (ticker, date, title, body, sentiment, tags, linked_chart_id, now, now),
         )
-        obs_id = cur.lastrowid
+        obs_id = cur.fetchone()['id']
 
     return jsonify({'id': obs_id}), 201
 
@@ -124,14 +126,14 @@ def update_observation(obs_id):
         return jsonify({'error': 'No valid fields to update'}), 400
 
     updates['updated_at'] = datetime.now(timezone.utc).isoformat()
-    set_clause = ', '.join(f'{k} = ?' for k in updates)
+    set_clause = ', '.join(f'{k} = %s' for k in updates)
     values     = list(updates.values()) + [obs_id]
 
     with get_connection() as conn:
-        row = conn.execute("SELECT id FROM observations WHERE id = ?", (obs_id,)).fetchone()
+        row = conn.execute("SELECT id FROM observations WHERE id = %s", (obs_id,)).fetchone()
         if not row:
             return jsonify({'error': 'Not found'}), 404
-        conn.execute(f"UPDATE observations SET {set_clause} WHERE id = ?", values)
+        conn.execute(f"UPDATE observations SET {set_clause} WHERE id = %s", values)
 
     return jsonify({'success': True})
 
@@ -143,8 +145,8 @@ def update_observation(obs_id):
 @observations_bp.route('/observations/<int:obs_id>', methods=['DELETE'])
 def delete_observation(obs_id):
     with get_connection() as conn:
-        row = conn.execute("SELECT id FROM observations WHERE id = ?", (obs_id,)).fetchone()
+        row = conn.execute("SELECT id FROM observations WHERE id = %s", (obs_id,)).fetchone()
         if not row:
             return jsonify({'error': 'Not found'}), 404
-        conn.execute("DELETE FROM observations WHERE id = ?", (obs_id,))
+        conn.execute("DELETE FROM observations WHERE id = %s", (obs_id,))
     return jsonify({'success': True})

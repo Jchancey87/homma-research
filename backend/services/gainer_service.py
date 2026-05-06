@@ -11,19 +11,19 @@ def get_gainers_filtered(date=None, min_gap=None, max_float_m=None,
     params = []
 
     if date:
-        query += " AND date = ?"
+        query += " AND date = %s"
         params.append(date)
     if min_gap is not None:
-        query += " AND gap_pct >= ?"
+        query += " AND gap_pct >= %s"
         params.append(float(min_gap))
     if max_float_m is not None:
-        query += " AND float_shares <= ?"
+        query += " AND float_shares <= %s"
         params.append(float(max_float_m) * 1_000_000)
     if min_rvol is not None:
-        query += " AND rvol_15m >= ?"
+        query += " AND rvol_15m >= %s"
         params.append(float(min_rvol))
     if sector:
-        query += " AND sector = ?"
+        query += " AND sector = %s"
         params.append(sector)
 
     query += " ORDER BY date DESC, gap_pct DESC"

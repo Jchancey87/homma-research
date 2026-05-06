@@ -41,11 +41,11 @@ def add_to_watchlist():
     try:
         with get_connection() as conn:
             conn.execute(
-                "INSERT INTO watchlist (ticker, sector, notes, tags, added_at) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO watchlist (ticker, sector, notes, tags, added_at) VALUES (%s, %s, %s, %s, %s)",
                 (ticker, sector, notes, tags, now),
             )
     except Exception as e:
-        if 'UNIQUE' in str(e):
+        if 'unique' in str(e).lower():
             return jsonify({'error': f'{ticker} is already on your watchlist'}), 409
         raise
 
@@ -72,14 +72,14 @@ def update_watchlist_item(ticker):
     if not updates:
         return jsonify({'error': 'No valid fields to update'}), 400
 
-    set_clause = ', '.join(f'{k} = ?' for k in updates)
+    set_clause = ', '.join(f'{k} = %s' for k in updates)
     values     = list(updates.values()) + [ticker]
 
     with get_connection() as conn:
-        row = conn.execute("SELECT ticker FROM watchlist WHERE ticker = ?", (ticker,)).fetchone()
+        row = conn.execute("SELECT ticker FROM watchlist WHERE ticker = %s", (ticker,)).fetchone()
         if not row:
             return jsonify({'error': 'Not found'}), 404
-        conn.execute(f"UPDATE watchlist SET {set_clause} WHERE ticker = ?", values)
+        conn.execute(f"UPDATE watchlist SET {set_clause} WHERE ticker = %s", values)
 
     return jsonify({'success': True})
 
@@ -94,7 +94,7 @@ def mark_viewed(ticker):
     now    = datetime.now(timezone.utc).isoformat()
     with get_connection() as conn:
         conn.execute(
-            "UPDATE watchlist SET last_viewed_at = ? WHERE ticker = ?", (now, ticker)
+            "UPDATE watchlist SET last_viewed_at = %s WHERE ticker = %s", (now, ticker)
         )
     return jsonify({'success': True})
 
@@ -107,8 +107,8 @@ def mark_viewed(ticker):
 def remove_from_watchlist(ticker):
     ticker = ticker.upper().strip()
     with get_connection() as conn:
-        row = conn.execute("SELECT ticker FROM watchlist WHERE ticker = ?", (ticker,)).fetchone()
+        row = conn.execute("SELECT ticker FROM watchlist WHERE ticker = %s", (ticker,)).fetchone()
         if not row:
             return jsonify({'error': 'Not found'}), 404
-        conn.execute("DELETE FROM watchlist WHERE ticker = ?", (ticker,))
+        conn.execute("DELETE FROM watchlist WHERE ticker = %s", (ticker,))
     return jsonify({'success': True})

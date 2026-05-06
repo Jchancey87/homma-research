@@ -6,10 +6,14 @@ load_dotenv()
 class Config:
     # Paths
     BASE_DIR        = os.path.dirname(os.path.abspath(__file__))
-    
-    _env_db_path    = os.getenv('DB_PATH', '../data/journal.db')
-    DB_PATH         = os.path.normpath(os.path.join(BASE_DIR, _env_db_path)) if not os.path.isabs(_env_db_path) else _env_db_path
-    
+
+    # ── Database (PostgreSQL) ───────────────────────────────────────────────
+    # Full DSN — used by psycopg2.connect()
+    DATABASE_URL    = os.getenv(
+        'DATABASE_URL',
+        'postgresql://journal:journal@localhost:5432/trading_journal'
+    )
+
     _env_storage    = os.getenv('STORAGE_PATH', '../storage/charts')
     STORAGE_PATH    = os.path.normpath(os.path.join(BASE_DIR, _env_storage)) if not os.path.isabs(_env_storage) else _env_storage
 
@@ -21,7 +25,7 @@ class Config:
     # External APIs
     POLYGON_API_KEY = os.getenv('POLYGON_API_KEY', '')
     SEC_USER_AGENT  = os.getenv('SEC_USER_AGENT', 'TradingJournal trader@example.com')
-    
+
     # Vision API (OpenAI-compatible)
     VISION_BASE_URL = os.getenv('VISION_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta/openai/')
     VISION_API_KEY  = os.getenv('VISION_API_KEY', os.getenv('GEMINI_API_KEY', ''))

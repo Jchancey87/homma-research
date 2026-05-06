@@ -72,19 +72,19 @@ def main():
     if not args.dry_run:
         with get_connection() as conn:
             deleted = conn.execute(
-                "DELETE FROM daily_gainers WHERE gap_pct > ?", (MAX_SUSPECT_GAP,)
+                "DELETE FROM daily_gainers WHERE gap_pct > %s", (MAX_SUSPECT_GAP,)
             ).rowcount
         log.info(f"Removed {deleted} suspect records (gap_pct > {MAX_SUSPECT_GAP}%)")
     else:
         with get_connection() as conn:
             cnt = conn.execute(
-                "SELECT COUNT(*) FROM daily_gainers WHERE gap_pct > ?", (MAX_SUSPECT_GAP,)
-            ).fetchone()[0]
+                "SELECT COUNT(*) AS count FROM daily_gainers WHERE gap_pct > %s", (MAX_SUSPECT_GAP,)
+            ).fetchone()['count']
         log.info(f"[DRY RUN] Would remove {cnt} suspect records")
 
     # Step 2: Load all records that still need enrichment
     if args.ticker:
-        filter_clause = "WHERE ticker = ? ORDER BY date"
+        filter_clause = "WHERE ticker = %s ORDER BY date"
         filter_params = (args.ticker.upper(),)
     else:
         filter_clause = "ORDER BY ticker, date"
@@ -248,14 +248,14 @@ def process_ticker(ticker: str, records: list[dict], dry_run: bool) -> dict:
         with get_connection() as conn:
             conn.execute(
                 """UPDATE daily_gainers
-                   SET gap_pct      = ?,
-                       float_shares = ?,
-                       rvol_15m     = ?,
-                       sector       = ?,
-                       market_cap   = ?,
-                       open_price   = ?,
-                       close_price  = ?
-                   WHERE id = ?""",
+                   SET gap_pct      = %s,
+                       float_shares = %s,
+                       rvol_15m     = %s,
+                       sector       = %s,
+                       market_cap   = %s,
+                       open_price   = %s,
+                       close_price  = %s
+                   WHERE id = %s""",
                 (
                     round(gap_pct, 2),
                     float_shares,
@@ -274,9 +274,13 @@ def process_ticker(ticker: str, records: list[dict], dry_run: bool) -> dict:
 
 def _delete_records(records: list[dict]):
     ids = [r['id'] for r in records]
+    if not ids:
+        return
+    # psycopg2 uses %s; build a placeholder tuple
+    placeholders = ','.join(['%s'] * len(ids))
     with get_connection() as conn:
         conn.execute(
-            f"DELETE FROM daily_gainers WHERE id IN ({','.join('?' * len(ids))})",
+            f"DELETE FROM daily_gainers WHERE id IN ({placeholders})",
             ids
         )
 

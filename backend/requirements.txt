@@ -16,3 +16,4 @@ mplfinance
 beautifulsoup4
 lxml
 pytz
+psycopg2-binary

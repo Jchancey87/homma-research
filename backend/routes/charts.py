@@ -10,12 +10,12 @@ charts_bp = Blueprint('charts', __name__)
 
 def _sync_chart_tags(conn, chart_id: int, tags: list):
     """Replace all chart_tags rows for chart_id with the new tag list."""
-    conn.execute("DELETE FROM chart_tags WHERE chart_id = ?", (chart_id,))
+    conn.execute("DELETE FROM chart_tags WHERE chart_id = %s", (chart_id,))
     for tag in tags:
         tag = str(tag).strip()
         if tag:
             conn.execute(
-                "INSERT OR IGNORE INTO chart_tags (chart_id, tag) VALUES (?, ?)",
+                "INSERT INTO chart_tags (chart_id, tag) VALUES (%s, %s) ON CONFLICT DO NOTHING",
                 (chart_id, tag),
             )
 
@@ -58,11 +58,12 @@ def upload_chart():
             """INSERT INTO chart_captures
                (ticker, capture_date, timeframe, image_path, setup_type,
                 cleanliness_score, tags, notes)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+               RETURNING id""",
             (ticker, capture_date, timeframe, image_path,
              setup_type, score, json.dumps(tags), notes),
         )
-        chart_id = cur.lastrowid
+        chart_id = cur.fetchone()['id']
         _sync_chart_tags(conn, chart_id, tags)
 
     return jsonify({'id': chart_id, 'image_path': image_path}), 201
@@ -81,21 +82,21 @@ def list_charts():
     params = []
 
     if tag:
-        query += " JOIN chart_tags ct ON ct.chart_id = cc.id AND ct.tag = ?"
+        query += " JOIN chart_tags ct ON ct.chart_id = cc.id AND ct.tag = %s"
         params.append(tag)
 
     query += " WHERE 1=1"
 
     if ticker:
-        query += " AND cc.ticker = ?";     params.append(ticker)
+        query += " AND cc.ticker = %s";     params.append(ticker)
     if setup_type:
-        query += " AND cc.setup_type = ?"; params.append(setup_type)
+        query += " AND cc.setup_type = %s"; params.append(setup_type)
     if date_from:
-        query += " AND cc.capture_date >= ?"; params.append(date_from)
+        query += " AND cc.capture_date >= %s"; params.append(date_from)
     if date_to:
-        query += " AND cc.capture_date <= ?"; params.append(date_to)
+        query += " AND cc.capture_date <= %s"; params.append(date_to)
     if min_clean is not None:
-        query += " AND cc.cleanliness_score >= ?"; params.append(min_clean)
+        query += " AND cc.cleanliness_score >= %s"; params.append(min_clean)
 
     query += " ORDER BY cc.capture_date DESC, cc.created_at DESC"
 
@@ -109,7 +110,7 @@ def list_charts():
 def get_chart(chart_id):
     with get_connection() as conn:
         row = conn.execute(
-            "SELECT * FROM chart_captures WHERE id = ?", (chart_id,)
+            "SELECT * FROM chart_captures WHERE id = %s", (chart_id,)
         ).fetchone()
     if not row:
         return jsonify({'error': 'Not found'}), 404
@@ -139,11 +140,11 @@ def update_chart(chart_id):
         # Already validated above; decode for junction table sync
         tag_list = json.loads(updates['tags'])
 
-    set_clause = ', '.join(f'{k} = ?' for k in updates)
+    set_clause = ', '.join(f'{k} = %s' for k in updates)
     values     = list(updates.values()) + [chart_id]
 
     with get_connection() as conn:
-        conn.execute(f"UPDATE chart_captures SET {set_clause} WHERE id = ?", values)
+        conn.execute(f"UPDATE chart_captures SET {set_clause} WHERE id = %s", values)
         if tag_list is not None:
             _sync_chart_tags(conn, chart_id, tag_list)
 
@@ -154,7 +155,7 @@ def update_chart(chart_id):
 def delete_chart(chart_id):
     with get_connection() as conn:
         row = conn.execute(
-            "SELECT image_path, gemini_image_path FROM chart_captures WHERE id = ?",
+            "SELECT image_path, gemini_image_path FROM chart_captures WHERE id = %s",
             (chart_id,)
         ).fetchone()
         if not row:
@@ -169,7 +170,7 @@ def delete_chart(chart_id):
                     pass
 
         # chart_tags rows deleted by CASCADE
-        conn.execute("DELETE FROM chart_captures WHERE id = ?", (chart_id,))
+        conn.execute("DELETE FROM chart_captures WHERE id = %s", (chart_id,))
 
     return jsonify({'success': True})
 
@@ -178,7 +179,7 @@ def delete_chart(chart_id):
 def gemini_import(chart_id):
     with get_connection() as conn:
         row = conn.execute(
-            "SELECT ticker, capture_date FROM chart_captures WHERE id = ?",
+            "SELECT ticker, capture_date FROM chart_captures WHERE id = %s",
             (chart_id,)
         ).fetchone()
         if not row:
@@ -199,8 +200,8 @@ def gemini_import(chart_id):
     if image_file:
         try:
             image_path = save_chart_image(
-                image_file, 
-                ticker=ticker, 
+                image_file,
+                ticker=ticker,
                 capture_date=capture_date,
                 subfolder='annotated'
             )
@@ -210,21 +211,21 @@ def gemini_import(chart_id):
     with get_connection() as conn:
         if image_path:
             conn.execute(
-                """UPDATE chart_captures 
-                   SET gemini_annotation = ?, 
-                       llm_annotation = ?, 
-                       gemini_image_path = ?,
-                       gemini_imported_at = CURRENT_TIMESTAMP
-                   WHERE id = ?""",
+                """UPDATE chart_captures
+                   SET gemini_annotation = %s,
+                       llm_annotation = %s,
+                       gemini_image_path = %s,
+                       gemini_imported_at = NOW()
+                   WHERE id = %s""",
                 (analysis_text, analysis_text, image_path, chart_id)
             )
         else:
             conn.execute(
-                """UPDATE chart_captures 
-                   SET gemini_annotation = ?, 
-                       llm_annotation = ?,
-                       gemini_imported_at = CURRENT_TIMESTAMP
-                   WHERE id = ?""",
+                """UPDATE chart_captures
+                   SET gemini_annotation = %s,
+                       llm_annotation = %s,
+                       gemini_imported_at = NOW()
+                   WHERE id = %s""",
                 (analysis_text, analysis_text, chart_id)
             )
 

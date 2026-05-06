@@ -16,7 +16,7 @@ analysis_bp = Blueprint('analysis', __name__)
 def gemini_import(chart_id):
     with get_connection() as conn:
         row = conn.execute(
-            "SELECT id FROM chart_captures WHERE id = ?", (chart_id,)
+            "SELECT id FROM chart_captures WHERE id = %s", (chart_id,)
         ).fetchone()
     if not row:
         return jsonify({'error': 'Chart not found'}), 404
@@ -46,15 +46,15 @@ def gemini_import(chart_id):
         if gemini_image_path:
             conn.execute(
                 """UPDATE chart_captures
-                   SET gemini_annotation = ?, gemini_image_path = ?, gemini_imported_at = ?
-                   WHERE id = ?""",
+                   SET gemini_annotation = %s, gemini_image_path = %s, gemini_imported_at = %s
+                   WHERE id = %s""",
                 (analysis_text, gemini_image_path, now, chart_id),
             )
         else:
             conn.execute(
                 """UPDATE chart_captures
-                   SET gemini_annotation = ?, gemini_imported_at = ?
-                   WHERE id = ?""",
+                   SET gemini_annotation = %s, gemini_imported_at = %s
+                   WHERE id = %s""",
                 (analysis_text, now, chart_id),
             )
 
@@ -151,7 +151,7 @@ def retry_job(job_id):
     """Re-fire a job that is in 'error' status or stale 'running' status."""
     with get_connection() as conn:
         row = conn.execute(
-            "SELECT * FROM llm_jobs WHERE id = ?", (job_id,)
+            "SELECT * FROM llm_jobs WHERE id = %s", (job_id,)
         ).fetchone()
     if not row:
         return jsonify({'error': 'Job not found'}), 404
@@ -167,7 +167,7 @@ def retry_job(job_id):
     now = datetime.now(timezone.utc).isoformat()
     with get_connection() as conn:
         conn.execute(
-            "UPDATE llm_jobs SET status='pending', output=NULL, updated_at=? WHERE id=?",
+            "UPDATE llm_jobs SET status='pending', output=NULL, updated_at=%s WHERE id=%s",
             (now, job_id),
         )
 
@@ -317,8 +317,8 @@ def list_jobs():
     query  = "SELECT * FROM llm_jobs WHERE 1=1"
     params = []
     if jtype:
-        query += " AND type = ?"; params.append(jtype)
-    query += " ORDER BY created_at DESC LIMIT ?"; params.append(limit)
+        query += " AND type = %s"; params.append(jtype)
+    query += " ORDER BY created_at DESC LIMIT %s"; params.append(limit)
     with get_connection() as conn:
         rows = conn.execute(query, params).fetchall()
     return jsonify([dict(r) for r in rows])
@@ -328,7 +328,7 @@ def list_jobs():
 def get_job(job_id):
     with get_connection() as conn:
         row = conn.execute(
-            "SELECT * FROM llm_jobs WHERE id = ?", (job_id,)
+            "SELECT * FROM llm_jobs WHERE id = %s", (job_id,)
         ).fetchone()
     if not row:
         return jsonify({'error': 'Job not found'}), 404
@@ -347,7 +347,7 @@ def _run_continuation(job_id: str, date: str):
             gainer_rows = conn.execute(
                 """SELECT ticker, gap_pct, float_shares, rvol_15m, sector,
                           news_headline, news_fresh, close_price, open_price
-                   FROM daily_gainers WHERE date = ?
+                   FROM daily_gainers WHERE date = %s
                    ORDER BY gap_pct DESC LIMIT 10""",
                 (date,),
             ).fetchall()
@@ -617,7 +617,7 @@ def _run_deep_context(job_id: str, ticker: str):
 def _create_job(job_id: str, jtype: str, input_ref: str):
     with get_connection() as conn:
         conn.execute(
-            "INSERT INTO llm_jobs (id, type, status, input_ref) VALUES (?, ?, 'pending', ?)",
+            "INSERT INTO llm_jobs (id, type, status, input_ref) VALUES (%s, %s, 'pending', %s)",
             (job_id, jtype, input_ref),
         )
 
@@ -626,6 +626,6 @@ def _set_status(job_id: str, status: str, output: str = None, model_used: str = 
     now = datetime.now(timezone.utc).isoformat()
     with get_connection() as conn:
         conn.execute(
-            "UPDATE llm_jobs SET status=?, output=?, model_used=?, updated_at=? WHERE id=?",
+            "UPDATE llm_jobs SET status=%s, output=%s, model_used=%s, updated_at=%s WHERE id=%s",
             (status, output, model_used, now, job_id),
         )

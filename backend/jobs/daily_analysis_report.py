@@ -83,9 +83,9 @@ def fetch_top_gainers_from_db(target_date: str, limit: int) -> list[dict]:
         SELECT ticker, gap_pct, float_shares, rvol_15m, sector, market_cap,
                news_headline, news_fresh, close_price, open_price
         FROM daily_gainers
-        WHERE date = ?
+        WHERE date = %s
         ORDER BY gap_pct DESC
-        LIMIT ?
+        LIMIT %s
     """
     with get_connection() as conn:
         rows = conn.execute(query, (target_date, limit)).fetchall()

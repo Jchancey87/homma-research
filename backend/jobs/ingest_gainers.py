@@ -282,7 +282,7 @@ def write_gainers(gainers: list[dict], target_date: str) -> tuple[int, int]:
                     """INSERT INTO daily_gainers
                        (date, ticker, gap_pct, float_shares, rvol_15m, sector,
                         market_cap, news_headline, news_fresh, close_price, open_price)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                     (
                         target_date,
                         g['ticker'],
@@ -299,7 +299,7 @@ def write_gainers(gainers: list[dict], target_date: str) -> tuple[int, int]:
                 )
                 inserted += 1
             except Exception as e:
-                if 'UNIQUE' in str(e):
+                if 'unique' in str(e).lower():
                     skipped += 1
                 else:
                     log.error(f"DB error for {g['ticker']}: {e}")

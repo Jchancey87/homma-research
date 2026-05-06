@@ -41,7 +41,7 @@ def main():
                 date = row.get('Date', '').strip()
                 ticker = row.get('symbol', '').strip().upper()
                 percent_gain = row.get('percent_gain')
-                
+
                 if not date or not ticker:
                     skipped += 1
                     continue
@@ -66,7 +66,7 @@ def main():
                     """INSERT INTO daily_gainers
                        (date, ticker, gap_pct, float_shares, rvol_15m, sector,
                         market_cap, news_headline, news_fresh, close_price, open_price)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                     (
                         date, ticker, gap_pct, float_shares, rvol, sector,
                         market_cap, news_headline, news_fresh, close_price, open_price
@@ -75,7 +75,7 @@ def main():
                 inserted += 1
 
             except Exception as e:
-                if 'UNIQUE' in str(e):
+                if 'unique' in str(e).lower():
                     skipped += 1
                 else:
                     log.error(f"Error inserting {ticker} on {date}: {e}")

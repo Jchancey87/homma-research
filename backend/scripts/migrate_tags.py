@@ -5,7 +5,7 @@ into the chart_tags junction table.
 Run from the backend/ directory:
     python scripts/migrate_tags.py
 
-Safe to run multiple times — uses INSERT OR IGNORE.
+Safe to run multiple times — uses ON CONFLICT DO NOTHING.
 """
 import json
 import sys
@@ -45,7 +45,7 @@ def migrate():
                     continue
                 try:
                     conn.execute(
-                        "INSERT OR IGNORE INTO chart_tags (chart_id, tag) VALUES (?, ?)",
+                        "INSERT INTO chart_tags (chart_id, tag) VALUES (%s, %s) ON CONFLICT DO NOTHING",
                         (chart_id, tag),
                     )
                     inserted += 1

@@ -92,7 +92,7 @@ def gainers_summary():
         rows = conn.execute(
             """SELECT ticker, gap_pct, float_shares, rvol_15m, sector,
                       news_headline, news_fresh, close_price, open_price
-               FROM daily_gainers WHERE date = ?
+               FROM daily_gainers WHERE date = %s
                ORDER BY gap_pct DESC LIMIT 10""",
             (latest_date,),
         ).fetchall()
@@ -142,10 +142,10 @@ def ticker_history():
     conditions = []
     params     = []
     if cutoff:
-        conditions.append('date >= ?')
+        conditions.append('date >= %s')
         params.append(cutoff)
     if search:
-        conditions.append('ticker LIKE ?')
+        conditions.append('ticker LIKE %s')
         params.append(f'{search}%')
 
     where = ('WHERE ' + ' AND '.join(conditions)) if conditions else ''
@@ -176,7 +176,7 @@ def ticker_history():
             {where}
             GROUP BY ticker
             ORDER BY {order_clause}
-            LIMIT ?
+            LIMIT %s
         """, params).fetchall()
 
     return jsonify([dict(r) for r in rows])
@@ -204,10 +204,10 @@ def ticker_appearances(ticker):
         cutoff = (today - timedelta(days=365)).isoformat()
 
     if cutoff:
-        sql    = "SELECT * FROM daily_gainers WHERE ticker = ? AND date >= ? ORDER BY date DESC"
+        sql    = "SELECT * FROM daily_gainers WHERE ticker = %s AND date >= %s ORDER BY date DESC"
         params = (ticker, cutoff)
     else:
-        sql    = "SELECT * FROM daily_gainers WHERE ticker = ? ORDER BY date DESC"
+        sql    = "SELECT * FROM daily_gainers WHERE ticker = %s ORDER BY date DESC"
         params = (ticker,)
 
     with get_connection() as conn:

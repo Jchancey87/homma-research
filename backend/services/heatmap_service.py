@@ -21,7 +21,7 @@ def build_heatmap_spec(cutoff_date: str | None = None) -> dict:
               "WHERE float_shares IS NOT NULL AND rvol_15m IS NOT NULL AND gap_pct IS NOT NULL")
     params = []
     if cutoff_date:
-        query += " AND date >= ?"
+        query += " AND date >= %s"
         params.append(cutoff_date)
 
     with get_connection() as conn:
@@ -137,7 +137,7 @@ def get_sector_spec(cutoff_date: str | None = None) -> dict:
               "WHERE sector IS NOT NULL AND gap_pct IS NOT NULL AND sector != ''")
     params = []
     if cutoff_date:
-        query += " AND date >= ?"
+        query += " AND date >= %s"
         params.append(cutoff_date)
 
     with get_connection() as conn:

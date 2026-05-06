@@ -1,20 +1,20 @@
--- Trading Journal SQLite Schema
--- Apply with: python database.py (called on app startup via init_db())
+-- Trading Journal PostgreSQL Schema
+-- Applied on startup via init_db() — all statements are idempotent.
 
 CREATE TABLE IF NOT EXISTS daily_gainers (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    id            SERIAL PRIMARY KEY,
     date          TEXT    NOT NULL,
     ticker        TEXT    NOT NULL,
-    gap_pct       REAL,
-    float_shares  REAL,
-    rvol_15m      REAL,
+    gap_pct       DOUBLE PRECISION,
+    float_shares  DOUBLE PRECISION,
+    rvol_15m      DOUBLE PRECISION,
     sector        TEXT,
-    market_cap    REAL,
+    market_cap    DOUBLE PRECISION,
     news_headline TEXT,
     news_fresh    BOOLEAN,
-    close_price   REAL,
-    open_price    REAL,
-    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    close_price   DOUBLE PRECISION,
+    open_price    DOUBLE PRECISION,
+    created_at    TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(date, ticker)
 );
 
@@ -22,7 +22,7 @@ CREATE INDEX IF NOT EXISTS idx_gainers_date   ON daily_gainers(date);
 CREATE INDEX IF NOT EXISTS idx_gainers_ticker ON daily_gainers(ticker);
 
 CREATE TABLE IF NOT EXISTS chart_captures (
-    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    id                  SERIAL PRIMARY KEY,
     ticker              TEXT    NOT NULL,
     capture_date        TEXT    NOT NULL,
     timeframe           TEXT,
@@ -34,10 +34,10 @@ CREATE TABLE IF NOT EXISTS chart_captures (
     -- Gemini vision import fields
     gemini_annotation   TEXT,               -- pasted text from Gemini chat
     gemini_image_path   TEXT,               -- optional annotated image re-uploaded from Gemini
-    gemini_imported_at  TIMESTAMP,
+    gemini_imported_at  TIMESTAMPTZ,
     -- Reserved for future local LLM use
     llm_annotation      TEXT,
-    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_charts_ticker ON chart_captures(ticker);
@@ -60,26 +60,26 @@ CREATE TABLE IF NOT EXISTS llm_jobs (
     input_ref  TEXT,                         -- date string or query snippet
     output     TEXT,
     model_used TEXT,                         -- log which LLM_MODEL produced this
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Watchlist: tickers of interest saved between research sessions
 CREATE TABLE IF NOT EXISTS watchlist (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    id             SERIAL PRIMARY KEY,
     ticker         TEXT    NOT NULL UNIQUE,
     sector         TEXT,
     notes          TEXT,
     tags           TEXT    DEFAULT '[]',     -- JSON array of string labels
-    added_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_viewed_at TIMESTAMP
+    added_at       TIMESTAMPTZ DEFAULT NOW(),
+    last_viewed_at TIMESTAMPTZ
 );
 
 CREATE INDEX IF NOT EXISTS idx_watchlist_ticker ON watchlist(ticker);
 
 -- Observations: standalone markdown notes per ticker
 CREATE TABLE IF NOT EXISTS observations (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    id              SERIAL PRIMARY KEY,
     ticker          TEXT    NOT NULL,
     date            TEXT    NOT NULL,        -- YYYY-MM-DD (trading date being referenced)
     title           TEXT,
@@ -87,9 +87,9 @@ CREATE TABLE IF NOT EXISTS observations (
     sentiment       TEXT    DEFAULT 'neutral' CHECK(sentiment IN ('bullish','bearish','neutral')),
     tags            TEXT    DEFAULT '[]',    -- JSON array
     linked_chart_id INTEGER REFERENCES chart_captures(id) ON DELETE SET NULL,
-    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_observations_ticker ON observations(ticker);
-CREATE INDEX IF NOT EXISTS idx_observations_date   ON observations(date);
+CREATE INDEX IF NOT EXISTS idx_observations_date   ON observations(date)

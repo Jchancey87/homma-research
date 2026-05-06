@@ -1,15 +1,36 @@
 services:
+  postgres:
+    image: postgres:18
+    container_name: trading-journal-db
+    environment:
+      POSTGRES_DB: trading_journal
+      POSTGRES_USER: journal
+      POSTGRES_PASSWORD: journal
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U journal -d trading_journal"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   backend:
     build: ./backend
     container_name: trading-journal-backend
     volumes:
-      - ./data:/app/../data
       - ./storage:/app/../storage
       - ./backend/.env:/app/.env
     ports:
       - "5000:5000"
     environment:
       - FLASK_ENV=production
+      - DATABASE_URL=postgresql://journal:journal@postgres:5432/trading_journal
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:
@@ -27,5 +48,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  data:
+  pg_data:
   storage:

@@ -48,13 +48,13 @@ def main():
 
     with open(csv_path, 'r', encoding='utf-8') as f:
         reader = csv.DictReader(f)
-        
+
         with get_connection() as conn:
             for row in reader:
                 try:
                     date   = row.get(COL_DATE, '').strip()
                     ticker = row.get(COL_TICKER, '').strip().upper()
-                    
+
                     if not date or not ticker:
                         log.warning(f"Skipping row missing date or ticker: {row}")
                         skipped += 1
@@ -77,7 +77,7 @@ def main():
                     news_headline = row.get(COL_NEWS_HEADLINE, '').strip() or None
                     close_price   = parse_float(row.get(COL_CLOSE))
                     open_price    = parse_float(row.get(COL_OPEN))
-                    
+
                     # Assume news is stale for historical data unless otherwise classified
                     news_fresh = False
 
@@ -85,7 +85,7 @@ def main():
                         """INSERT INTO daily_gainers
                            (date, ticker, gap_pct, float_shares, rvol_15m, sector,
                             market_cap, news_headline, news_fresh, close_price, open_price)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                         (
                             date, ticker, gap_pct, float_shares, rvol, sector,
                             market_cap, news_headline, news_fresh, close_price, open_price
@@ -94,7 +94,7 @@ def main():
                     inserted += 1
 
                 except Exception as e:
-                    if 'UNIQUE' in str(e):
+                    if 'unique' in str(e).lower():
                         skipped += 1
                     else:
                         log.error(f"Error inserting {row.get(COL_TICKER)} on {row.get(COL_DATE)}: {e}")

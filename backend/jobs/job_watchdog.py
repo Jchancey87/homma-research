@@ -19,7 +19,7 @@ def _reset_stale_jobs():
     cutoff = (datetime.now(timezone.utc) - timedelta(minutes=JOB_TIMEOUT_MINUTES)).isoformat()
     with get_connection() as conn:
         stale = conn.execute(
-            "SELECT id FROM llm_jobs WHERE status = 'running' AND updated_at < ?",
+            "SELECT id FROM llm_jobs WHERE status = 'running' AND updated_at < %s",
             (cutoff,),
         ).fetchall()
 
@@ -27,7 +27,7 @@ def _reset_stale_jobs():
             job_id = row['id']
             now = datetime.now(timezone.utc).isoformat()
             conn.execute(
-                "UPDATE llm_jobs SET status='error', output=?, updated_at=? WHERE id=?",
+                "UPDATE llm_jobs SET status='error', output=%s, updated_at=%s WHERE id=%s",
                 (f"Timed out after {JOB_TIMEOUT_MINUTES} min — process may have crashed. "
                  "Use the retry endpoint to re-run.", now, job_id),
             )
