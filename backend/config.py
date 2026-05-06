@@ -24,6 +24,7 @@ class Config:
 
     # External APIs
     POLYGON_API_KEY = os.getenv('POLYGON_API_KEY', '')
+    FMP_API_KEY     = os.getenv('FMP_API_KEY', '')        # Financial Modeling Prep
     SEC_USER_AGENT  = os.getenv('SEC_USER_AGENT', 'TradingJournal trader@example.com')
 
     # Vision API (OpenAI-compatible)

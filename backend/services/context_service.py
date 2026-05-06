@@ -151,18 +151,43 @@ def _get_52w_range(ticker: str) -> dict:
 
 
 def _get_float_structure(ticker: str) -> dict:
-    """Return float, shares outstanding, and float rotation estimate."""
+    """Return float, shares outstanding, and float rotation estimate.
+    FMP profile primary; yfinance fallback.
+    """
+    # --- Primary: FMP ---
+    try:
+        from services.fmp_service import get_company_profile
+        p = get_company_profile(ticker)
+        if p:
+            float_shares = p.get('float_shares')
+            shares_out   = p.get('shares_outstanding')
+            avg_vol      = p.get('avg_volume')
+            result = {
+                'float_shares':       float_shares,
+                'shares_outstanding': shares_out,
+                'avg_daily_volume':   avg_vol,
+                '_source':            'fmp',
+            }
+            if float_shares and avg_vol and float_shares > 0:
+                result['float_rotation_days'] = round(float_shares / avg_vol, 1)
+            if float_shares and shares_out and shares_out > 0:
+                result['float_pct_of_outstanding'] = round(float_shares / shares_out * 100, 1)
+            return result
+    except Exception as e:
+        log.warning(f'[Context] FMP float structure failed: {e}')
+
+    # --- Fallback: yfinance ---
     try:
         import yfinance as yf
-        info = yf.Ticker(ticker).info or {}
+        info         = yf.Ticker(ticker).info or {}
         float_shares = info.get('floatShares')
         shares_out   = info.get('sharesOutstanding')
         avg_vol      = info.get('averageVolume') or info.get('averageDailyVolume10Day')
-
         result = {
             'float_shares':       float_shares,
             'shares_outstanding': shares_out,
             'avg_daily_volume':   avg_vol,
+            '_source':            'yfinance_fallback',
         }
         if float_shares and avg_vol and float_shares > 0:
             result['float_rotation_days'] = round(float_shares / avg_vol, 1)
@@ -282,7 +307,22 @@ def _get_journal_history(ticker: str, limit: int = 20) -> list[dict]:
 
 
 def _get_sector_context(ticker: str) -> dict:
-    """Return sector and industry for high-level context in the report."""
+    """Return sector and industry for high-level context. FMP profile primary."""
+    # --- Primary: FMP ---
+    try:
+        from services.fmp_service import get_company_profile
+        p = get_company_profile(ticker)
+        if p:
+            return {
+                'sector':   p.get('sector', 'Unknown'),
+                'industry': p.get('industry', 'Unknown'),
+                'beta':     p.get('beta'),
+                '_source':  'fmp',
+            }
+    except Exception as e:
+        log.warning(f'[Context] FMP sector context failed: {e}')
+
+    # --- Fallback: yfinance ---
     try:
         import yfinance as yf
         info = yf.Ticker(ticker).info or {}
@@ -290,6 +330,7 @@ def _get_sector_context(ticker: str) -> dict:
             'sector':   info.get('sector', 'Unknown'),
             'industry': info.get('industry', 'Unknown'),
             'beta':     info.get('beta'),
+            '_source':  'yfinance_fallback',
         }
     except Exception as e:
         log.warning(f'[Context] Sector context fetch failed: {e}')

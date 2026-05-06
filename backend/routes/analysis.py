@@ -442,51 +442,74 @@ def _run_deep_research(job_id: str, ticker: str, date: str, base_url: str):
     import yfinance as yf
     _set_status(job_id, 'running')
     try:
-        t = yf.Ticker(ticker)
-        
-        # 1. Gather fundamental data (yfinance)
-        info     = t.info or {}
-        calendar = t.calendar
-        actions  = t.actions.tail(10).to_dict() if not t.actions.empty else {}
-        news     = t.news[:10] if t.news else []
-        
-        # Format calendar
-        cal_data = {}
-        if isinstance(calendar, dict): cal_data = calendar
-        elif hasattr(calendar, 'to_dict'): cal_data = calendar.to_dict()
+        # ── 1. Fundamentals: FMP primary, yfinance fallback ──────────────────
+        from services.fmp_service import (
+            get_company_profile,
+            get_analyst_estimates,
+            get_income_statement,
+            get_key_metrics,
+            get_earnings_calendar as fmp_earnings,
+        )
+        import pytz
 
-        # 2. Generate Advanced Chart (Polygon + mplfinance)
+        profile    = get_company_profile(ticker)
+        estimates  = get_analyst_estimates(ticker)
+        income     = get_income_statement(ticker)
+        key_m      = get_key_metrics(ticker)
+        earnings   = fmp_earnings(ticker)
+
+        # yfinance still used for: news, actions, options (not in FMP free tier)
+        t       = yf.Ticker(ticker)
+        actions = t.actions.tail(10).to_dict() if not t.actions.empty else {}
+        news    = t.news[:10] if t.news else []
+
+        # If FMP profile returned nothing (unknown ticker / no key), fall back to yfinance
+        if not profile:
+            info = t.info or {}
+            profile = {
+                'sector':             info.get('sector'),
+                'industry':           info.get('industry'),
+                'market_cap':         info.get('marketCap'),
+                'float_shares':       info.get('floatShares'),
+                'shares_outstanding': info.get('sharesOutstanding'),
+                'beta':               info.get('beta'),
+                'current_price':      info.get('currentPrice') or info.get('regularMarketPrice'),
+                '_source':            'yfinance_fallback',
+            }
+
+        # ── 2. Intraday chart (Polygon → yfinance) ───────────────────────────
         import os
         from config import Config
         from services.chart_service_research import build_session_chart
-        
+
         storage_dir = os.path.join(Config.STORAGE_PATH, 'research')
         os.makedirs(storage_dir, exist_ok=True)
-        
+
         image_paths = []
         chart_urls  = []
-        
-        # If no date provided, use today's date in Eastern Time
+
         if not date:
-            import pytz
             date = datetime.now(pytz.timezone('America/New_York')).strftime('%Y-%m-%d')
-            
+
         bars_df = _fetch_intraday_polygon(ticker, date)
-        
-        # Fallback to yfinance if polygon fails or key is missing
+
         if bars_df.empty:
-            print(f"Polygon failed or empty for {date}. Falling back to yfinance (warning: yfinance intraday data limited to ~60 days).")
+            print(f"Polygon failed or empty for {date}. Falling back to yfinance.")
             from datetime import timedelta
             start_dt = datetime.strptime(date, '%Y-%m-%d')
-            end_dt = start_dt + timedelta(days=1)
+            end_dt   = start_dt + timedelta(days=1)
             try:
-                # Use 5m bars for a cleaner chart (fewer data points, still detailed)
-                yf_df = yf.download(ticker, start=start_dt.strftime('%Y-%m-%d'), end=end_dt.strftime('%Y-%m-%d'), interval='5m', prepost=True, progress=False)
+                yf_df = yf.download(ticker,
+                                    start=start_dt.strftime('%Y-%m-%d'),
+                                    end=end_dt.strftime('%Y-%m-%d'),
+                                    interval='5m', prepost=True, progress=False)
                 if not yf_df.empty:
-                    # Handle both regular and MultiIndex columns from yfinance
                     if hasattr(yf_df.columns, 'levels'):
                         yf_df.columns = yf_df.columns.get_level_values(0)
-                    yf_df = yf_df.rename(columns={'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close', 'Volume': 'volume'})
+                    yf_df = yf_df.rename(columns={
+                        'Open': 'open', 'High': 'high', 'Low': 'low',
+                        'Close': 'close', 'Volume': 'volume',
+                    })
                     bars_df = yf_df
                     print(f"yfinance fallback got {len(bars_df)} rows for {date}")
             except Exception as e:
@@ -506,39 +529,32 @@ def _run_deep_research(job_id: str, ticker: str, date: str, base_url: str):
                 print(f"Failed to generate session chart: {e}")
                 traceback.print_exc()
         else:
-            print(f"No intraday data available for {ticker} on {date} from any source. Chart skipped.")
+            print(f"No intraday data for {ticker} on {date}. Chart skipped.")
 
-
-        # 3. Get Vision Analysis
+        # ── 3. Vision analysis ────────────────────────────────────────────────
         vision_analysis = None
         if image_paths:
             from llm.vision_client import analyze_charts_multi_tf
             vision_analysis = analyze_charts_multi_tf(ticker, image_paths)
 
+        # ── 4. Build structured payload ───────────────────────────────────────
         payload = {
             'fundamentals': {
-                'marketCap':     info.get('marketCap'),
-                'floatShares':   info.get('floatShares'),
-                'trailingEps':   info.get('trailingEps'),
-                'forwardEps':    info.get('forwardEps'),
-                'shortPct':      info.get('shortPercentOfFloat'),
-                'shortRatio':    info.get('shortRatio'),
-                'heldInstitutions': info.get('heldPercentInstitutions'),
-                'heldInsiders':     info.get('heldPercentInsiders'),
-                'sector':           info.get('sector'),
-                'industry':         info.get('industry'),
+                'profile':           profile,
+                'key_metrics_ttm':   key_m,
+                'income_statement':  income,   # last 4 quarters
+                'analyst_estimates': estimates,
             },
             'events': {
-                'calendar': cal_data,
-                'recent_actions': actions,
+                'earnings_calendar': earnings,  # FMP: confirmed date + EPS estimate
+                'recent_actions':    actions,
             },
             'news_headlines': [n.get('title') for n in news if n.get('title')],
-            'technical_vision_analysis': vision_analysis or "No technical vision analysis available."
+            'technical_vision_analysis': vision_analysis or 'No technical vision analysis available.',
         }
 
         from llm.llm_client import get_ticker_deep_research
-        
-        # Sanitize for JSON (convert Timestamps to strings)
+
         def sanitize(obj):
             if isinstance(obj, dict):
                 return {str(k): sanitize(v) for k, v in obj.items()}
@@ -549,8 +565,7 @@ def _run_deep_research(job_id: str, ticker: str, date: str, base_url: str):
             return obj
 
         output, model = get_ticker_deep_research(ticker, sanitize(payload))
-        
-        # Prepend the chart images to the markdown output for the UI
+
         if chart_urls:
             images_md = "\n".join([f"![{ticker} Chart]({url})" for url in chart_urls])
             output = f"### Technical Charts\n{images_md}\n\n---\n\n" + output

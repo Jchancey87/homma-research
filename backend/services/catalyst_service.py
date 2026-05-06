@@ -327,23 +327,62 @@ def _get_sec_fulltext_catalyst(ticker: str, anchor_date: str) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def _get_earnings_calendar(ticker: str) -> dict:
-    """Return the upcoming earnings date and EPS estimates from yfinance."""
+    """Return the upcoming earnings date and EPS estimates.
+
+    Priority:
+      1. Financial Modeling Prep (FMP) — confirmed dates from SEC filings
+      2. yfinance — scraper fallback, all dates annotated as past/upcoming
+
+    Both paths stamp '_data_as_of' and '_source' so the LLM always knows
+    how fresh the data is and whether a reported date is truly future.
+    """
+    # --- Primary: FMP ---
+    try:
+        from services.fmp_service import get_earnings_calendar as fmp_calendar
+        result = fmp_calendar(ticker)
+        if result.get('_source') == 'fmp':
+            log.debug(f'[Catalyst] Earnings calendar via FMP for {ticker}')
+            return result
+    except Exception as e:
+        log.warning(f'[Catalyst] FMP earnings calendar failed: {e}')
+
+    # --- Fallback: yfinance (with staleness annotation) ---
+    import pytz
     try:
         import yfinance as yf
+        today = datetime.now(pytz.timezone('America/New_York')).date()
+
         t   = yf.Ticker(ticker)
         cal = t.calendar
+        raw: dict = {}
         if isinstance(cal, dict):
-            return {k: str(v) for k, v in cal.items()}
+            raw = {k: str(v) for k, v in cal.items()}
         elif hasattr(cal, 'to_dict'):
-            result = {}
             for col in cal.columns:
                 for idx in cal.index:
-                    result[f'{col}_{idx}'] = str(cal.at[idx, col])
-            return result
-        return {}
+                    raw[f'{col}_{idx}'] = str(cal.at[idx, col])
+
+        # Annotate every date value so the LLM knows past vs. upcoming
+        annotated = {}
+        for k, v in raw.items():
+            annotated[k] = v
+            for fmt in ('%Y-%m-%d', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S'):
+                try:
+                    parsed = datetime.strptime(v[:10], '%Y-%m-%d').date()
+                    annotated[f'{k}_status'] = (
+                        'upcoming' if parsed >= today else 'PAST — already occurred'
+                    )
+                    break
+                except ValueError:
+                    continue
+
+        annotated['_source']      = 'yfinance_fallback'
+        annotated['_data_as_of']  = str(today)
+        annotated['_reliability'] = 'LOW — yfinance scraper; dates may be stale'
+        return annotated
     except Exception as e:
-        log.warning(f'[Catalyst] Earnings calendar fetch failed: {e}')
-        return {}
+        log.warning(f'[Catalyst] yfinance earnings fallback failed: {e}')
+        return {'_source': 'unavailable'}
 
 
 def _get_analyst_activity(ticker: str, n: int = 8) -> list[dict]:

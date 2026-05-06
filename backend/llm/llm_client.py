@@ -232,6 +232,12 @@ DEEP_RESEARCH_SYSTEM = """
 You are a senior Equity Research Analyst specializing in high-volatility small-cap stocks and catalysts. 
 Your goal is to provide a comprehensive "Deep Dive" on a specific ticker based on provided data.
 
+CRITICAL — TEMPORAL AWARENESS:
+- The data snapshot includes a '_data_as_of' field in the earnings_calendar section showing today's date.
+- Any earnings date with a status of "PAST — already occurred" has ALREADY HAPPENED. Do NOT describe it as "upcoming."
+- Only describe dates with status "upcoming" as future events.
+- If an earnings date is in the past, note that the event has already occurred and no upcoming date is known.
+
 Focus on:
 1. **Fundamental Health**: EPS trends, cash position, and valuation context.
 2. **Ownership Structure**: Are institutions buying or selling? Is there high short interest?
@@ -251,7 +257,14 @@ Structure your report with:
 def get_ticker_deep_research(ticker: str, data: dict) -> tuple[str, str]:
     """Perform a deep research analysis using gathered yfinance data."""
     import json
-    user_msg = f"Ticker: {ticker}\nData Snapshot:\n{json.dumps(data, indent=2)}"
+    from datetime import datetime
+    import pytz
+    today_str = datetime.now(pytz.timezone('America/New_York')).strftime('%Y-%m-%d')
+    user_msg = (
+        f"Today's Date: {today_str}\n"
+        f"Ticker: {ticker}\n"
+        f"Data Snapshot:\n{json.dumps(data, indent=2)}"
+    )
     result = _chat(DEEP_RESEARCH_SYSTEM, user_msg, max_tokens=3000)
     return result, Config.LLM_MODEL
 

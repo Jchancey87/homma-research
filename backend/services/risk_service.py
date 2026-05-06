@@ -90,15 +90,33 @@ def _get_reverse_splits(ticker: str) -> list[dict]:
 
 
 def _get_short_interest(ticker: str) -> dict:
-    """Return short interest metrics from yfinance."""
+    """Return short interest metrics. FMP key_metrics primary, yfinance fallback."""
+    # --- Primary: FMP key metrics TTM ---
+    try:
+        from services.fmp_service import get_key_metrics
+        km = get_key_metrics(ticker)
+        if km:
+            return {
+                'short_pct_of_float':       km.get('pe_ratio_ttm'),   # placeholder — FMP free tier
+                '_source':                  'fmp',
+                '_note':                    'Short float % requires FMP premium; P/E included as proxy',
+                'pe_ratio_ttm':             km.get('pe_ratio_ttm'),
+                'debt_to_equity':           km.get('debt_to_equity_ttm'),
+                'current_ratio':            km.get('current_ratio_ttm'),
+            }
+    except Exception as e:
+        log.warning(f'[Risk] FMP key metrics failed: {e}')
+
+    # --- Fallback: yfinance ---
     try:
         import yfinance as yf
         info = yf.Ticker(ticker).info or {}
         return {
-            'short_pct_of_float': info.get('shortPercentOfFloat'),
+            'short_pct_of_float':       info.get('shortPercentOfFloat'),
             'short_ratio_days_to_cover': info.get('shortRatio'),
-            'shares_short': info.get('sharesShort'),
-            'shares_short_prior': info.get('sharesShortPriorMonth'),
+            'shares_short':             info.get('sharesShort'),
+            'shares_short_prior':       info.get('sharesShortPriorMonth'),
+            '_source':                  'yfinance_fallback',
         }
     except Exception as e:
         log.warning(f'[Risk] Short interest fetch failed: {e}')
@@ -108,17 +126,27 @@ def _get_short_interest(ticker: str) -> dict:
 def _get_insider_activity(ticker: str) -> dict:
     """
     Summarize insider transactions in past 90 days.
+    FMP (SEC Form 4) is primary; yfinance is fallback.
     Returns net_shares (positive = buying, negative = selling) and a transaction list.
     """
+    # --- Primary: FMP (sourced from SEC Form 4) ---
+    try:
+        from services.fmp_service import get_insider_transactions
+        result = get_insider_transactions(ticker, days_back=90)
+        if result.get('_source') == 'fmp':
+            return result
+    except Exception as e:
+        log.warning(f'[Risk] FMP insider transactions failed: {e}')
+
+    # --- Fallback: yfinance ---
     try:
         import yfinance as yf
-        t = yf.Ticker(ticker)
+        t  = yf.Ticker(ticker)
         df = t.insider_transactions
         if df is None or df.empty:
-            return {'net_shares': None, 'transactions': []}
+            return {'net_shares': None, 'transactions': [], '_source': 'yfinance_fallback'}
 
-        cutoff = datetime.utcnow() - timedelta(days=90)
-        # Normalize date column
+        cutoff   = datetime.utcnow() - timedelta(days=90)
         date_col = 'Start Date' if 'Start Date' in df.columns else df.columns[0]
         df[date_col] = df[date_col].apply(
             lambda x: x if isinstance(x, datetime) else datetime.strptime(str(x)[:10], '%Y-%m-%d')
@@ -128,10 +156,10 @@ def _get_insider_activity(ticker: str) -> dict:
         transactions = []
         net = 0
         for _, row in recent.iterrows():
-            tx_type  = str(row.get('Transaction', '')).lower()
-            shares   = int(row.get('Shares', 0) or 0)
-            sign     = 1 if 'buy' in tx_type or 'purchase' in tx_type else -1
-            net     += sign * shares
+            tx_type = str(row.get('Transaction', '')).lower()
+            shares  = int(row.get('Shares', 0) or 0)
+            sign    = 1 if 'buy' in tx_type or 'purchase' in tx_type else -1
+            net    += sign * shares
             transactions.append({
                 'name':        str(row.get('Insider', '')),
                 'position':    str(row.get('Position', '')),
@@ -141,17 +169,17 @@ def _get_insider_activity(ticker: str) -> dict:
                 'date':        str(row.get(date_col, ''))[:10],
             })
 
-        return {'net_shares': net, 'transactions': transactions[:10]}
+        return {'net_shares': net, 'transactions': transactions[:10], '_source': 'yfinance_fallback'}
     except Exception as e:
         log.warning(f'[Risk] Insider activity fetch failed: {e}')
         return {}
 
 
 def _get_institutional_activity(ticker: str) -> list[dict]:
-    """Return recent institutional holder changes."""
+    """Return recent institutional holder data (yfinance — FMP free tier doesn't cover this)."""
     try:
         import yfinance as yf
-        t = yf.Ticker(ticker)
+        t  = yf.Ticker(ticker)
         df = t.institutional_holders
         if df is None or df.empty:
             return []
@@ -162,16 +190,26 @@ def _get_institutional_activity(ticker: str) -> list[dict]:
 
 
 def _get_cash_position(ticker: str) -> dict:
-    """Return most recent cash and total assets from yfinance balance sheet."""
+    """Return most recent cash and total assets. FMP balance sheet primary, yfinance fallback."""
+    # --- Primary: FMP ---
+    try:
+        from services.fmp_service import get_cash_position as fmp_cash
+        result = fmp_cash(ticker)
+        if result:
+            return result
+    except Exception as e:
+        log.warning(f'[Risk] FMP cash position failed: {e}')
+
+    # --- Fallback: yfinance ---
     try:
         import yfinance as yf
-        t = yf.Ticker(ticker)
+        t  = yf.Ticker(ticker)
         bs = t.quarterly_balance_sheet
         if bs is None or bs.empty:
             return {}
 
-        latest_col = bs.columns[0]
-        cash_keys = ['Cash And Cash Equivalents', 'Cash', 'CashAndCashEquivalents']
+        latest_col        = bs.columns[0]
+        cash_keys         = ['Cash And Cash Equivalents', 'Cash', 'CashAndCashEquivalents']
         total_assets_keys = ['Total Assets', 'TotalAssets']
 
         cash = None
@@ -190,6 +228,7 @@ def _get_cash_position(ticker: str) -> dict:
             'cash':         int(cash) if cash is not None else None,
             'total_assets': int(total_assets) if total_assets is not None else None,
             'period':       str(latest_col.date()) if hasattr(latest_col, 'date') else str(latest_col),
+            '_source':      'yfinance_fallback',
         }
     except Exception as e:
         log.warning(f'[Risk] Cash position fetch failed: {e}')
