@@ -273,6 +273,25 @@ def get_chart_data():
             print(f"yfinance fallback failed in chart-data: {e}")
 
     if bars_df.empty:
+        # Fallback 2: Try the previous day (in case ingest tagged it as 'tomorrow' or it's a weekend)
+        try:
+            from datetime import timedelta
+            prev_date = (datetime.strptime(date, '%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
+            print(f"No data for {date}, trying fallback to {prev_date}")
+            bars_df = _fetch_intraday_polygon(ticker, prev_date)
+            if bars_df.empty:
+                # final yfinance check for prev_date
+                start_dt = datetime.strptime(prev_date, '%Y-%m-%d')
+                end_dt   = start_dt + timedelta(days=1)
+                bars_df = yf.download(ticker, start=start_dt.strftime('%Y-%m-%d'),
+                                     end=end_dt.strftime('%Y-%m-%d'),
+                                     interval='1m', prepost=True, progress=False)
+                if not bars_df.empty and hasattr(bars_df.columns, 'levels'):
+                    bars_df.columns = bars_df.columns.get_level_values(0)
+                    bars_df = bars_df.rename(columns={'Open':'open','High':'high','Low':'low','Close':'close','Volume':'volume'})
+        except: pass
+
+    if bars_df.empty:
         return jsonify({'error': f'No intraday data available for {ticker} on {date}'}), 404
 
     df = bars_df[['open', 'high', 'low', 'close', 'volume']].copy()

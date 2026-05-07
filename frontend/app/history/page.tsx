@@ -2,13 +2,13 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  getTickerHistory, getTickerAppearances, getSectors,
+  getTickerHistory, getTickerAppearances, getSectors, getGainersExportUrl,
   TickerHistoryItem, TickerAppearance,
 } from '@/lib/api'
 import HeatMap from '@/components/HeatMap'
 import {
   History, Search, ChevronDown, ChevronUp, ExternalLink,
-  BarChart2, TrendingUp, RefreshCw, ArrowUpDown, LayoutGrid,
+  BarChart2, TrendingUp, RefreshCw, ArrowUpDown, LayoutGrid, Download,
 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -308,20 +308,30 @@ export default function HistoryPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <History className="text-emerald-400" size={22} />
-            Ticker History
+            <LayoutGrid className="text-emerald-400" size={22} />
+            Command Center
           </h1>
           <p className="text-gray-500 text-sm mt-0.5">
-            Every ticker that&apos;s appeared in daily gainers — searchable and filterable
+            Real-time gainers, heatmaps, and full ticker history
           </p>
         </div>
-        <button
-          id="refresh-history"
-          onClick={load}
-          className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors mt-1"
-        >
-          <RefreshCw size={15} />
-        </button>
+        <div className="flex gap-2 mt-1">
+          <a
+            href={getGainersExportUrl({ date, min_gap: minGap, max_float: maxFloat, min_rvol: minRvol, sector })}
+            download="history_export.csv"
+            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600/10 border border-emerald-500/30 text-emerald-400 rounded-lg text-xs hover:bg-emerald-600/20 transition-colors"
+          >
+            <Download size={13} />
+            <span>Export CSV</span>
+          </a>
+          <button
+            id="refresh-history"
+            onClick={load}
+            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+          >
+            <RefreshCw size={15} />
+          </button>
+        </div>
       </div>
 
       {/* Controls */}

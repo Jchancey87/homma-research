@@ -7,9 +7,8 @@ import {
 } from 'lucide-react'
 
 const links = [
-  { href: '/',             label: 'Dashboard',    icon: LayoutDashboard },
-  { href: '/history',      label: 'History',      icon: History },
-  { href: '/daily-charts', label: 'Daily Charts', icon: AreaChart },
+  { href: '/history',      label: 'Command Center', icon: LayoutDashboard },
+  { href: '/daily-charts', label: 'Daily Charts',   icon: AreaChart },
   { href: '/charts',       label: 'Charts',       icon: Camera },
   { href: '/research',     label: 'Research',     icon: Search },
   { href: '/watchlist',    label: 'Watchlist',    icon: Bookmark },

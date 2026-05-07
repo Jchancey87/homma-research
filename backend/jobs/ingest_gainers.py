@@ -43,15 +43,22 @@ MAX_MARKET_CAP = 500e6  # < $500M
 # ---------------------------------------------------------------------------
 
 def main():
+    # Ensure target_date is based on New York time (US/Eastern)
+    # This prevents UTC servers from tagging late-night ingests as 'tomorrow'
+    from datetime import datetime
+    import pytz
+    eastern = pytz.timezone('US/Eastern')
+    ny_now  = datetime.now(eastern)
+    
     parser = argparse.ArgumentParser(description='Ingest daily top gainers')
-    parser.add_argument('--date',    default=str(date_cls.today()), help='YYYY-MM-DD')
+    parser.add_argument('--date',    default=ny_now.strftime('%Y-%m-%d'), help='YYYY-MM-DD')
     parser.add_argument('--dry-run', action='store_true', help='Fetch data but do not write to DB')
     args = parser.parse_args()
 
     target_date = args.date
     dry_run     = args.dry_run
 
-    log.info(f"Starting ingestion for {target_date} (dry_run={dry_run})")
+    log.info(f"Starting ingestion for {target_date} (NY Time: {ny_now.strftime('%Y-%m-%d %H:%M:%S %Z')})")
 
     gainers = fetch_gainers(target_date)
     log.info(f"Found {len(gainers)} qualified gainers")
