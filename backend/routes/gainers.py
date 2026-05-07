@@ -8,6 +8,24 @@ from services.archetype_service import get_archetype_stats
 gainers_bp = Blueprint('gainers', __name__)
 
 
+@gainers_bp.route('/gainers/live', methods=['GET'])
+def live_gainers():
+    """
+    Real-time top-10 gainer screener powered by the Polygon Snapshot API.
+    Results are cached in-memory for CACHE_TTL_SECONDS (default 5 min).
+    Pass ?force=1 to bypass cache and re-fetch immediately.
+    """
+    force = request.args.get('force', '').strip() in ('1', 'true', 'yes')
+    try:
+        from services.live_screener import get_live_gainers, refresh_cache
+        if force:
+            refresh_cache(force=True)
+        return jsonify(get_live_gainers())
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
 @gainers_bp.route('/gainers', methods=['GET'])
 def list_gainers():
     gainers = get_gainers_filtered(

@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import HeatMap from '@/components/HeatMap'
-import TodayGainers from '@/components/TodayGainers'
+import LiveGainers from '@/components/LiveGainers'
 import WatchlistQuickAccess from '@/components/WatchlistQuickAccess'
 import RecentObservations from '@/components/RecentObservations'
 import SystemStatus from '@/components/SystemStatus'
@@ -45,25 +45,23 @@ export default async function DashboardPage() {
         <p className="text-gray-500 text-sm mt-0.5">Your market research briefing</p>
       </div>
 
-      {/* ── Row 1: Today's Movers (full width) ── */}
+      {/* ── Row 1: Live Gainer Screener (full width) ── */}
       <section className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-wide flex items-center gap-2">
             <TrendingUp size={14} className="text-emerald-400" />
-            Today&apos;s Top Movers
+            Live Gainer Screener
           </h2>
           <div className="flex items-center gap-3">
             <a href="/daily-charts" className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors font-medium">
               View charts →
             </a>
-            <a href="/gainers" className="text-xs text-gray-600 hover:text-gray-400 transition-colors">
-              Table view
+            <a href="/history" className="text-xs text-gray-600 hover:text-gray-400 transition-colors">
+              History
             </a>
           </div>
         </div>
-        <Suspense fallback={<p className="text-gray-600 text-sm py-4">Loading gainers…</p>}>
-          <TodayGainers />
-        </Suspense>
+        <LiveGainers />
       </section>
 
       {/* ── Row 2: Watchlist quick-access + Recent observations ── */}

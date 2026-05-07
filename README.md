@@ -13,27 +13,28 @@ This platform automates the process of identifying, analyzing, and journaling ma
 - **AI/LLM**:
   - **Text**: Groq (Llama 3) for rapid structured analysis reports.
   - **Vision**: Gemini 1.5 Pro/Flash for automated chart annotation and pattern recognition.
-- **Data Pipeline**: Polygon.io (Primary), yfinance (Fallback/Historical), SEC EDGAR (Free, no key required), finviz
+- **Data Pipeline**: Financial Modeling Prep (FMP - Primary Fundamental/Earnings), Polygon.io (Primary Market Data), SEC EDGAR (Filings & PIPE detection), finviz
 - **Deployment**: Manual (Ubuntu/Proxmox LXC), PM2 (Process Management), Nginx Proxy Manager
 
 ## ✨ Core Features
 
+- **Command Center**:
+  - **Unified Hub**: Combines real-time gainers, historical ticker tracking, and heatmaps into a single, filterable interface.
+  - **Advanced Filtering**: Filter the entire history by Gap %, Float, RVOL, Sector, or specific date.
+  - **Multi-View Heatmap**: Interactive "Float vs. RVOL" and "Avg Gap by Sector" visualizations to identify high-conviction momentum pockets.
 - **Daily Market Intelligence**:
-  - Automated ingestion of top 100+ gainers at market close.
+  - **Automated Ingestion**: Ingests top 100+ gainers at market close (using Eastern Time boundaries).
+  - **RVOL Screening**: Intelligent screening to prioritize quality volume relative to 20-day averages.
   - **Today's Overview**: A "morning briefing" dashboard showing top movers, active watchlists, and recent observations.
-  - **Daily Chart Grid**: A high-performance, lazy-loaded responsive grid of the top 10 gainers for any date, featuring interactive candles + EMA 21.
+- **Interactive Deep Research** (4 parallel analysis modules):
+  - **Full Report**: AI-generated analyst report with fundamental health, ownership, catalysts, and technical context.
+  - **🚨 Risk Detection**: Scans SEC EDGAR for reverse splits, S-3 shelf registrations, 424B ATM offerings, toxic financing language, and short interest traps.
+  - **⚡ Catalyst Analysis**: Event-date-aware rating — Tier 1 (binary), Tier 2 (soft), or Tier 3 (none) — with SEC 8-K item code parsing and FMP earnings integration.
+  - **📊 Deep Context**: Produces a Setup Score (1–10) by combining SMA levels, RS vs SPY, float rotation, and historical appearance density.
 - **Ticker History & Tracking**:
   - **Historical Lookup**: Searchable archive of every ticker that has ever appeared as a gainer.
   - **Repeat Appearance Tracking**: Automatically flags "repeat runners" with multi-period filtering (Week/Month/Year).
   - **Expanded Context**: Deep dive into every historical date a ticker ran — see its old news headlines, float, and catalyst freshness.
-- **Interactive Deep Research** (4 parallel analysis modules):
-  - **Full Report**: AI-generated analyst report with fundamental health, ownership, catalysts, and technical context.
-  - **🚨 Risk Detection**: Scans SEC EDGAR for reverse splits, S-3 shelf registrations, 424B ATM offerings, toxic financing language, and short interest traps.
-  - **⚡ Catalyst Analysis**: Event-date-aware rating — Tier 1 (binary), Tier 2 (soft), or Tier 3 (none) — with SEC 8-K item code parsing and full-text keyword search.
-  - **📊 Deep Context**: Produces a Setup Score (1–10) by combining SMA levels, RS vs SPY, float rotation, and historical appearance density.
-- **Visual Analytics & Heatmaps**:
-  - **Multi-View Heatmap**: Interactive "Float vs. RVOL" and "Avg Gap by Sector" visualizations to identify high-conviction momentum pockets.
-  - **Period Filtering**: Heatmaps automatically update based on the selected historical period (Week/Month/Year/All Time).
 - **Asset Management**:
   - Local storage for trade screenshots with AI-assisted annotation and pattern tagging.
 - **📋 Watchlist & Notes**: Quick-access tracking with bullish/bearish sentiment tagging and historical observation feeds.
@@ -74,6 +75,7 @@ nano backend/.env
 |---|---|
 | `DATABASE_URL` | PostgreSQL DSN: `postgresql://user:pass@host:5432/trading_journal` |
 | `POLYGON_API_KEY` | Market data (news, OHLCV, aggregates) |
+| `FMP_API_KEY` | Financial Modeling Prep key for fundamental/earnings data |
 | `LLM_API_KEY` | Groq API key for text analysis |
 | `GEMINI_API_KEY` | Gemini vision API key for chart annotation |
 | `SEC_USER_AGENT` | Your name + email (e.g. `John Doe john@email.com`) — required by SEC EDGAR (free) |

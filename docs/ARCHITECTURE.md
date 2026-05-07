@@ -8,18 +8,19 @@ The Trading Pattern Journal is a self-hosted, distributed local application cons
 
 | Source | Used For | Auth |
 |---|---|---|
+| **FMP (Financial Modeling Prep)** | Fundamentals, earnings calendar, analyst estimates, enterprise value | API Key |
 | **Polygon.io** | Real-time OHLCV, daily aggregates, news articles | API Key |
 | **SEC EDGAR Submissions API** | Company filings (S-3, 8-K, 424B) | User-Agent header only |
 | **SEC EDGAR EFTS** | Full-text search for toxic financing keywords | User-Agent header only |
 | **SEC EDGAR XBRL** | Quarterly shares outstanding (dilution trend) | User-Agent header only |
-| **yfinance** | Fallback OHLCV, fundamentals, insider/institutional data, options chain | None |
+| **yfinance** | Fallback fundamentals, insider/institutional data | None |
 | **finviz** | Short interest confirmation, screener data | None |
 
 ### 2. Backend Service Layer (Flask)
 
 - **Modular Blueprints**: The API is segmented into `gainers`, `charts`, and `analysis` blueprints, each registered at `/api`.
 - **Service-Oriented Design**: All data gathering lives in `services/`, completely decoupled from routes. This means each service can be tested and called independently.
-- **Async Job Pattern**: All LLM-heavy operations (`/api/research/*`) immediately return a `job_id` and run in daemon threads. The frontend polls `GET /api/jobs/<job_id>` until completion. Jobs are persisted to SQLite (`llm_jobs` table).
+- **Async Job Pattern**: All LLM-heavy operations (`/api/research/*`) immediately return a `job_id` and run in daemon threads. The frontend polls `GET /api/jobs/<job_id>` until completion. Jobs are persisted to PostgreSQL (`llm_jobs` table).
 
 ### 3. AI Analysis Engine
 
@@ -50,7 +51,7 @@ The AI layer has two clients and six prompt functions:
 ### Daily Automation
 ```
 Market Close (4pm ET)
-  → ingest_gainers.py: Polygon top gainers → SQLite daily_gainers table
+  → ingest_gainers.py: Polygon top gainers (ET-aware) → PostgreSQL daily_gainers table
   → daily_analysis_report.py: Top 3 gainers → Groq analysis → email
 ```
 
@@ -59,24 +60,24 @@ Market Close (4pm ET)
 User enters ticker → clicks ANALYZE
   │
   ├── [Thread 1] /api/research
-  │     yfinance fundamentals + Polygon intraday → mplfinance chart
+  │     FMP fundamentals + Polygon intraday → mplfinance chart
   │     → Gemini vision analysis → Groq DEEP_RESEARCH_SYSTEM → Full Report
   │
   ├── [Thread 2] /api/research/risk
-  │     yfinance (splits, short, insider, cash) + SEC EDGAR (S-3, 424B, EFTS)
+  │     FMP (splits, short, insider, cash) + SEC EDGAR (S-3, 424B, EFTS)
   │     → Groq RISK_DETECTION_SYSTEM → Risk Report
   │
   ├── [Thread 3] /api/research/catalyst
-  │     Polygon news + SEC 8-K filings + yfinance calendar + freshness LLM scoring
+  │     Polygon news + SEC 8-K filings + FMP earnings calendar + freshness LLM scoring
   │     → Groq CATALYST_ANALYSIS_SYSTEM → Catalyst Report (Tier 1/2/3)
   │
   └── [Thread 4] /api/research/context
-        Polygon/yfinance daily OHLCV (SMA) + yfinance RS vs SPY + options chain
-        + SQLite daily_gainers history for this ticker
+        Polygon daily OHLCV (SMA) + FMP RS vs SPY + options data
+        + PostgreSQL daily_gainers history for this ticker
         → Groq DEEP_CONTEXT_SYSTEM → Setup Score + Playbook
 ```
 
-Each thread writes to `llm_jobs` in SQLite. Frontend polls all 4 `job_id`s in parallel every 2.5s.
+Each thread writes to `llm_jobs` in PostgreSQL. Frontend polls all 4 `job_id`s in parallel every 2.5s.
 
 ---
 

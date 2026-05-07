@@ -41,6 +41,10 @@ def create_app() -> Flask:
     from jobs.job_watchdog import start_watchdog
     start_watchdog()
 
+    # Start live screener: Polygon cache refresh + 8 PM ET EOD persist
+    from services.live_screener import start_auto_persist
+    start_auto_persist()
+
     @app.route('/api/health')
     def health():
         return jsonify({

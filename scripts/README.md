@@ -5,7 +5,7 @@ This directory contains scripts for historical data management, enrichment, and 
 ## 📜 Available Scripts
 
 ### 1. `import_historical.py`
-Imports raw CSV data into the SQLite database.
+Imports raw CSV data into the PostgreSQL database.
 - **Usage**: `python import_historical.py /path/to/data.csv`
 - **Schema**: Expects columns for `Date, Ticker, Gap %, Float, RVOL, Sector, Market Cap, News, Close, Open`.
 
@@ -20,7 +20,10 @@ Enriches the `daily_gainers` table with accurate metrics from yfinance.
 - **Usage**: `python enrich_historical.py [--dry-run] [--ticker AAPL] [--limit 100]`
 
 ### 3. `pull_historical.py`
-A simple utility to pull historical OHLCV data for specific tickers directly to the storage folder.
+A utility to pull historical gainer lists from external sources or APIs (Polygon/HPG).
+
+### 4. `import_historical.py`
+Legacy/Utility script to import CSV-formatted historical gainer lists.
 
 ## ⚙️ Workflow for New Data
 

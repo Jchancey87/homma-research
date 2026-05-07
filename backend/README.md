@@ -16,10 +16,11 @@ Business logic is fully decoupled from routes for testability and reuse:
 
 | Service | Purpose |
 |---|---|
+| `fmp_service.py` | Financial Modeling Prep integration — fundamental metrics, cash runway, earnings, analyst targets, institutional ownership |
 | `sec_service.py` | SEC EDGAR integration — CIK lookup, filing fetches (Submissions API), EFTS full-text search, XBRL shares history |
-| `risk_service.py` | Risk Detection data pipeline — reverse splits, short interest, insider activity, S-3/424B filings, toxic financing search, cash runway |
-| `catalyst_service.py` | Catalyst Analysis data pipeline — Polygon news, SEC 8-K items, earnings calendar, analyst upgrades, freshness scoring |
-| `context_service.py` | Deep Context data pipeline — SMA/EMA levels, RS vs SPY, options P/C ratio, float rotation, journal history |
+| `risk_service.py` | Risk Detection data pipeline — reverse splits, short interest, insider activity, S-3/424B filings, toxic financing search |
+| `catalyst_service.py` | Catalyst Analysis data pipeline — Polygon news, SEC 8-K items, FMP earnings, analyst upgrades, freshness scoring |
+| `context_service.py` | Deep Context data pipeline — SMA/EMA levels, FMP RS vs SPY, options flow, journal history |
 | `chart_service_research.py` | Intraday chart generation (Polygon + mplfinance) for the main research report |
 | `gainer_service.py` | Gainer data queries and filtering |
 | `archetype_service.py` | Pattern categorization stats |
@@ -40,8 +41,8 @@ Business logic is fully decoupled from routes for testability and reuse:
 - `jobs/daily_analysis_report.py` — Generates and emails the nightly AI report.
 
 ### Database
-- `database.py` — SQLite connection with WAL mode, Row factory, and busy-timeout retry.
-- `models/schema.sql` — Idempotent schema for `daily_gainers`, `chart_captures`, and `llm_jobs`.
+- `database.py` — PostgreSQL connection pool using `psycopg2`.
+- `models/schema.sql` — Idempotent schema for `daily_gainers`, `chart_captures`, `llm_jobs`, and `pipe_filings`.
 
 ---
 
@@ -64,7 +65,9 @@ Business logic is fully decoupled from routes for testability and reuse:
 
 | Variable | Required | Purpose |
 |---|---|---|
+| `DATABASE_URL` | ✅ | PostgreSQL DSN: `postgresql://user:pass@host:5432/db` |
 | `POLYGON_API_KEY` | ✅ | Market data (OHLCV, news, reference) |
+| `FMP_API_KEY` | ✅ | Financial Modeling Prep key |
 | `LLM_API_KEY` | ✅ | Groq API key |
 | `LLM_MODEL` | Optional | Default: `llama-3.3-70b-versatile` |
 | `GEMINI_API_KEY` | Optional | Vision chart annotation |
@@ -97,17 +100,28 @@ The server defaults to `http://127.0.0.1:5000`.
 > All `POST /api/research/*` routes accept `{ ticker, date? }` and immediately return `{ job_id }`.
 > The frontend polls `GET /api/jobs/<job_id>` every 2.5s until `status === 'done'`.
 
-### Gainers
+### Gainers & History
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/gainers` | Filter gainers by date, gap, float, RVOL, sector |
-| GET | `/api/gainers/heatmap` | Float × RVOL heatmap data |
+| GET | `/api/gainers/summary` | Dashboard briefing: latest ingest stats + top 9 gainers |
+| GET | `/api/gainers/ticker-history` | Aggregated per-ticker history (appearances, avg gap, etc.) |
+| GET | `/api/gainers/ticker/<ticker>` | Individual appearance log for a specific ticker |
+| GET | `/api/gainers/heatmap` | Float × RVOL heatmap data (period-aware) |
+| GET | `/api/gainers/pipe-scan` | Batch-scan a date for PIPE/private placement activity |
 | GET | `/api/gainers/sectors` | Unique sector list |
-| GET | `/api/gainers/export` | CSV export |
+| GET | `/api/gainers/export` | CSV export (honours active filters) |
+### Watchlist & Observations
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/watchlist` | List all tickers on watchlist |
+| POST | `/api/watchlist` | Add/update ticker on watchlist |
+| DELETE | `/api/watchlist/<ticker>` | Remove ticker from watchlist |
+| GET | `/api/observations` | List latest historical observations |
+| POST | `/api/observations` | Add new note/observation for a ticker |
 
 ### Charts & Health
-
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET/POST | `/api/charts` | List / upload chart captures |

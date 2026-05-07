@@ -87,6 +87,37 @@ export interface GainerSummary {
 export const getGainersSummary = () =>
   api.get<GainerSummary>('/api/gainers/summary').then(r => r.data)
 
+// ── Live Screener ──────────────────────────────────────────────────────────
+
+export interface LiveGainerRow {
+  ticker:        string
+  gap_pct:       number
+  last_price:    number | null
+  open_price:    number | null
+  prev_close:    number | null
+  volume:        number | null
+  rvol_15m:      number | null
+  float_shares:  number | null
+  sector:        string | null
+  market_cap:    number | null
+  news_headline: string | null
+  news_fresh:    boolean | null
+}
+
+export interface LiveGainerSnapshot {
+  session:       'pre_market' | 'open' | 'after_hours' | 'closed'
+  session_label: string
+  fetched_at:    string | null   // ISO UTC
+  gainers:       LiveGainerRow[]
+  top_n:         number
+  cache_ttl_s:   number
+}
+
+export const getLiveGainers = (force = false) =>
+  api.get<LiveGainerSnapshot>('/api/gainers/live', {
+    params: force ? { force: 1 } : undefined
+  }).then(r => r.data)
+
 export interface TickerHistoryItem {
   ticker:       string
   sector:       string | null

@@ -4,9 +4,10 @@ The frontend is a modern Next.js 14 application designed for rapid ticker analys
 
 ## 🚀 Key Features
 
+- **Command Center**: A unified hub for real-time gainers, historical ticker tracking, and period-aware heatmaps.
 - **Interactive Charting**: Powered by `lightweight-charts`, providing a TradingView-like experience with EMA ribbons, RVOL, ATR, and ADX panels.
 - **Deep Research Interface**: A tabbed `/research` page with four parallel analysis modules that all fire simultaneously when you submit a ticker.
-- **Dynamic Dashboard**: Heatmaps (Float × RVOL) and archetype performance metrics.
+- **Dynamic Dashboard**: "Today's Movers" briefing, watchlist quick-access, and archetype performance metrics.
 - **Responsive Layout**: Tailwind CSS with dark mode throughout.
 
 ## 🛠️ Getting Started
@@ -30,17 +31,20 @@ Open [http://localhost:3000](http://localhost:3000).
 ```
 frontend/
 ├── app/
-│   ├── page.tsx              # Main dashboard
+│   ├── page.tsx              # Main dashboard (Today's Movers)
+│   ├── history/
+│   │   └── page.tsx          # Command Center (Ticker History & Heatmaps)
 │   ├── research/
 │   │   └── page.tsx          # Deep Research page (4 parallel tabs)
-│   └── gainers/
-│       └── page.tsx          # Gainers table & filtering
+│   ├── daily-charts/
+│   │   └── page.tsx          # Responsive grid of daily gainers
+│   └── watchlist/            # Watchlist & notes management
 ├── components/
 │   ├── research/
 │   │   └── FeaturePanel.tsx  # Reusable tab panel for research modules
 │   ├── InteractiveSessionChart.tsx  # lightweight-charts integration
-│   ├── ChartUpload.tsx       # Chart capture uploader with AI annotation
-│   └── TagSelector.tsx       # Multi-tag selector for archetypes
+│   ├── HeatMap.tsx           # Vega-lite powered heatmap
+│   └── ...
 ├── lib/
 │   └── api.ts                # Typed Axios API client
 └── hooks/                    # Custom React hooks
