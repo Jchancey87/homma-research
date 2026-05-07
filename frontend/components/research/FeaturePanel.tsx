@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { Loader2, AlertCircle, RefreshCw, type LucideIcon } from 'lucide-react'
+import { Loader2, AlertCircle, RefreshCw, Clock, Download, type LucideIcon } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { getJobStatus } from '@/lib/api'
 
@@ -26,6 +26,11 @@ interface FeaturePanelProps {
   state:       FeatureState
   onTrigger:   () => void
   ticker:      string | null
+  // Cache metadata
+  cachedAt?:   string | null   // ISO timestamp of cache hit
+  version?:    number | null
+  expiresAt?:  string | null   // ISO timestamp for stale warning
+  exportUrl?:  string | null   // download URL
 }
 
 // ── Accent colour maps ─────────────────────────────────────────────────────────
@@ -73,8 +78,27 @@ const COLORS = {
 
 export default function FeaturePanel({
   title, description, Icon, accentColor, state, onTrigger, ticker,
+  cachedAt, version, expiresAt, exportUrl,
 }: FeaturePanelProps) {
   const c = COLORS[accentColor]
+
+  // Stale warning: if expiresAt exists and we're >50% through TTL from cachedAt
+  const isStale = (() => {
+    if (!expiresAt || !cachedAt) return false
+    const created = new Date(cachedAt).getTime()
+    const expires = new Date(expiresAt).getTime()
+    const now     = Date.now()
+    const pct     = (now - created) / (expires - created)
+    return pct > 0.5
+  })()
+
+  const cacheAge = (() => {
+    if (!cachedAt) return null
+    const ms  = Date.now() - new Date(cachedAt).getTime()
+    const hrs = Math.floor(ms / 3_600_000)
+    const min = Math.floor((ms % 3_600_000) / 60_000)
+    return hrs > 0 ? `${hrs}h ago` : `${min}m ago`
+  })()
 
   // Poll for job completion
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -102,29 +126,60 @@ export default function FeaturePanel({
         <div className="flex items-center gap-3">
           <Icon className={c.icon} size={20} />
           <div>
-            <h3 className="font-bold text-white text-sm tracking-wide">{title}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-white text-sm tracking-wide">{title}</h3>
+              {/* Cache version badge */}
+              {version != null && (
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-gray-700 text-gray-400">
+                  v{version}
+                </span>
+              )}
+            </div>
             {!state.report && !state.loading && (
               <p className="text-xs text-gray-500 mt-0.5">{description}</p>
+            )}
+            {/* Cache age */}
+            {state.report && cacheAge && (
+              <div className="flex items-center gap-1 mt-0.5">
+                <Clock size={10} className={isStale ? 'text-amber-400' : 'text-gray-600'} />
+                <span className={`text-[10px] ${isStale ? 'text-amber-400' : 'text-gray-600'}`}>
+                  From cache · {cacheAge}{isStale ? ' · may be stale' : ''}
+                </span>
+              </div>
             )}
           </div>
         </div>
 
-        {/* Action button */}
-        {ticker && (
-          <button
-            onClick={onTrigger}
-            disabled={state.loading}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed ${state.report ? 'bg-gray-700 hover:bg-gray-600' : c.btn}`}
-            title={state.report ? `Re-run ${title}` : `Run ${title}`}
-          >
-            {state.loading
-              ? <Loader2 size={13} className="animate-spin" />
-              : state.report
-                ? <><RefreshCw size={12} /> RE-RUN</>
-                : 'RUN'
-            }
-          </button>
-        )}
+        {/* Action buttons */}
+        <div className="flex items-center gap-2">
+          {/* Download button — only shown when report is ready and exportUrl provided */}
+          {state.report && exportUrl && (
+            <a
+              href={exportUrl}
+              download
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 transition-all"
+              title="Download report as Markdown"
+            >
+              <Download size={12} />
+            </a>
+          )}
+          {/* Run / Re-run button */}
+          {ticker && (
+            <button
+              onClick={onTrigger}
+              disabled={state.loading}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed ${state.report ? 'bg-gray-700 hover:bg-gray-600' : c.btn}`}
+              title={state.report ? `Force re-run ${title}` : `Run ${title}`}
+            >
+              {state.loading
+                ? <Loader2 size={13} className="animate-spin" />
+                : state.report
+                  ? <><RefreshCw size={12} /> RE-RUN</>
+                  : 'RUN'
+              }
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Body */}

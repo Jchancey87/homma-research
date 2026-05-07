@@ -198,27 +198,30 @@ export const importGeminiAnalysis = (
 
 // ── Analysis ──────────────────────────────────────────────────────────────
 
+export interface JobResponse   { job_id: string; status: string; cached?: false }
+export interface CacheResponse { cached: true; report: string; version: number; created_at: string }
+export type ResearchResponse = JobResponse | CacheResponse
+
 export const startContinuation = (date: string) =>
   api.post<{ job_id: string; status: string }>('/api/continuation', { date }).then(r => r.data)
 
 export const startSentiment = (query: string) =>
   api.post<{ job_id: string; status: string }>('/api/sentiment', { query }).then(r => r.data)
 
-export const startResearch = (ticker: string, date?: string) =>
-  api.post<{ job_id: string; status: string }>('/api/research', { ticker, date }).then(r => r.data)
+export const startResearch = (ticker: string, date?: string, force = false) =>
+  api.post<ResearchResponse>('/api/research', { ticker, date, force }).then(r => r.data)
 
-export const startRiskDetection = (ticker: string) =>
-  api.post<{ job_id: string; status: string }>('/api/research/risk', { ticker }).then(r => r.data)
+export const startRiskDetection = (ticker: string, force = false) =>
+  api.post<ResearchResponse>('/api/research/risk', { ticker, force }).then(r => r.data)
 
-export const startCatalystAnalysis = (ticker: string, date?: string) =>
-  api.post<{ job_id: string; status: string }>('/api/research/catalyst', { ticker, date }).then(r => r.data)
+export const startCatalystAnalysis = (ticker: string, date?: string, force = false) =>
+  api.post<ResearchResponse>('/api/research/catalyst', { ticker, date, force }).then(r => r.data)
 
-export const startDeepContext = (ticker: string) =>
-  api.post<{ job_id: string; status: string }>('/api/research/context', { ticker }).then(r => r.data)
+export const startDeepContext = (ticker: string, force = false) =>
+  api.post<ResearchResponse>('/api/research/context', { ticker, force }).then(r => r.data)
 
 export const getJob = (jobId: string) =>
   api.get<LLMJob>(`/api/jobs/${jobId}`).then(r => r.data)
-
 
 export const getJobStatus = getJob
 
@@ -231,9 +234,28 @@ export const getArchetypes = () =>
 export const retryJob = (jobId: string) =>
   api.post<{ job_id: string; status: string }>(`/api/jobs/${jobId}/retry`).then(r => r.data)
 
-// ── Health ────────────────────────────────────────────────────────────────
+// ── Research History & Export ─────────────────────────────────────────────
 
-export const getHealth = () => api.get('/api/health').then(r => r.data)
+export interface CachedReport {
+  id:          number
+  ticker:      string
+  date:        string | null
+  report_type: string
+  version:     number
+  model_used:  string | null
+  created_at:  string
+  expires_at:  string | null
+  output?:     string   // only present when fetching single record
+}
+
+export const getResearchHistory = (ticker: string, type?: string, limit = 50) =>
+  api.get<CachedReport[]>('/api/research/history', { params: { ticker, type, limit } }).then(r => r.data)
+
+export const getCachedReport = (id: number) =>
+  api.get<CachedReport>(`/api/research/history/${id}`).then(r => r.data)
+
+export const getResearchExportUrl = (id: number) =>
+  `${BASE}/api/research/export/${id}`
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 

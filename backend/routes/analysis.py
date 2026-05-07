@@ -96,8 +96,15 @@ def start_research():
     data   = request.get_json(silent=True) or {}
     ticker = (data.get('ticker') or '').strip().upper()
     date   = (data.get('date') or '').strip()
+    force  = data.get('force', False)
     if not ticker:
         return jsonify({'error': 'ticker is required'}), 400
+
+    if not force:
+        cached = _cache_read(ticker, date or None, 'deep_research')
+        if cached:
+            return jsonify({'cached': True, 'report': cached['output'],
+                            'version': cached['version'], 'created_at': str(cached['created_at'])})
 
     job_id = str(uuid.uuid4())
     _create_job(job_id, 'research', ticker)
@@ -110,8 +117,15 @@ def start_research():
 def start_risk_detection():
     data   = request.get_json(silent=True) or {}
     ticker = (data.get('ticker') or '').strip().upper()
+    force  = data.get('force', False)
     if not ticker:
         return jsonify({'error': 'ticker is required'}), 400
+
+    if not force:
+        cached = _cache_read(ticker, None, 'risk')
+        if cached:
+            return jsonify({'cached': True, 'report': cached['output'],
+                            'version': cached['version'], 'created_at': str(cached['created_at'])})
 
     job_id = str(uuid.uuid4())
     _create_job(job_id, 'risk_detection', ticker)
@@ -124,8 +138,15 @@ def start_catalyst_analysis():
     data   = request.get_json(silent=True) or {}
     ticker = (data.get('ticker') or '').strip().upper()
     date   = (data.get('date') or '').strip()
+    force  = data.get('force', False)
     if not ticker:
         return jsonify({'error': 'ticker is required'}), 400
+
+    if not force:
+        cached = _cache_read(ticker, date or None, 'catalyst')
+        if cached:
+            return jsonify({'cached': True, 'report': cached['output'],
+                            'version': cached['version'], 'created_at': str(cached['created_at'])})
 
     job_id = str(uuid.uuid4())
     _create_job(job_id, 'catalyst_analysis', ticker)
@@ -137,8 +158,15 @@ def start_catalyst_analysis():
 def start_deep_context():
     data   = request.get_json(silent=True) or {}
     ticker = (data.get('ticker') or '').strip().upper()
+    force  = data.get('force', False)
     if not ticker:
         return jsonify({'error': 'ticker is required'}), 400
+
+    if not force:
+        cached = _cache_read(ticker, None, 'context')
+        if cached:
+            return jsonify({'cached': True, 'report': cached['output'],
+                            'version': cached['version'], 'created_at': str(cached['created_at'])})
 
     job_id = str(uuid.uuid4())
     _create_job(job_id, 'deep_context', ticker)
@@ -323,6 +351,70 @@ def get_chart_data():
         'minus_di': line_series('minus_di'),
         'atr':      line_series('atr'),
     })
+
+
+@analysis_bp.route('/research/history', methods=['GET'])
+def research_history():
+    """
+    Return all cached research reports for a ticker, newest first.
+    Optional ?type=risk filter.
+    ?ticker=AAPL&type=risk&limit=20
+    """
+    ticker = (request.args.get('ticker') or '').strip().upper()
+    rtype  = request.args.get('type')
+    limit  = request.args.get('limit', 50, type=int)
+    if not ticker:
+        return jsonify({'error': 'ticker is required'}), 400
+
+    query  = "SELECT id, ticker, date, report_type, version, model_used, created_at, expires_at FROM research_cache WHERE ticker = %s"
+    params = [ticker]
+    if rtype:
+        query += " AND report_type = %s"; params.append(rtype)
+    query += " ORDER BY created_at DESC LIMIT %s"; params.append(limit)
+
+    with get_connection() as conn:
+        rows = conn.execute(query, params).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@analysis_bp.route('/research/history/<int:cache_id>', methods=['GET'])
+def get_cached_report(cache_id):
+    """Return a single cached report by its ID (including the full output text)."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM research_cache WHERE id = %s", (cache_id,)
+        ).fetchone()
+    if not row:
+        return jsonify({'error': 'Cached report not found'}), 404
+    return jsonify(dict(row))
+
+
+@analysis_bp.route('/research/export/<int:cache_id>', methods=['GET'])
+def export_cached_report(cache_id):
+    """
+    Download a cached report as a markdown file.
+    GET /api/research/export/42
+    """
+    from flask import Response
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT ticker, date, report_type, version, output, created_at FROM research_cache WHERE id = %s",
+            (cache_id,)
+        ).fetchone()
+    if not row:
+        return jsonify({'error': 'Cached report not found'}), 404
+
+    r = dict(row)
+    filename = f"{r['ticker']}_{r['report_type']}_v{r['version']}_{(r['date'] or str(r['created_at'])[:10])}.md"
+    header = f"# {r['ticker']} — {r['report_type'].replace('_', ' ').title()} (v{r['version']})\n"
+    header += f"_Generated: {r['created_at']}_\n\n---\n\n"
+    content = header + (r['output'] or '')
+
+    return Response(
+        content,
+        mimetype='text/markdown',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
 
 
 @analysis_bp.route('/jobs', methods=['GET'])
@@ -587,6 +679,7 @@ def _run_deep_research(job_id: str, ticker: str, date: str, base_url: str):
             output = f"### Technical Charts\n{images_md}\n\n---\n\n" + output
 
         _set_status(job_id, 'done', output=output, model_used=model)
+        _cache_write(ticker, date or None, 'deep_research', output, model, job_id)
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -603,6 +696,7 @@ def _run_risk_detection(job_id: str, ticker: str):
         payload = build_risk_payload(ticker)
         output, model = get_risk_analysis(ticker, payload)
         _set_status(job_id, 'done', output=output, model_used=model)
+        _cache_write(ticker, None, 'risk', output, model, job_id)
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -619,6 +713,7 @@ def _run_catalyst_analysis(job_id: str, ticker: str, date: str):
         payload = build_catalyst_payload(ticker, date or None)
         output, model = get_catalyst_analysis(ticker, payload)
         _set_status(job_id, 'done', output=output, model_used=model)
+        _cache_write(ticker, date or None, 'catalyst', output, model, job_id)
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -635,6 +730,7 @@ def _run_deep_context(job_id: str, ticker: str):
         payload = build_context_payload(ticker)
         output, model = get_deep_context(ticker, payload)
         _set_status(job_id, 'done', output=output, model_used=model)
+        _cache_write(ticker, None, 'context', output, model, job_id)
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -675,4 +771,80 @@ def _set_status(job_id: str, status: str, output: str = None, model_used: str = 
         conn.execute(
             "UPDATE llm_jobs SET status=%s, output=%s, model_used=%s, updated_at=%s WHERE id=%s",
             (status, output, model_used, now, job_id),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Research Cache helpers
+# ---------------------------------------------------------------------------
+
+# TTL in hours per report type (None = never expires)
+_CACHE_TTL: dict[str, int | None] = {
+    'deep_research': 24,
+    'risk':          72,
+    'catalyst':       6,
+    'context':       48,
+    'pipe':          None,
+}
+
+
+def _cache_read(ticker: str, date: str | None, report_type: str) -> dict | None:
+    """
+    Return the latest non-expired cached row for (ticker, date, report_type),
+    or None if not found / expired.
+    """
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+
+    if date:
+        sql = (
+            "SELECT * FROM research_cache "
+            "WHERE ticker=%s AND date=%s AND report_type=%s "
+            "AND (expires_at IS NULL OR expires_at > %s) "
+            "ORDER BY created_at DESC LIMIT 1"
+        )
+        params = (ticker, date, report_type, now)
+    else:
+        sql = (
+            "SELECT * FROM research_cache "
+            "WHERE ticker=%s AND (date IS NULL OR date='') AND report_type=%s "
+            "AND (expires_at IS NULL OR expires_at > %s) "
+            "ORDER BY created_at DESC LIMIT 1"
+        )
+        params = (ticker, report_type, now)
+
+    with get_connection() as conn:
+        row = conn.execute(sql, params).fetchone()
+    return dict(row) if row else None
+
+
+def _cache_write(
+    ticker: str, date: str | None, report_type: str,
+    output: str, model_used: str, job_id: str
+) -> None:
+    """
+    Insert a new versioned cache row. Version is auto-calculated as
+    (max existing version for this ticker+date+type) + 1.
+    """
+    from datetime import datetime, timezone, timedelta
+
+    ttl_hours = _CACHE_TTL.get(report_type)
+    now       = datetime.now(timezone.utc)
+    expires_at = (now + timedelta(hours=ttl_hours)).isoformat() if ttl_hours else None
+
+    # Calculate next version number
+    if date:
+        ver_sql    = "SELECT COALESCE(MAX(version), 0) FROM research_cache WHERE ticker=%s AND date=%s AND report_type=%s"
+        ver_params = (ticker, date, report_type)
+    else:
+        ver_sql    = "SELECT COALESCE(MAX(version), 0) FROM research_cache WHERE ticker=%s AND (date IS NULL OR date='') AND report_type=%s"
+        ver_params = (ticker, report_type)
+
+    with get_connection() as conn:
+        max_ver = conn.execute(ver_sql, ver_params).fetchone()[0]
+        conn.execute(
+            """INSERT INTO research_cache
+               (ticker, date, report_type, version, output, model_used, job_id, expires_at)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+            (ticker, date or None, report_type, max_ver + 1, output, model_used, job_id, expires_at)
         )

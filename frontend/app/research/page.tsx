@@ -2,13 +2,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Search, Loader2, AlertCircle, FileText,
-  TrendingUp, ShieldAlert, BarChart3, CalendarDays, Landmark,
+  TrendingUp, ShieldAlert, BarChart3, CalendarDays, Landmark, History, Download,
   type LucideIcon,
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import {
   startResearch, startRiskDetection, startCatalystAnalysis, startDeepContext,
   startPipeAnalysis, getJobStatus,
+  getResearchHistory, getCachedReport, getResearchExportUrl,
+  type CachedReport,
 } from '@/lib/api'
 import FeaturePanel, {
   type FeatureState, EMPTY_FEATURE,
@@ -16,7 +18,7 @@ import FeaturePanel, {
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Tab = 'report' | 'risk' | 'catalyst' | 'context' | 'pipe'
+type Tab = 'report' | 'risk' | 'catalyst' | 'context' | 'pipe' | 'history'
 
 interface MainState {
   jobId:   string | null
@@ -25,6 +27,18 @@ interface MainState {
   error:   string | null
   status:  string | null
 }
+
+// Per-feature cache metadata
+interface CacheMeta {
+  cachedAt:  string | null
+  version:   number | null
+  expiresAt: string | null
+  cacheId:   number | null
+}
+const EMPTY_META: CacheMeta = { cachedAt: null, version: null, expiresAt: null, cacheId: null }
+
+
+
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -90,6 +104,7 @@ const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'catalyst', label: 'Catalyst',    icon: TrendingUp },
   { id: 'context',  label: 'Context',     icon: BarChart3 },
   { id: 'pipe',     label: 'PIPE',        icon: Landmark },
+  { id: 'history',  label: 'History',     icon: History },
 ]
 
 const TAB_ACCENT: Record<Tab, string> = {
@@ -98,6 +113,7 @@ const TAB_ACCENT: Record<Tab, string> = {
   catalyst: 'text-emerald-400 border-emerald-500',
   context:  'text-blue-400 border-blue-500',
   pipe:     'text-violet-400 border-violet-500',
+  history:  'text-gray-400 border-gray-500',
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -115,6 +131,16 @@ export default function ResearchPage() {
   const [catalyst, setCatalyst] = useState<FeatureState>(EMPTY_FEATURE)
   const [context,  setContext]  = useState<FeatureState>(EMPTY_FEATURE)
   const [pipe,     setPipe]     = useState<FeatureState>(EMPTY_FEATURE)
+
+  // Cache metadata per feature
+  const [riskMeta,     setRiskMeta]     = useState<CacheMeta>(EMPTY_META)
+  const [catalystMeta, setCatalystMeta] = useState<CacheMeta>(EMPTY_META)
+  const [contextMeta,  setContextMeta]  = useState<CacheMeta>(EMPTY_META)
+
+  // History tab
+  const [historyItems, setHistoryItems]   = useState<CachedReport[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [expandedReport, setExpandedReport] = useState<CachedReport | null>(null)
 
   // ── Polling hooks ──────────────────────────────────────────────────────────
 
@@ -146,34 +172,54 @@ export default function ResearchPage() {
 
   // ── Trigger individual features ────────────────────────────────────────────
 
-  const runRisk = useCallback(async () => {
+  // Helper: apply a cache-hit or job response to a feature setter
+  const applyFeatureRes = (
+    res: Awaited<ReturnType<typeof startRiskDetection>>,
+    setState: typeof setRisk,
+    setMeta: typeof setRiskMeta,
+    errMsg: string,
+  ) => {
+    if ('cached' in res && res.cached) {
+      setState({ ...EMPTY_FEATURE, loading: false, report: res.report })
+      setMeta({ cachedAt: res.created_at, version: res.version, expiresAt: null, cacheId: null })
+    } else if ('job_id' in res) {
+      setState(s => ({ ...s, jobId: res.job_id }))
+    } else {
+      setState({ ...EMPTY_FEATURE, error: errMsg })
+    }
+  }
+
+  const runRisk = useCallback(async (force = false) => {
     if (!ticker) return
     setRisk({ ...EMPTY_FEATURE, loading: true, status: 'Scanning SEC filings & corporate actions…' })
+    setRiskMeta(EMPTY_META)
     try {
-      const { job_id } = await startRiskDetection(ticker)
-      setRisk(s => ({ ...s, jobId: job_id }))
+      const res = await startRiskDetection(ticker, force)
+      applyFeatureRes(res, setRisk, setRiskMeta, 'Failed to start risk analysis')
     } catch (e: any) {
       setRisk({ ...EMPTY_FEATURE, error: e?.response?.data?.error ?? 'Failed to start risk analysis' })
     }
   }, [ticker])
 
-  const runCatalyst = useCallback(async () => {
+  const runCatalyst = useCallback(async (force = false) => {
     if (!ticker) return
     setCatalyst({ ...EMPTY_FEATURE, loading: true, status: 'Parsing news & regulatory events…' })
+    setCatalystMeta(EMPTY_META)
     try {
-      const { job_id } = await startCatalystAnalysis(ticker, date || undefined)
-      setCatalyst(s => ({ ...s, jobId: job_id }))
+      const res = await startCatalystAnalysis(ticker, date || undefined, force)
+      applyFeatureRes(res, setCatalyst, setCatalystMeta, 'Failed to start catalyst analysis')
     } catch (e: any) {
       setCatalyst({ ...EMPTY_FEATURE, error: e?.response?.data?.error ?? 'Failed to start catalyst analysis' })
     }
   }, [ticker, date])
 
-  const runContext = useCallback(async () => {
+  const runContext = useCallback(async (force = false) => {
     if (!ticker) return
     setContext({ ...EMPTY_FEATURE, loading: true, status: 'Building multi-timeframe technical picture…' })
+    setContextMeta(EMPTY_META)
     try {
-      const { job_id } = await startDeepContext(ticker)
-      setContext(s => ({ ...s, jobId: job_id }))
+      const res = await startDeepContext(ticker, force)
+      applyFeatureRes(res, setContext, setContextMeta, 'Failed to start deep context')
     } catch (e: any) {
       setContext({ ...EMPTY_FEATURE, error: e?.response?.data?.error ?? 'Failed to start deep context' })
     }
@@ -190,6 +236,22 @@ export default function ResearchPage() {
     }
   }, [ticker, date])
 
+  // ── History tab loader ────────────────────────────────────────────────────
+  const loadHistory = useCallback(async () => {
+    if (!ticker) return
+    setHistoryLoading(true)
+    try {
+      const items = await getResearchHistory(ticker)
+      setHistoryItems(items)
+    } catch { /* silent */ } finally {
+      setHistoryLoading(false)
+    }
+  }, [ticker])
+
+  useEffect(() => {
+    if (activeTab === 'history' && ticker) loadHistory()
+  }, [activeTab, ticker, loadHistory])
+
   // ── Main search — fires all 4 jobs in parallel ─────────────────────────────
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -197,15 +259,14 @@ export default function ResearchPage() {
     const sym = ticker.trim().toUpperCase()
     if (!sym) return
 
-    // Reset all
     setMain({ ...EMPTY_MAIN, loading: true, status: 'Gathering market data…' })
     setRisk({ ...EMPTY_FEATURE, loading: true, status: 'Scanning SEC filings & corporate actions…' })
     setCatalyst({ ...EMPTY_FEATURE, loading: true, status: 'Parsing news & regulatory events…' })
     setContext({ ...EMPTY_FEATURE, loading: true, status: 'Building multi-timeframe technical picture…' })
     setPipe({ ...EMPTY_FEATURE, loading: true, status: 'Scanning SEC 8-K filings for PIPE signals…' })
+    setRiskMeta(EMPTY_META); setCatalystMeta(EMPTY_META); setContextMeta(EMPTY_META)
     setActiveTab('report')
 
-    // Fire all 4 in parallel
     try {
       const [mainRes, riskRes, catRes, ctxRes, pipeRes] = await Promise.allSettled([
         startResearch(sym, date || undefined),
@@ -215,30 +276,25 @@ export default function ResearchPage() {
         startPipeAnalysis(sym, date || undefined),
       ])
 
-      if (mainRes.status === 'fulfilled')
-        setMain(s => ({ ...s, jobId: mainRes.value.job_id, status: 'AI Analyst is investigating…' }))
-      else
-        setMain({ ...EMPTY_MAIN, error: 'Failed to start main report' })
+      // Main report — no cache path yet (deep research)
+      if (mainRes.status === 'fulfilled') {
+        const r = mainRes.value
+        if ('cached' in r && r.cached) setMain({ ...EMPTY_MAIN, loading: false, report: r.report })
+        else if ('job_id' in r) setMain(s => ({ ...s, jobId: r.job_id, status: 'AI Analyst is investigating…' }))
+      } else setMain({ ...EMPTY_MAIN, error: 'Failed to start main report' })
 
-      if (riskRes.status === 'fulfilled')
-        setRisk(s => ({ ...s, jobId: riskRes.value.job_id }))
-      else
-        setRisk({ ...EMPTY_FEATURE, error: 'Failed to start risk detection' })
+      if (riskRes.status === 'fulfilled')    applyFeatureRes(riskRes.value, setRisk, setRiskMeta, 'Failed to start risk detection')
+      else setRisk({ ...EMPTY_FEATURE, error: 'Failed to start risk detection' })
 
-      if (catRes.status === 'fulfilled')
-        setCatalyst(s => ({ ...s, jobId: catRes.value.job_id }))
-      else
-        setCatalyst({ ...EMPTY_FEATURE, error: 'Failed to start catalyst analysis' })
+      if (catRes.status === 'fulfilled')     applyFeatureRes(catRes.value, setCatalyst, setCatalystMeta, 'Failed to start catalyst analysis')
+      else setCatalyst({ ...EMPTY_FEATURE, error: 'Failed to start catalyst analysis' })
 
-      if (ctxRes.status === 'fulfilled')
-        setContext(s => ({ ...s, jobId: ctxRes.value.job_id }))
-      else
-        setContext({ ...EMPTY_FEATURE, error: 'Failed to start deep context' })
+      if (ctxRes.status === 'fulfilled')     applyFeatureRes(ctxRes.value, setContext, setContextMeta, 'Failed to start deep context')
+      else setContext({ ...EMPTY_FEATURE, error: 'Failed to start deep context' })
 
-      if (pipeRes.status === 'fulfilled')
+      if (pipeRes.status === 'fulfilled' && 'job_id' in pipeRes.value)
         setPipe(s => ({ ...s, jobId: pipeRes.value.job_id }))
-      else
-        setPipe({ ...EMPTY_FEATURE, error: 'Failed to start PIPE analysis' })
+      else setPipe({ ...EMPTY_FEATURE, error: 'Failed to start PIPE analysis' })
 
     } catch (err) {
       setMain({ ...EMPTY_MAIN, error: 'Unexpected error starting research' })
@@ -409,8 +465,12 @@ export default function ResearchPage() {
                 Icon={ShieldAlert}
                 accentColor="orange"
                 state={risk}
-                onTrigger={runRisk}
+                onTrigger={() => runRisk(true)}
                 ticker={ticker || null}
+                cachedAt={riskMeta.cachedAt}
+                version={riskMeta.version}
+                expiresAt={riskMeta.expiresAt}
+                exportUrl={riskMeta.cacheId ? getResearchExportUrl(riskMeta.cacheId) : null}
               />
             )}
 
@@ -422,8 +482,12 @@ export default function ResearchPage() {
                 Icon={TrendingUp}
                 accentColor="emerald"
                 state={catalyst}
-                onTrigger={runCatalyst}
+                onTrigger={() => runCatalyst(true)}
                 ticker={ticker || null}
+                cachedAt={catalystMeta.cachedAt}
+                version={catalystMeta.version}
+                expiresAt={catalystMeta.expiresAt}
+                exportUrl={catalystMeta.cacheId ? getResearchExportUrl(catalystMeta.cacheId) : null}
               />
             )}
 
@@ -435,8 +499,12 @@ export default function ResearchPage() {
                 Icon={BarChart3}
                 accentColor="blue"
                 state={context}
-                onTrigger={runContext}
+                onTrigger={() => runContext(true)}
                 ticker={ticker || null}
+                cachedAt={contextMeta.cachedAt}
+                version={contextMeta.version}
+                expiresAt={contextMeta.expiresAt}
+                exportUrl={contextMeta.cacheId ? getResearchExportUrl(contextMeta.cacheId) : null}
               />
             )}
 
@@ -451,6 +519,64 @@ export default function ResearchPage() {
                 onTrigger={runPipe}
                 ticker={ticker || null}
               />
+            )}
+
+            {/* History tab */}
+            {activeTab === 'history' && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-gray-300">Past Reports for <span className="text-white font-mono">{ticker}</span></h3>
+                  <button onClick={loadHistory} className="text-xs text-gray-500 hover:text-white transition-colors">Refresh</button>
+                </div>
+                {historyLoading ? (
+                  <div className="flex items-center justify-center py-12 text-gray-600 gap-2">
+                    <Loader2 size={16} className="animate-spin" /> Loading history…
+                  </div>
+                ) : historyItems.length === 0 ? (
+                  <p className="text-center py-12 text-gray-600 text-sm">No cached reports yet for {ticker}. Run an analysis first.</p>
+                ) : (
+                  historyItems.map(item => (
+                    <div key={item.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-start justify-between gap-4 hover:border-gray-700 transition-colors">
+                      <div className="space-y-1 flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold uppercase tracking-wide text-gray-400 bg-gray-800 px-2 py-0.5 rounded">{item.report_type.replace('_', ' ')}</span>
+                          <span className="text-[10px] font-mono text-gray-600 bg-gray-800 px-1.5 py-0.5 rounded">v{item.version}</span>
+                          {item.date && <span className="text-[10px] text-gray-600">{item.date}</span>}
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          {new Date(item.created_at).toLocaleString()} · {item.model_used || 'unknown model'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={async () => {
+                            if (expandedReport?.id === item.id) { setExpandedReport(null); return }
+                            const full = await getCachedReport(item.id)
+                            setExpandedReport(full)
+                          }}
+                          className="text-xs text-gray-400 hover:text-emerald-400 transition-colors px-2 py-1.5 rounded bg-gray-800 hover:bg-gray-700"
+                        >
+                          {expandedReport?.id === item.id ? 'Collapse' : 'View'}
+                        </button>
+                        <a
+                          href={getResearchExportUrl(item.id)}
+                          download
+                          className="flex items-center gap-1 text-xs text-gray-400 hover:text-white px-2 py-1.5 rounded bg-gray-800 hover:bg-gray-700 transition-colors"
+                          title="Download .md"
+                        >
+                          <Download size={12} />
+                        </a>
+                      </div>
+                      {/* Expanded report viewer */}
+                      {expandedReport?.id === item.id && expandedReport.output && (
+                        <div className="col-span-full w-full mt-3 pt-3 border-t border-gray-800 prose prose-invert prose-sm max-w-none prose-headings:text-white prose-strong:text-emerald-400">
+                          <ReactMarkdown>{expandedReport.output}</ReactMarkdown>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
             )}
           </div>
         </>

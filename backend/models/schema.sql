@@ -117,4 +117,25 @@ CREATE TABLE IF NOT EXISTS pipe_filings (
 
 CREATE INDEX IF NOT EXISTS idx_pipe_ticker ON pipe_filings(ticker);
 CREATE INDEX IF NOT EXISTS idx_pipe_date   ON pipe_filings(anchor_date);
-CREATE INDEX IF NOT EXISTS idx_pipe_is_pipe ON pipe_filings(is_pipe)
+CREATE INDEX IF NOT EXISTS idx_pipe_is_pipe ON pipe_filings(is_pipe);
+
+-- Research Cache: stores versioned LLM analysis reports per ticker/date/type
+-- Multiple rows per (ticker, report_type) are allowed — versions are never deleted,
+-- allowing the user to scroll back through previous runs.
+CREATE TABLE IF NOT EXISTS research_cache (
+    id          SERIAL PRIMARY KEY,
+    ticker      TEXT    NOT NULL,
+    date        TEXT,                         -- YYYY-MM-DD anchor date (null for non-date analyses)
+    report_type TEXT    NOT NULL,             -- risk | catalyst | context | deep_research | pipe
+    version     INTEGER NOT NULL DEFAULT 1,  -- auto-incremented per ticker+date+type on insert
+    output      TEXT    NOT NULL,             -- full markdown report
+    model_used  TEXT,
+    job_id      TEXT REFERENCES llm_jobs(id) ON DELETE SET NULL,
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    expires_at  TIMESTAMPTZ                   -- NULL = never expires (PIPE reports)
+);
+
+CREATE INDEX IF NOT EXISTS idx_rcache_ticker      ON research_cache(ticker);
+CREATE INDEX IF NOT EXISTS idx_rcache_report_type ON research_cache(report_type);
+CREATE INDEX IF NOT EXISTS idx_rcache_expires     ON research_cache(expires_at);
+CREATE INDEX IF NOT EXISTS idx_rcache_ticker_type ON research_cache(ticker, report_type, created_at DESC);
