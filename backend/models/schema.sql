@@ -92,11 +92,36 @@ CREATE TABLE IF NOT EXISTS watchlist (
     sector         TEXT,
     notes          TEXT,
     tags           TEXT    DEFAULT '[]',     -- JSON array of string labels
+    alert_threshold DOUBLE PRECISION,        -- optional gap% drop threshold for auto-expiry
     added_at       TIMESTAMPTZ DEFAULT NOW(),
     last_viewed_at TIMESTAMPTZ
 );
 
+ALTER TABLE watchlist ADD COLUMN IF NOT EXISTS alert_threshold DOUBLE PRECISION;
+
 CREATE INDEX IF NOT EXISTS idx_watchlist_ticker ON watchlist(ticker);
+
+-- Continuation Picks: AI-identified top picks from nightly email, auto-expire when conditions weaken
+CREATE TABLE IF NOT EXISTS continuation_picks (
+    id              SERIAL PRIMARY KEY,
+    ticker          TEXT    NOT NULL,
+    date            TEXT    NOT NULL,        -- YYYY-MM-DD date of the nightly report
+    reason          TEXT,                    -- one-sentence LLM rationale
+    gap_pct         DOUBLE PRECISION,        -- gap% on the date of pick
+    float_shares    DOUBLE PRECISION,        -- float on the date of pick
+    rvol_15m        DOUBLE PRECISION,        -- rvol on the date of pick
+    sector          TEXT,
+    rank            INTEGER DEFAULT 1,       -- 1=highest priority
+    is_active       BOOLEAN DEFAULT TRUE,    -- flipped to FALSE when conditions weaken
+    deactivated_at  TIMESTAMPTZ,
+    deactivated_reason TEXT,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(ticker, date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cont_picks_active ON continuation_picks(is_active);
+CREATE INDEX IF NOT EXISTS idx_cont_picks_date   ON continuation_picks(date);
+CREATE INDEX IF NOT EXISTS idx_cont_picks_ticker ON continuation_picks(ticker);
 
 -- Observations: standalone markdown notes per ticker
 CREATE TABLE IF NOT EXISTS observations (

@@ -62,6 +62,9 @@ def main():
     log.info("Generating Top 10 Continuation Report...")
     continuation_md, _ = get_continuation_analysis(target_date, gainers)
 
+    # 2a. Parse Top Picks from the report and persist to DB
+    parse_and_save_top_picks(continuation_md, target_date, gainers)
+
     # 3. Top 3 Deep Technical / Fundamental Analysis
     top_3_gainers = gainers[:3]
     log.info(f"Fetching deeper technical data for top 3: {[g['ticker'] for g in top_3_gainers]}")
@@ -83,6 +86,61 @@ def main():
         return
 
     send_email(target_date, full_report_md)
+
+
+def parse_and_save_top_picks(continuation_md: str, date_str: str, gainers: list[dict]):
+    """
+    Parse the '## 🏆 Top Picks for Continuation Watch' section from the continuation
+    report markdown and persist each ticker to the continuation_picks table.
+    Format expected from the LLM:
+        1. ERNA - High gap percentage and low float...
+        2. OSS  - ...
+    """
+    import re
+    # Find the section between '## 🏆 Top Picks' and the next ## heading
+    section_match = re.search(
+        r'##\s*🏆\s*Top Picks.*?\n(.*?)(?=\n##|\Z)',
+        continuation_md,
+        re.DOTALL | re.IGNORECASE,
+    )
+    if not section_match:
+        log.warning('Could not find Top Picks section in continuation report')
+        return
+
+    section_text = section_match.group(1).strip()
+    # Match lines like: 1. ERNA - reason or 1. ERNA — reason
+    pick_pattern = re.findall(
+        r'^\d+\.\s+([A-Z]{1,6})\s*[-—]\s*(.+)$',
+        section_text,
+        re.MULTILINE,
+    )
+    if not pick_pattern:
+        log.warning(f'No pick lines found in section: {section_text[:200]}')
+        return
+
+    # Build a quick lookup of gainer data by ticker
+    gainer_map = {g['ticker']: g for g in gainers}
+    now = __import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat()
+
+    with get_connection() as conn:
+        for rank, (ticker, reason) in enumerate(pick_pattern, start=1):
+            ticker = ticker.upper().strip()
+            g = gainer_map.get(ticker, {})
+            conn.execute(
+                """
+                INSERT INTO continuation_picks
+                    (ticker, date, reason, gap_pct, float_shares, rvol_15m, sector, rank, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (ticker, date) DO UPDATE
+                    SET reason = EXCLUDED.reason, rank = EXCLUDED.rank
+                """,
+                (
+                    ticker, date_str, reason.strip(),
+                    g.get('gap_pct'), g.get('float_shares'), g.get('rvol_15m'),
+                    g.get('sector'), rank, now,
+                )
+            )
+            log.info(f'Saved continuation pick #{rank}: {ticker}')
 
 
 def fetch_top_gainers_from_db(target_date: str, limit: int) -> list[dict]:

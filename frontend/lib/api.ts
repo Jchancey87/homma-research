@@ -345,6 +345,46 @@ export const removeFromWatchlist = (ticker: string) =>
 export const markWatchlistViewed = (ticker: string) =>
   api.post(`/api/watchlist/${ticker}/viewed`).then(r => r.data)
 
+// ── Continuation Picks ────────────────────────────────────────────────────
+
+export interface ContinuationPick {
+  id:                   number
+  ticker:               string
+  date:                 string
+  reason:               string | null
+  gap_pct:              number | null
+  float_shares:         number | null
+  rvol_15m:             number | null
+  sector:               string | null
+  rank:                 number
+  is_active:            boolean
+  deactivated_at:       string | null
+  deactivated_reason:   string | null
+  created_at:           string
+}
+
+export const getContinuationPicks = (includeInactive = false) =>
+  api.get<ContinuationPick[]>('/api/continuation-picks', {
+    params: { include_inactive: includeInactive }
+  }).then(r => r.data)
+
+export const addContinuationPick = (data: {
+  ticker: string
+  date: string
+  reason?: string
+  gap_pct?: number
+  float_shares?: number
+  rvol_15m?: number
+  sector?: string
+  rank?: number
+}) => api.post<{ inserted: number }>('/api/continuation-picks', [data]).then(r => r.data)
+
+export const deactivateContinuationPick = (id: number, reason?: string) =>
+  api.post(`/api/continuation-picks/${id}/deactivate`, { reason }).then(r => r.data)
+
+export const deleteContinuationPick = (id: number) =>
+  api.delete(`/api/continuation-picks/${id}`).then(r => r.data)
+
 // ── Observations ──────────────────────────────────────────────────────────
 
 export interface Observation {
