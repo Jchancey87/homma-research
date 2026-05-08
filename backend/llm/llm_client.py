@@ -560,11 +560,13 @@ def get_ticker_enrichment(ticker: str, sector: str, description: str) -> dict:
         f"Sector: {sector}\n"
         f"Description: {description}\n"
     )
-    # Use a small token limit and fast model if possible (Config.LLM_MODEL is usually fast)
-    raw = _chat(WATCHLIST_ENRICHMENT_SYSTEM, user_msg, max_tokens=150)
     try:
+        # Use OpenRouter (deep client) to avoid Groq rate limits on quick tasks
+        raw = _chat(WATCHLIST_ENRICHMENT_SYSTEM, user_msg, max_tokens=150, use_deep_client=True)
         # Strip potential markdown fences
         clean = raw.strip().replace('```json', '').replace('```', '').strip()
         return json.loads(clean)
-    except:
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Watchlist enrichment failed for {ticker}: {e}")
         return {"notes": None, "tags": []}

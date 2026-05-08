@@ -57,9 +57,10 @@ def add_to_watchlist():
                 if not notes:
                     notes = enrich.get('notes')
                 if not tags_raw:
-                    tags_raw = enrich.get('tags', [])
+                    tags_raw = enrich.get('tags') or []
 
-    tags = json.dumps([str(t).strip() for t in tags_raw if str(t).strip()])
+    tags_list = tags_raw if isinstance(tags_raw, list) else []
+    tags = json.dumps([str(t).strip() for t in tags_list if str(t).strip()])
 
     now = datetime.now(timezone.utc).isoformat()
     try:
