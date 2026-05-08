@@ -17,10 +17,15 @@ class Config:
     _env_storage    = os.getenv('STORAGE_PATH', '../storage/charts')
     STORAGE_PATH    = os.path.normpath(os.path.join(BASE_DIR, _env_storage)) if not os.path.isabs(_env_storage) else _env_storage
 
-    # LLM (Groq / OpenAI-compatible)
+    # Primary LLM (Groq / Fast Tasks)
     LLM_BASE_URL    = os.getenv('LLM_BASE_URL', 'https://api.groq.com/openai/v1')
     LLM_API_KEY     = os.getenv('LLM_API_KEY', '')
-    LLM_MODEL       = os.getenv('LLM_MODEL', 'deepseek-r1-distill-llama-70b')
+    LLM_MODEL       = os.getenv('LLM_MODEL', 'llama-3.3-70b-versatile')
+
+    # Secondary LLM (OpenRouter / Deep Research)
+    DEEP_LLM_BASE_URL = os.getenv('DEEP_LLM_BASE_URL', 'https://openrouter.ai/api/v1')
+    DEEP_LLM_API_KEY  = os.getenv('DEEP_LLM_API_KEY', '')
+    DEEP_LLM_MODEL    = os.getenv('DEEP_LLM_MODEL', 'meta-llama/llama-3.3-70b-instruct')
 
     # External APIs
     POLYGON_API_KEY = os.getenv('POLYGON_API_KEY', '')

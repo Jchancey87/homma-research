@@ -16,6 +16,16 @@ def _get_client() -> OpenAI:
         base_url=Config.LLM_BASE_URL,
     )
 
+def _get_deep_client() -> OpenAI:
+    return OpenAI(
+        api_key=Config.DEEP_LLM_API_KEY,
+        base_url=Config.DEEP_LLM_BASE_URL,
+        default_headers={
+            "HTTP-Referer": "https://github.com/jchancey87/Analysis-App",
+            "X-Title": "Trading Journal Analysis App",
+        }
+    )
+
 
 # ---------------------------------------------------------------------------
 # Prompt templates
@@ -189,8 +199,8 @@ def get_deep_analysis_report(date: str, deep_data: list[dict]) -> tuple[str, str
         "Produce the deep technical and fundamental analysis report now."
     )
 
-    result = _chat(DEEP_ANALYSIS_SYSTEM, user_msg, max_tokens=2500)
-    return result, Config.LLM_MODEL
+    result = _chat(DEEP_ANALYSIS_SYSTEM, user_msg, max_tokens=2500, use_deep_client=True)
+    return result, Config.DEEP_LLM_MODEL
 
 
 def classify_news_fresh(headline: str) -> bool:
@@ -211,10 +221,16 @@ def classify_news_fresh(headline: str) -> bool:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _chat(system: str, user: str, max_tokens: int = 1024) -> str:
-    client = _get_client()
+def _chat(system: str, user: str, max_tokens: int = 1024, use_deep_client: bool = False) -> str:
+    if use_deep_client and Config.DEEP_LLM_API_KEY:
+        client = _get_deep_client()
+        model = Config.DEEP_LLM_MODEL
+    else:
+        client = _get_client()
+        model = Config.LLM_MODEL
+
     response = client.chat.completions.create(
-        model=Config.LLM_MODEL,
+        model=model,
         messages=[
             {'role': 'system',  'content': system},
             {'role': 'user',    'content': user},
@@ -269,8 +285,8 @@ def get_ticker_deep_research(ticker: str, data: dict) -> tuple[str, str]:
         f"Ticker: {ticker}\n"
         f"Data Snapshot:\n{json.dumps(data, indent=2)}"
     )
-    result = _chat(DEEP_RESEARCH_SYSTEM, user_msg, max_tokens=3000)
-    return result, Config.LLM_MODEL
+    result = _chat(DEEP_RESEARCH_SYSTEM, user_msg, max_tokens=3000, use_deep_client=True)
+    return result, Config.DEEP_LLM_MODEL
 
 
 # ---------------------------------------------------------------------------
