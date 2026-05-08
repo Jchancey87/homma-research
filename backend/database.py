@@ -51,7 +51,10 @@ class _ConnectionWrapper:
 
     def execute(self, sql: str, params=None):
         cur = self._conn.cursor()
-        cur.execute(sql, params or ())
+        if params is not None:
+            cur.execute(sql, params)
+        else:
+            cur.execute(sql)
         return cur
 
     def cursor(self):
