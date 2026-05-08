@@ -701,8 +701,9 @@ def _run_deep_research(job_id: str, ticker: str, date: str, base_url: str):
         _cache_write(ticker, date or None, 'deep_research', output, model, job_id)
     except Exception as e:
         import traceback
-        traceback.print_exc()
-        _set_status(job_id, 'error', output=str(e))
+        tb = traceback.format_exc()
+        print(tb)
+        _set_status(job_id, 'error', output=f"{str(e)}\n\n{tb}")
 
 
 def _run_risk_detection(job_id: str, ticker: str):
