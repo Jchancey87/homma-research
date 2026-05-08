@@ -862,7 +862,7 @@ def _cache_write(
 
     with get_connection() as conn:
         row = conn.execute(ver_sql, ver_params).fetchone()
-        max_ver = list(row)[0] if row else 0
+        max_ver = int(list(row.values())[0]) if row else 0
         conn.execute(
             """INSERT INTO research_cache
                (ticker, date, report_type, version, output, model_used, job_id, expires_at)
