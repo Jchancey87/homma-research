@@ -576,6 +576,10 @@ def _run_deep_research(job_id: str, ticker: str, date: str, base_url: str):
             get_income_statement,
             get_key_metrics,
             get_earnings_calendar as fmp_earnings,
+            get_cash_position,
+            get_insider_transactions,
+            get_institutional_holders,
+            get_stock_news as fmp_news,
         )
         import pytz
 
@@ -584,6 +588,10 @@ def _run_deep_research(job_id: str, ticker: str, date: str, base_url: str):
         income     = get_income_statement(ticker)
         key_m      = get_key_metrics(ticker)
         earnings   = fmp_earnings(ticker)
+        cash       = get_cash_position(ticker)
+        insider    = get_insider_transactions(ticker)
+        holders    = get_institutional_holders(ticker)
+        news_fmp   = fmp_news(ticker)
 
         # yfinance still used for: news, actions, options (not in FMP free tier)
         t       = yf.Ticker(ticker)
@@ -671,12 +679,18 @@ def _run_deep_research(job_id: str, ticker: str, date: str, base_url: str):
                 'key_metrics_ttm':   key_m,
                 'income_statement':  income,   # last 4 quarters
                 'analyst_estimates': estimates,
+                'cash_position':     cash,
+                'insider_activity':  insider,
+                'institutional':     holders,
             },
             'events': {
                 'earnings_calendar': earnings,  # FMP: confirmed date + EPS estimate
                 'recent_actions':    actions,
             },
-            'news_headlines': [n.get('title') for n in news if n.get('title')],
+            'news_headlines': {
+                'yfinance': [n.get('title') for n in news if n.get('title')],
+                'fmp':      [n.get('title') for n in news_fmp if n.get('title')],
+            },
             'technical_vision_analysis': vision_analysis or 'No technical vision analysis available.',
         }
 

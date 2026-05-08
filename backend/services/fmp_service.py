@@ -292,3 +292,49 @@ def get_cash_position(ticker: str) -> dict:
         'period':            bs.get('date'),
         '_source':           'fmp',
     }
+
+
+# ---------------------------------------------------------------------------
+# Public: Institutional Holders
+# ---------------------------------------------------------------------------
+
+def get_institutional_holders(ticker: str) -> list[dict]:
+    """
+    Return top institutional holders from FMP.
+    """
+    data = _get(f'institutional-holders/{ticker.upper()}')
+    if not data or not isinstance(data, list):
+        return []
+    return [
+        {
+            'holder':     e.get('holder'),
+            'shares':     e.get('shares'),
+            'date':       e.get('dateReported'),
+            'change':     e.get('change'),
+        }
+        for e in data[:10]
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Public: Stock News (FMP variant)
+# ---------------------------------------------------------------------------
+
+def get_stock_news(ticker: str, limit: int = 10) -> list[dict]:
+    """
+    Return recent news articles for a ticker from FMP.
+    Often more comprehensive for small-caps than yfinance.
+    """
+    data = _get('stock_news', {'tickers': ticker.upper(), 'limit': limit})
+    if not data or not isinstance(data, list):
+        return []
+    return [
+        {
+            'title':     e.get('title'),
+            'text':      e.get('text'),
+            'url':       e.get('url'),
+            'date':      e.get('publishedDate'),
+            'site':      e.get('site'),
+        }
+        for e in data
+    ]
