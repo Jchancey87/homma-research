@@ -29,6 +29,13 @@ import markdown
 from database import get_connection
 from config import Config
 from llm.llm_client import get_continuation_analysis, get_deep_analysis_report
+from services.fmp_service import (
+    get_earnings_calendar,
+    get_company_profile,
+    get_cash_position,
+    get_income_statement,
+    get_insider_transactions
+)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 log = logging.getLogger(__name__)
@@ -125,19 +132,40 @@ def enrich_deep_technicals(gainers: list[dict]) -> list[dict]:
                     rsi = 100 - (100 / (1 + rs))
                     rsi_14 = round(rsi.iloc[-1], 2)
             
+            # Fetch FMP deep fundamentals
+            fmp_data = {}
+            try:
+                profile = get_company_profile(ticker)
+                earnings = get_earnings_calendar(ticker)
+                cash = get_cash_position(ticker)
+                income = get_income_statement(ticker, quarters=1)
+                insider = get_insider_transactions(ticker, days_back=90)
+                
+                fmp_data = {
+                    'FMP True Float': format_large_number(profile.get('float_shares')),
+                    'FMP Shares Out': format_large_number(profile.get('shares_outstanding')),
+                    'Next Earnings Date': earnings.get('next_earnings_date', 'N/A'),
+                    'Next Earnings Status': earnings.get('next_earnings_status', 'N/A'),
+                    'Cash Position': format_large_number(cash.get('cash')),
+                    'Net Income (Latest Q)': format_large_number(income[0].get('net_income') if income else None),
+                    'Insider Net Shares (90d)': insider.get('net_shares', 'N/A')
+                }
+            except Exception as e:
+                log.warning(f"Failed to fetch FMP data for {ticker}: {e}")
+
             enriched.append({
                 'ticker': ticker,
                 'Current Price': f"${g.get('close_price', 'N/A')}",
                 'Gap': f"{g.get('gap_pct', 'N/A')}%",
                 'Sector': g.get('sector', 'N/A'),
-                'Float': format_large_number(g.get('float_shares')),
                 'Market Cap': format_large_number(g.get('market_cap')),
                 'SMA 20': f"${sma_20}",
                 'SMA 50': f"${sma_50}",
                 'SMA 200': f"${sma_200}",
                 'RSI (14)': rsi_14,
                 'Recent Headline': g.get('news_headline', 'N/A'),
-                'Fresh Catalyst?': 'Yes' if g.get('news_fresh') else 'No'
+                'Fresh Catalyst?': 'Yes' if g.get('news_fresh') else 'No',
+                **fmp_data
             })
         except Exception as e:
             log.warning(f"Failed to fetch deeper data for {ticker}: {e}")

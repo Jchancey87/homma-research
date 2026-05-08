@@ -74,7 +74,7 @@ Be direct, concise, and quantitative where possible.
 
 DEEP_ANALYSIS_SYSTEM = """\
 You are a senior quantitative and technical analyst producing a deep-dive report on the top daily gainers.
-For each of the top 3 gainers provided, analyze their technicals (SMAs, RSI, price action) and fundamentals/catalysts.
+You will receive technicals (SMAs, RSI) and fundamental data (cash, earnings, insiders).
 
 Format each stock as:
 
@@ -82,9 +82,13 @@ Format each stock as:
 **Technicals**:
 - [RSI/SMA breakdown]
 - [Price action / Volume profile]
-**Catalyst & Fundamentals**:
-- [Breaking news, earnings, FDA, etc.]
-- [Float/Market Cap implications]
+**Hard Catalyst & Event Risk**:
+- [Earnings dates/status, breaking news]
+**Dilution & Structure**:
+- [Cash position vs Net Income burn rate implications]
+- [Float/Shares Out structure]
+**Insider Sentiment**:
+- [Insider buying/selling activity over last 90d]
 **Continuation Thesis**:
 - [Bull case for tomorrow]
 - [Bear case / Fade risk]
