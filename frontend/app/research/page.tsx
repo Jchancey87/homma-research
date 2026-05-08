@@ -44,7 +44,7 @@ const EMPTY_META: CacheMeta = { cachedAt: null, version: null, expiresAt: null, 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const EMPTY_MAIN: MainState = {
-  jobId: null, loading: false, report: null, error: null, status: null,
+  jobId: null, loading: false, report: null, error: null, status: null, model: null,
 }
 
 function useJobPoller(
