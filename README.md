@@ -18,14 +18,16 @@ This platform automates the process of identifying, analyzing, and journaling ma
 
 ## ✨ Core Features
 
+- **Morning Briefing Interface (New)**:
+  - **Tier 1 Intelligence**: Live market breadth (SPY/QQQ/IWM) with derived risk bias, auto-refreshing every 15 minutes.
+  - **Repeat Runner Alerts**: Real-time cross-referencing of today's gainers against historical database appearances.
+  - **Momentum Context**: Yesterday's follow-through tracker, float tier analysis (Nano/Micro/Small), and sector rotation trends.
+  - **Watchlist Wake-Up**: Live Polygon pricing with "Flame" alerts for tickers moving >5%.
+  - **Impeccable Design**: High-density, restrained aesthetic optimized for 4:00 AM dark-room analysis.
 - **Command Center**:
   - **Unified Hub**: Combines real-time gainers, historical ticker tracking, and heatmaps into a single, filterable interface.
   - **Advanced Filtering**: Filter the entire history by Gap %, Float, RVOL, Sector, or specific date.
   - **Multi-View Heatmap**: Interactive "Float vs. RVOL" and "Avg Gap by Sector" visualizations to identify high-conviction momentum pockets.
-- **Daily Market Intelligence**:
-  - **Automated Ingestion**: Ingests top 100+ gainers at market close (using Eastern Time boundaries).
-  - **RVOL Screening**: Intelligent screening to prioritize quality volume relative to 20-day averages.
-  - **Today's Overview**: A "morning briefing" dashboard showing top movers, active watchlists, and recent observations.
 - **Interactive Deep Research** (4 parallel analysis modules):
   - **Full Report**: AI-generated analyst report with fundamental health, ownership, catalysts, and technical context.
   - **🚨 Risk Detection**: Scans SEC EDGAR for reverse splits, S-3 shelf registrations, 424B ATM offerings, toxic financing language, and short interest traps.

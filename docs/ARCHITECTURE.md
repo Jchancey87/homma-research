@@ -18,7 +18,8 @@ The Trading Pattern Journal is a self-hosted, distributed local application cons
 
 ### 2. Backend Service Layer (Flask)
 
-- **Modular Blueprints**: The API is segmented into `gainers`, `charts`, and `analysis` blueprints, each registered at `/api`.
+- **Modular Blueprints**: The API is segmented into `gainers`, `market`, `watchlist`, `charts`, and `analysis` blueprints, each registered at `/api`.
+- **Market Intelligence Blueprint**: A specialized high-performance route providing live index status (SPY/QQQ/IWM) and high-impact economic events (FMP Economic Calendar) with aggressive caching (15min/6h) to preserve API quotas.
 - **Service-Oriented Design**: All data gathering lives in `services/`, completely decoupled from routes. This means each service can be tested and called independently.
 - **Async Job Pattern**: All LLM-heavy operations (`/api/research/*`) immediately return a `job_id` and run in daemon threads. The frontend polls `GET /api/jobs/<job_id>` until completion. Jobs are persisted to PostgreSQL (`llm_jobs` table).
 
@@ -53,6 +54,12 @@ The AI layer has two clients and six prompt functions:
 Market Close (4pm ET)
   → ingest_gainers.py: Polygon top gainers (ET-aware) → PostgreSQL daily_gainers table
   → daily_analysis_report.py: Top 3 gainers → Groq analysis → email
+
+Morning Briefing (4am – 9:30am ET)
+  → /api/market/breadth: Live SPY/QQQ/IWM performance + Risk Bias
+  → /api/gainers/repeat-runners: Cross-reference live gainers vs DB history
+  → /api/watchlist/prices: Batch Polygon snapshots for user watchlist
+  → /api/market/calendar: FMP high-impact event feed
 ```
 
 ### On-Demand Research (parallel)
