@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  BarChart2, Camera, TrendingUp, LayoutDashboard,
+  BarChart2, Camera, TrendingUp, LayoutDashboard, LayoutGrid,
   Search, Bookmark, FileText, AreaChart, History,
 } from 'lucide-react'
 
