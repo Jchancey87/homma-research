@@ -462,3 +462,90 @@ export const startPipeAnalysis = (ticker: string, date?: string) =>
 export const getPipeScan = (date: string) =>
   api.get<PipeScanResult[]>('/api/gainers/pipe-scan', { params: { date } }).then(r => r.data)
 
+
+// ── Dashboard Intelligence ────────────────────────────────────────────────
+
+export interface RepeatRunner {
+  ticker:       string
+  appearances:  number
+  avg_gap_pct:  number | null
+  best_gap_pct: number | null
+  last_seen:    string
+  first_seen:   string
+  avg_rvol:     number | null
+  avg_float_m:  number | null
+}
+export const getRepeatRunners = () =>
+  api.get<RepeatRunner[]>('/api/gainers/repeat-runners').then(r => r.data)
+
+export interface FloatBucket {
+  bucket:       string
+  count:        number
+  avg_gap_pct:  number | null
+  best_gap_pct: number | null
+}
+export const getFloatBuckets = (date?: string) =>
+  api.get<{ date: string; buckets: FloatBucket[] }>('/api/gainers/float-buckets', {
+    params: date ? { date } : undefined
+  }).then(r => r.data)
+
+export interface FollowThroughResult {
+  ticker:     string
+  prev_date:  string
+  prev_gap:   number | null
+  prev_close: number | null
+  today_open: number | null
+  change_pct: number | null
+  status:     'following' | 'fading' | 'flat' | 'no_data'
+}
+export const getFollowThrough = () =>
+  api.get<{ date: string; results: FollowThroughResult[] }>('/api/gainers/follow-through').then(r => r.data)
+
+export interface SectorRotationItem {
+  sector:       string
+  count:        number
+  avg_gap_pct:  number | null
+  last_avg_gap: number | null
+  last_rank:    number | null
+  this_rank:    number
+  trend:        'up' | 'down' | 'flat' | 'new'
+}
+export const getSectorRotation = () =>
+  api.get<SectorRotationItem[]>('/api/gainers/sector-rotation').then(r => r.data)
+
+export interface IndexData {
+  ticker:  string
+  price:   number | null
+  chg_pct: number | null
+  volume:  number | null
+}
+export interface MarketBreadthData {
+  indices:     Record<string, IndexData>
+  vix:         number | null
+  bias:        'risk_on' | 'neutral' | 'risk_off' | 'unknown'
+  fetched_at:  string
+  cache_ttl_s: number
+}
+export const getMarketBreadth = () =>
+  api.get<MarketBreadthData>('/api/market/breadth').then(r => r.data)
+
+export interface EconomicEvent {
+  date:     string
+  time:     string
+  event:    string | null
+  country:  string | null
+  impact:   'high' | 'medium'
+  actual:   number | null
+  estimate: number | null
+  previous: number | null
+}
+export const getEconomicCalendar = () =>
+  api.get<{ events: EconomicEvent[]; source: string }>('/api/market/calendar').then(r => r.data)
+
+export interface WatchlistPrice {
+  price:   number | null
+  chg_pct: number | null
+  volume:  number | null
+}
+export const getWatchlistPrices = () =>
+  api.get<Record<string, WatchlistPrice>>('/api/watchlist/prices').then(r => r.data)

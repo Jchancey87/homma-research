@@ -297,3 +297,219 @@ def ticker_appearances(ticker):
         rows = conn.execute(sql, params).fetchall()
 
     return jsonify([dict(r) for r in rows])
+
+
+# ── New Dashboard Intelligence Endpoints ─────────────────────────────────────
+
+@gainers_bp.route('/gainers/repeat-runners', methods=['GET'])
+def repeat_runners():
+    """
+    Cross-reference today's live snapshot tickers against historical ingest.
+    Returns tickers that are moving today AND have appeared in the DB before,
+    giving traders instant context: 'MOBI ran before — here's its history.'
+    """
+    from database import get_connection
+    try:
+        from services.live_screener import get_live_gainers
+        snapshot = get_live_gainers()
+        today_tickers = [g['ticker'] for g in snapshot.get('gainers', [])]
+    except Exception:
+        return jsonify([])
+
+    if not today_tickers:
+        return jsonify([])
+
+    placeholders = ', '.join(['%s'] * len(today_tickers))
+    with get_connection() as conn:
+        rows = conn.execute(f"""
+            SELECT
+                ticker,
+                COUNT(*)                                           AS appearances,
+                ROUND(AVG(gap_pct)::numeric, 1)::float             AS avg_gap_pct,
+                MAX(gap_pct)::float                                AS best_gap_pct,
+                MAX(date)                                          AS last_seen,
+                MIN(date)                                          AS first_seen,
+                ROUND(AVG(rvol_15m)::numeric, 1)::float           AS avg_rvol,
+                ROUND((AVG(float_shares)/1e6)::numeric, 1)::float AS avg_float_m
+            FROM daily_gainers
+            WHERE ticker IN ({placeholders})
+            GROUP BY ticker
+            ORDER BY appearances DESC, best_gap_pct DESC
+        """, today_tickers).fetchall()
+
+    return jsonify([dict(r) for r in rows])
+
+
+@gainers_bp.route('/gainers/float-buckets', methods=['GET'])
+def float_buckets():
+    """
+    Bucket today's (or a given date's) gainers by float tier.
+    Helps identify which float category is 'in play' on a given day.
+    Tiers: Nano (<10M), Micro (10-50M), Small (50-200M), Mid (>200M)
+    """
+    from database import get_connection
+    from datetime import datetime
+    exact_date = request.args.get('date') or datetime.utcnow().strftime('%Y-%m-%d')
+
+    with get_connection() as conn:
+        rows = conn.execute("""
+            SELECT
+                CASE
+                    WHEN float_shares < 10e6   THEN 'Nano'
+                    WHEN float_shares < 50e6   THEN 'Micro'
+                    WHEN float_shares < 200e6  THEN 'Small'
+                    ELSE                            'Mid+'
+                END                                                AS bucket,
+                COUNT(*)                                           AS count,
+                ROUND(AVG(gap_pct)::numeric, 1)::float             AS avg_gap_pct,
+                MAX(gap_pct)::float                                AS best_gap_pct
+            FROM daily_gainers
+            WHERE date = %s AND float_shares IS NOT NULL
+            GROUP BY bucket
+            ORDER BY avg_gap_pct DESC NULLS LAST
+        """, (exact_date,)).fetchall()
+
+    return jsonify({'date': exact_date, 'buckets': [dict(r) for r in rows]})
+
+
+@gainers_bp.route('/gainers/follow-through', methods=['GET'])
+def follow_through():
+    """
+    Checks if yesterday's top gainers are following through today.
+    Compares yesterday's close to today's Polygon live price.
+    """
+    from database import get_connection
+    from datetime import datetime, timedelta
+    import requests as _req
+    from config import Config
+
+    today     = datetime.utcnow().date()
+    yesterday = (today - timedelta(days=1)).isoformat()
+
+    with get_connection() as conn:
+        # Walk back up to 5 days to find the last trading day with data
+        rows = None
+        for offset in range(1, 8):
+            check_date = (today - timedelta(days=offset)).isoformat()
+            rows = conn.execute("""
+                SELECT ticker, gap_pct, close_price, float_shares
+                FROM daily_gainers
+                WHERE date = %s
+                ORDER BY gap_pct DESC NULLS LAST
+                LIMIT 5
+            """, (check_date,)).fetchall()
+            if rows:
+                yesterday = check_date
+                break
+
+    if not rows:
+        return jsonify({'date': yesterday, 'results': []})
+
+    tickers = [r['ticker'] for r in rows]
+    prev_closes = {r['ticker']: r['close_price'] for r in rows}
+    prev_gaps   = {r['ticker']: r['gap_pct'] for r in rows}
+
+    # Fetch live prices from Polygon
+    live_prices = {}
+    polygon_key = getattr(Config, 'POLYGON_API_KEY', None)
+    if polygon_key:
+        try:
+            for ticker in tickers:
+                url = f'https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/{ticker}'
+                resp = _req.get(url, params={'apiKey': polygon_key}, timeout=5)
+                if resp.ok:
+                    data = resp.json()
+                    day = data.get('ticker', {}).get('day', {})
+                    live_prices[ticker] = day.get('o') or day.get('c')
+        except Exception:
+            pass
+
+    results = []
+    for ticker in tickers:
+        prev_close  = prev_closes.get(ticker)
+        live_price  = live_prices.get(ticker)
+        change_pct  = None
+        status      = 'no_data'
+
+        if prev_close and live_price:
+            change_pct = round((live_price - prev_close) / prev_close * 100, 1)
+            if change_pct >= 2:
+                status = 'following'
+            elif change_pct <= -2:
+                status = 'fading'
+            else:
+                status = 'flat'
+
+        results.append({
+            'ticker':      ticker,
+            'prev_date':   yesterday,
+            'prev_gap':    prev_gaps.get(ticker),
+            'prev_close':  prev_close,
+            'today_open':  live_price,
+            'change_pct':  change_pct,
+            'status':      status,
+        })
+
+    return jsonify({'date': yesterday, 'results': results})
+
+
+@gainers_bp.route('/gainers/sector-rotation', methods=['GET'])
+def sector_rotation():
+    """
+    Compare this week's vs last week's top sectors by average gap %.
+    Surfaces which sectors are gaining / losing momentum.
+    """
+    from database import get_connection
+    from datetime import datetime, timedelta
+
+    today      = datetime.utcnow().date()
+    this_week  = (today - timedelta(days=7)).isoformat()
+    last_week  = (today - timedelta(days=14)).isoformat()
+
+    with get_connection() as conn:
+        this_rows = conn.execute("""
+            SELECT sector,
+                   COUNT(*)                                    AS count,
+                   ROUND(AVG(gap_pct)::numeric, 1)::float      AS avg_gap_pct
+            FROM daily_gainers
+            WHERE date >= %s AND sector IS NOT NULL AND sector != ''
+            GROUP BY sector
+            ORDER BY avg_gap_pct DESC NULLS LAST
+            LIMIT 6
+        """, (this_week,)).fetchall()
+
+        last_rows = conn.execute("""
+            SELECT sector,
+                   ROUND(AVG(gap_pct)::numeric, 1)::float      AS avg_gap_pct
+            FROM daily_gainers
+            WHERE date >= %s AND date < %s AND sector IS NOT NULL AND sector != ''
+            GROUP BY sector
+            ORDER BY avg_gap_pct DESC NULLS LAST
+            LIMIT 6
+        """, (last_week, this_week)).fetchall()
+
+    last_map = {r['sector']: r['avg_gap_pct'] for r in last_rows}
+    last_sectors = [r['sector'] for r in last_rows]
+
+    result = []
+    for i, r in enumerate(this_rows):
+        sector = r['sector']
+        last_avg = last_map.get(sector)
+        last_rank = last_sectors.index(sector) + 1 if sector in last_sectors else None
+        trend = 'new'
+        if last_avg is not None:
+            diff = (r['avg_gap_pct'] or 0) - (last_avg or 0)
+            trend = 'up' if diff >= 2 else 'down' if diff <= -2 else 'flat'
+
+        result.append({
+            'sector':       sector,
+            'count':        r['count'],
+            'avg_gap_pct':  r['avg_gap_pct'],
+            'last_avg_gap': last_avg,
+            'last_rank':    last_rank,
+            'this_rank':    i + 1,
+            'trend':        trend,
+        })
+
+    return jsonify(result)
+

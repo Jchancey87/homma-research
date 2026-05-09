@@ -31,6 +31,7 @@ def create_app() -> Flask:
     from routes.watchlist     import watchlist_bp
     from routes.observations  import observations_bp
     from routes.continuation_picks import cont_picks_bp
+    from routes.market        import market_bp
 
     app.register_blueprint(gainers_bp,      url_prefix='/api')
     app.register_blueprint(charts_bp,       url_prefix='/api')
@@ -38,6 +39,7 @@ def create_app() -> Flask:
     app.register_blueprint(watchlist_bp,    url_prefix='/api')
     app.register_blueprint(observations_bp, url_prefix='/api')
     app.register_blueprint(cont_picks_bp,   url_prefix='/api')
+    app.register_blueprint(market_bp,       url_prefix='/api')
 
     # Start background job watchdog (resets stale 'running' jobs)
     from jobs.job_watchdog import start_watchdog

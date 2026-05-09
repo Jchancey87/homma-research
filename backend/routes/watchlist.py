@@ -137,3 +137,51 @@ def remove_from_watchlist(ticker):
             return jsonify({'error': 'Not found'}), 404
         conn.execute("DELETE FROM watchlist WHERE ticker = %s", (ticker,))
     return jsonify({'success': True})
+
+
+# ---------------------------------------------------------------------------
+# Batch live prices — returns Polygon snapshot price for each watchlist item
+# ---------------------------------------------------------------------------
+
+@watchlist_bp.route('/watchlist/prices', methods=['GET'])
+def watchlist_prices():
+    """
+    Returns current Polygon price + % change for every watchlist ticker.
+    Used by the dashboard to show if a watchlist stock is waking up.
+    """
+    import requests as _req
+    from config import Config
+
+    with get_connection() as conn:
+        rows = conn.execute("SELECT ticker FROM watchlist ORDER BY added_at DESC").fetchall()
+
+    tickers = [r['ticker'] for r in rows]
+    if not tickers:
+        return jsonify({})
+
+    polygon_key = getattr(Config, 'POLYGON_API_KEY', None)
+    if not polygon_key:
+        return jsonify({})
+
+    results = {}
+    for ticker in tickers:
+        try:
+            url = f'https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/{ticker}'
+            resp = _req.get(url, params={'apiKey': polygon_key}, timeout=5)
+            if resp.ok:
+                snap = resp.json().get('ticker', {})
+                day  = snap.get('day', {})
+                prev = snap.get('prevDay', {})
+                price    = day.get('c') or snap.get('last', {}).get('price')
+                prev_c   = prev.get('c')
+                chg_pct  = round((price - prev_c) / prev_c * 100, 2) if price and prev_c else None
+                results[ticker] = {
+                    'price':   price,
+                    'chg_pct': chg_pct,
+                    'volume':  day.get('v'),
+                }
+        except Exception:
+            results[ticker] = {'price': None, 'chg_pct': None, 'volume': None}
+
+    return jsonify(results)
+
