@@ -17,8 +17,20 @@ import logging
 import requests
 import pytz
 from datetime import datetime, timedelta
+from pydantic import TypeAdapter, ValidationError
 from config import Config
 from services.polygon_service import get_ticker_details
+from validation.external_schemas import (
+    FMPEarningsEvent,
+    FMPProfile,
+    FMPAnalystEstimate,
+    FMPIncomeStatement,
+    FMPKeyMetrics,
+    FMPInsiderTransaction,
+    FMPBalanceSheet,
+    FMPInstitutionalHolder,
+    FMPNewsItem,
+)
 
 log = logging.getLogger(__name__)
 
@@ -86,27 +98,32 @@ def get_earnings_calendar(ticker: str) -> dict:
         }
     """
     today = _today_et().date()
-    data  = _get(f'historical/earning_calendar/{ticker.upper()}')
+    raw   = _get(f'historical/earning_calendar/{ticker.upper()}')
 
-    if not data or not isinstance(data, list):
+    if not raw or not isinstance(raw, list):
         return {'_source': 'fmp_unavailable', '_data_as_of': str(today)}
 
-    # Split into upcoming (date >= today) and past
-    upcoming = [e for e in data if e.get('date', '') >= str(today)]
-    past     = [e for e in data if e.get('date', '') <  str(today)]
+    _ta = TypeAdapter(list[FMPEarningsEvent])
+    try:
+        events = _ta.validate_python(raw)
+    except ValidationError as exc:
+        log.warning(f'[FMP] EarningsCalendar schema mismatch for {ticker}: {exc}')
+        return {'_source': 'fmp_schema_error', '_data_as_of': str(today)}
 
-    # Sort: soonest upcoming first, most recent past first
-    upcoming.sort(key=lambda x: x.get('date', ''))
-    past.sort(key=lambda x: x.get('date', ''), reverse=True)
+    today_s   = str(today)
+    upcoming  = [e for e in events if (e.date or '') >= today_s]
+    past      = [e for e in events if (e.date or '') <  today_s]
+    upcoming.sort(key=lambda x: x.date or '')
+    past.sort(key=lambda x: x.date or '', reverse=True)
 
     next_event = upcoming[0] if upcoming else None
 
     return {
-        'next_earnings_date':   next_event['date'] if next_event else None,
+        'next_earnings_date':   next_event.date if next_event else None,
         'next_earnings_status': 'upcoming' if next_event else 'no upcoming date known',
-        'eps_estimate':         next_event.get('epsEstimated') if next_event else None,
-        'revenue_estimate':     next_event.get('revenueEstimated') if next_event else None,
-        'history':              past[:4],   # last 4 reported quarters
+        'eps_estimate':         next_event.epsEstimated if next_event else None,
+        'revenue_estimate':     next_event.revenueEstimated if next_event else None,
+        'history':              [e.model_dump() for e in past[:4]],
         '_source':              'fmp',
         '_data_as_of':          str(today),
     }
@@ -123,34 +140,41 @@ def get_company_profile(ticker: str) -> dict:
     Covers: market cap, float, shares outstanding, beta, sector, industry,
     52-week high/low, average volume, current price, description.
     """
-    data = _get(f'profile/{ticker.upper()}')
-    if not data or not isinstance(data, list) or not data[0]:
-        log.info(f"[FMP] Profile missing for {ticker}, trying Polygon fallback...")
+    raw = _get(f'profile/{ticker.upper()}')
+    if not raw or not isinstance(raw, list) or not raw[0]:
+        log.info(f'[FMP] Profile missing for {ticker}, trying Polygon fallback...')
         poly_data = get_ticker_details(ticker)
         if poly_data:
             poly_data['_data_as_of'] = str(_today_et().date())
             return poly_data
         return {}
 
-    p = data[0]
+    try:
+        p = FMPProfile.model_validate(raw[0])
+    except ValidationError as exc:
+        log.warning(f'[FMP] Profile schema mismatch for {ticker}: {exc}')
+        return {}
+
     today = _today_et().date()
+    rng   = p.range or ''
+    parts = rng.split('-')
 
     return {
-        'ticker':             p.get('symbol'),
-        'company_name':       p.get('companyName'),
-        'sector':             p.get('sector'),
-        'industry':           p.get('industry'),
-        'description':        (p.get('description') or '')[:500],
-        'market_cap':         p.get('mktCap'),
-        'float_shares':       p.get('floatShares'),
-        'shares_outstanding': p.get('sharesOutstanding'),
-        'beta':               p.get('beta'),
-        'current_price':      p.get('price'),
-        'high_52w':           p.get('range', '').split('-')[-1] if p.get('range') else None,
-        'low_52w':            p.get('range', '').split('-')[0]  if p.get('range') else None,
-        'avg_volume':         p.get('volAvg'),
-        'exchange':           p.get('exchangeShortName'),
-        'is_etf':             p.get('isEtf', False),
+        'ticker':             p.symbol,
+        'company_name':       p.companyName,
+        'sector':             p.sector,
+        'industry':           p.industry,
+        'description':        (p.description or '')[:500],
+        'market_cap':         p.mktCap,
+        'float_shares':       p.floatShares,
+        'shares_outstanding': p.sharesOutstanding,
+        'beta':               p.beta,
+        'current_price':      p.price,
+        'high_52w':           parts[-1] if len(parts) > 1 else None,
+        'low_52w':            parts[0]  if parts else None,
+        'avg_volume':         p.volAvg,
+        'exchange':           p.exchangeShortName,
+        'is_etf':             p.isEtf,
         '_source':            'fmp',
         '_data_as_of':        str(today),
     }
@@ -165,19 +189,27 @@ def get_analyst_estimates(ticker: str) -> list[dict]:
     Return forward EPS and revenue estimates from analyst consensus.
     Returns a list of quarterly estimate records, most recent first.
     """
-    data = _get(f'analyst-estimates/{ticker.upper()}', {'period': 'quarter', 'limit': 4})
-    if not data or not isinstance(data, list):
+    raw = _get(f'analyst-estimates/{ticker.upper()}', {'period': 'quarter', 'limit': 4})
+    if not raw or not isinstance(raw, list):
         return []
+
+    _ta = TypeAdapter(list[FMPAnalystEstimate])
+    try:
+        estimates = _ta.validate_python(raw)
+    except ValidationError as exc:
+        log.warning(f'[FMP] AnalystEstimates schema mismatch for {ticker}: {exc}')
+        return []
+
     return [
         {
-            'date':                e.get('date'),
-            'eps_avg_estimate':    e.get('estimatedEpsAvg'),
-            'eps_high':            e.get('estimatedEpsHigh'),
-            'eps_low':             e.get('estimatedEpsLow'),
-            'revenue_avg':         e.get('estimatedRevenueAvg'),
-            'number_analysts_eps': e.get('numberAnalystEstimatedEps'),
+            'date':                e.date,
+            'eps_avg_estimate':    e.estimatedEpsAvg,
+            'eps_high':            e.estimatedEpsHigh,
+            'eps_low':             e.estimatedEpsLow,
+            'revenue_avg':         e.estimatedRevenueAvg,
+            'number_analysts_eps': e.numberAnalystEstimatedEps,
         }
-        for e in data
+        for e in estimates
     ]
 
 
@@ -190,20 +222,28 @@ def get_income_statement(ticker: str, quarters: int = 4) -> list[dict]:
     Return trailing quarterly income statement data.
     Covers: revenue, gross profit, net income, EPS (basic/diluted).
     """
-    data = _get(f'income-statement/{ticker.upper()}',
-                {'period': 'quarter', 'limit': quarters})
-    if not data or not isinstance(data, list):
+    raw = _get(f'income-statement/{ticker.upper()}',
+               {'period': 'quarter', 'limit': quarters})
+    if not raw or not isinstance(raw, list):
         return []
+
+    _ta = TypeAdapter(list[FMPIncomeStatement])
+    try:
+        statements = _ta.validate_python(raw)
+    except ValidationError as exc:
+        log.warning(f'[FMP] IncomeStatement schema mismatch for {ticker}: {exc}')
+        return []
+
     return [
         {
-            'date':         e.get('date'),
-            'revenue':      e.get('revenue'),
-            'gross_profit': e.get('grossProfit'),
-            'net_income':   e.get('netIncome'),
-            'eps':          e.get('eps'),
-            'eps_diluted':  e.get('epsdiluted'),
+            'date':         e.date,
+            'revenue':      e.revenue,
+            'gross_profit': e.grossProfit,
+            'net_income':   e.netIncome,
+            'eps':          e.eps,
+            'eps_diluted':  e.epsdiluted,
         }
-        for e in data
+        for e in statements
     ]
 
 
@@ -216,19 +256,24 @@ def get_key_metrics(ticker: str) -> dict:
     Return latest TTM key metrics: P/E, P/S, debt-to-equity, short interest,
     current ratio, free cash flow per share, etc.
     """
-    data = _get(f'key-metrics-ttm/{ticker.upper()}')
-    if not data or not isinstance(data, list) or not data[0]:
+    raw = _get(f'key-metrics-ttm/{ticker.upper()}')
+    if not raw or not isinstance(raw, list) or not raw[0]:
         return {}
 
-    m = data[0]
+    try:
+        m = FMPKeyMetrics.model_validate(raw[0])
+    except ValidationError as exc:
+        log.warning(f'[FMP] KeyMetrics schema mismatch for {ticker}: {exc}')
+        return {}
+
     return {
-        'pe_ratio_ttm':          m.get('peRatioTTM'),
-        'ps_ratio_ttm':          m.get('priceToSalesRatioTTM'),
-        'pb_ratio_ttm':          m.get('pbRatioTTM'),
-        'debt_to_equity_ttm':    m.get('debtToEquityTTM'),
-        'current_ratio_ttm':     m.get('currentRatioTTM'),
-        'free_cashflow_ps_ttm':  m.get('freeCashFlowPerShareTTM'),
-        'revenue_ps_ttm':        m.get('revenuePerShareTTM'),
+        'pe_ratio_ttm':          m.peRatioTTM,
+        'ps_ratio_ttm':          m.priceToSalesRatioTTM,
+        'pb_ratio_ttm':          m.pbRatioTTM,
+        'debt_to_equity_ttm':    m.debtToEquityTTM,
+        'current_ratio_ttm':     m.currentRatioTTM,
+        'free_cashflow_ps_ttm':  m.freeCashFlowPerShareTTM,
+        'revenue_ps_ttm':        m.revenuePerShareTTM,
         '_source':               'fmp',
     }
 
@@ -245,27 +290,34 @@ def get_insider_transactions(ticker: str, days_back: int = 90) -> dict:
     today   = _today_et().date()
     cutoff  = (today - timedelta(days=days_back)).isoformat()
 
-    data = _get(f'insider-trading',
-                {'symbol': ticker.upper(), 'transactionType': 'P-Purchase,S-Sale', 'limit': 50})
-    if not data or not isinstance(data, list):
+    raw = _get('insider-trading',
+               {'symbol': ticker.upper(), 'transactionType': 'P-Purchase,S-Sale', 'limit': 50})
+    if not raw or not isinstance(raw, list):
         return {'net_shares': None, 'transactions': [], '_source': 'fmp_unavailable'}
 
-    recent = [t for t in data if (t.get('transactionDate') or '') >= cutoff]
+    _ta = TypeAdapter(list[FMPInsiderTransaction])
+    try:
+        all_txns = _ta.validate_python(raw)
+    except ValidationError as exc:
+        log.warning(f'[FMP] InsiderTransactions schema mismatch for {ticker}: {exc}')
+        return {'net_shares': None, 'transactions': [], '_source': 'fmp_schema_error'}
+
+    recent = [t for t in all_txns if (t.transactionDate or '') >= cutoff]
 
     net = 0
     transactions = []
     for tx in recent:
-        tx_type = tx.get('transactionType', '')
-        shares  = int(tx.get('securitiesTransacted') or 0)
+        tx_type = tx.transactionType or ''
+        shares  = int(tx.securitiesTransacted or 0)
         sign    = 1 if tx_type == 'P-Purchase' else -1
         net    += sign * shares
         transactions.append({
-            'name':        tx.get('reportingName'),
-            'type':        tx_type,
-            'shares':      shares,
-            'price':       tx.get('price'),
-            'date':        tx.get('transactionDate'),
-            'form':        tx.get('typeOfOwnership'),
+            'name':   tx.reportingName,
+            'type':   tx_type,
+            'shares': shares,
+            'price':  tx.price,
+            'date':   tx.transactionDate,
+            'form':   tx.typeOfOwnership,
         })
 
     return {
@@ -285,17 +337,22 @@ def get_cash_position(ticker: str) -> dict:
     Return the most recent quarterly cash and total assets from FMP.
     More reliable for small-caps than yfinance's balance sheet scraper.
     """
-    data = _get(f'balance-sheet-statement/{ticker.upper()}',
-                {'period': 'quarter', 'limit': 1})
-    if not data or not isinstance(data, list) or not data[0]:
+    raw = _get(f'balance-sheet-statement/{ticker.upper()}',
+               {'period': 'quarter', 'limit': 1})
+    if not raw or not isinstance(raw, list) or not raw[0]:
         return {}
 
-    bs = data[0]
+    try:
+        bs = FMPBalanceSheet.model_validate(raw[0])
+    except ValidationError as exc:
+        log.warning(f'[FMP] BalanceSheet schema mismatch for {ticker}: {exc}')
+        return {}
+
     return {
-        'cash':              bs.get('cashAndCashEquivalents'),
-        'total_assets':      bs.get('totalAssets'),
-        'total_liabilities': bs.get('totalLiabilities'),
-        'period':            bs.get('date'),
+        'cash':              bs.cashAndCashEquivalents,
+        'total_assets':      bs.totalAssets,
+        'total_liabilities': bs.totalLiabilities,
+        'period':            bs.date,
         '_source':           'fmp',
     }
 
@@ -308,17 +365,25 @@ def get_institutional_holders(ticker: str) -> list[dict]:
     """
     Return top institutional holders from FMP.
     """
-    data = _get(f'institutional-holders/{ticker.upper()}')
-    if not data or not isinstance(data, list):
+    raw = _get(f'institutional-holders/{ticker.upper()}')
+    if not raw or not isinstance(raw, list):
         return []
+
+    _ta = TypeAdapter(list[FMPInstitutionalHolder])
+    try:
+        holders = _ta.validate_python(raw)
+    except ValidationError as exc:
+        log.warning(f'[FMP] InstitutionalHolders schema mismatch for {ticker}: {exc}')
+        return []
+
     return [
         {
-            'holder':     e.get('holder'),
-            'shares':     e.get('shares'),
-            'date':       e.get('dateReported'),
-            'change':     e.get('change'),
+            'holder': h.holder,
+            'shares': h.shares,
+            'date':   h.dateReported,
+            'change': h.change,
         }
-        for e in data[:10]
+        for h in holders[:10]
     ]
 
 
@@ -331,16 +396,24 @@ def get_stock_news(ticker: str, limit: int = 10) -> list[dict]:
     Return recent news articles for a ticker from FMP.
     Often more comprehensive for small-caps than yfinance.
     """
-    data = _get('stock_news', {'tickers': ticker.upper(), 'limit': limit})
-    if not data or not isinstance(data, list):
+    raw = _get('stock_news', {'tickers': ticker.upper(), 'limit': limit})
+    if not raw or not isinstance(raw, list):
         return []
+
+    _ta = TypeAdapter(list[FMPNewsItem])
+    try:
+        articles = _ta.validate_python(raw)
+    except ValidationError as exc:
+        log.warning(f'[FMP] StockNews schema mismatch for {ticker}: {exc}')
+        return []
+
     return [
         {
-            'title':     e.get('title'),
-            'text':      e.get('text'),
-            'url':       e.get('url'),
-            'date':      e.get('publishedDate'),
-            'site':      e.get('site'),
+            'title': a.title,
+            'text':  a.text,
+            'url':   a.url,
+            'date':  a.publishedDate,
+            'site':  a.site,
         }
-        for e in data
+        for a in articles
     ]

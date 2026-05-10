@@ -12,7 +12,9 @@ import time
 import logging
 import requests
 from datetime import datetime, timedelta
+from pydantic import TypeAdapter, ValidationError
 from config import Config
+from validation.external_schemas import SECEFTSSource, SECCompanyFactShare
 
 log = logging.getLogger(__name__)
 
@@ -154,12 +156,17 @@ def search_filings_text(ticker: str, keywords: list[str],
 
     results = []
     for hit in hits[:n]:
-        src = hit.get('_source', {})
+        raw_src = hit.get('_source', {})
+        try:
+            src = SECEFTSSource.model_validate(raw_src)
+        except ValidationError:
+            # Malformed hit — skip rather than crash
+            continue
         results.append({
-            'entity_name': src.get('entity_name', ''),
-            'file_date':   src.get('file_date', ''),
-            'form_type':   src.get('form_type', ''),
-            'description': src.get('display_names', [''])[0] if src.get('display_names') else '',
+            'entity_name': src.entity_name or '',
+            'file_date':   src.file_date or '',
+            'form_type':   src.form_type or '',
+            'description': (src.display_names[0] if src.display_names else ''),
         })
     return results
 
@@ -197,16 +204,21 @@ def get_shares_history(ticker: str, n_periods: int = 8) -> list[dict]:
     units = shares_data.get('units', {})
     share_entries = units.get('shares', [])
 
-    # Filter to 10-Q / 10-K filings, sort descending by end date
-    filtered = [
-        e for e in share_entries
-        if e.get('form', '').startswith('10-')
-    ]
-    filtered.sort(key=lambda x: x.get('end', ''), reverse=True)
+    # Filter to 10-Q / 10-K filings via Pydantic; invalid entries are dropped
+    _ta = TypeAdapter(list[SECCompanyFactShare])
+    try:
+        parsed = _ta.validate_python(share_entries)
+    except ValidationError as exc:
+        log.warning(f'[SEC] CompanyFacts schema mismatch for {ticker}: {exc}')
+        return []
+
+    filtered = [e for e in parsed if (e.form or '').startswith('10-')]
+    filtered.sort(key=lambda x: x.end or '', reverse=True)
 
     return [
-        {'end_date': e['end'], 'shares': e['val'], 'form': e['form']}
+        {'end_date': e.end, 'shares': e.val, 'form': e.form}
         for e in filtered[:n_periods]
+        if e.end and e.val is not None
     ]
 
 
