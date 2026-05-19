@@ -228,6 +228,38 @@ class MassiveTickerDetails(_BaseExternal):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Schwab — Market Data
+# ─────────────────────────────────────────────────────────────────────────────
+
+class SchwabCandle(_BaseExternal):
+    """One aggregate bar from price history (minute or day)."""
+    datetime: Optional[int] = None   # timestamp in ms
+    open: Optional[float] = None
+    high: Optional[float] = None
+    low: Optional[float] = None
+    close: Optional[float] = None
+    volume: Optional[int] = None
+
+class SchwabQuote(_BaseExternal):
+    """One ticker from the quote endpoint (simplified)."""
+    symbol: Optional[str] = None
+    description: Optional[str] = None
+    lastPrice: Optional[float] = None            # noqa: N815
+    netChange: Optional[float] = None            # noqa: N815
+    netPercentChange: Optional[float] = None     # noqa: N815
+    quoteTime: Optional[int] = None              # noqa: N815
+    totalVolume: Optional[int] = None            # noqa: N815
+
+class SchwabInstrument(_BaseExternal):
+    """Instrument and fundamental data from search/quote."""
+    symbol: Optional[str] = None
+    description: Optional[str] = None
+    exchange: Optional[str] = None
+    assetType: Optional[str] = None              # noqa: N815
+    fundamental: Optional[dict] = None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # SEC — Submissions API (filing list item)
 # ─────────────────────────────────────────────────────────────────────────────
 

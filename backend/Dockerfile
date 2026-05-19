@@ -23,12 +23,11 @@ COPY . .
 # Create directory for database and storage if they don't exist
 RUN mkdir -p ../data ../storage/charts
 
-# Expose the port Flask runs on
+# Expose the port FastAPI runs on
 EXPOSE 5000
 
 # Set environment variables
-ENV FLASK_APP=app.py
-ENV FLASK_RUN_HOST=0.0.0.0
+ENV PYTHONUNBUFFERED=1
 
-# Run the application using gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+# Run the application using uvicorn
+CMD ["uvicorn", "fastapi_app.main:app", "--host", "0.0.0.0", "--port", "5000"]

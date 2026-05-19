@@ -32,6 +32,12 @@ class Config:
     FMP_API_KEY     = os.getenv('FMP_API_KEY', '')        # Financial Modeling Prep
     SEC_USER_AGENT  = os.getenv('SEC_USER_AGENT', 'TradingJournal trader@example.com')
 
+    # Schwab API
+    SCHWAB_API_KEY      = os.getenv('SCHWAB_API_KEY', '')
+    SCHWAB_API_SECRET   = os.getenv('SCHWAB_API_SECRET', '')
+    SCHWAB_CALLBACK_URL = os.getenv('SCHWAB_CALLBACK_URL', 'https://127.0.0.1:8182')
+    SCHWAB_TOKEN_PATH   = os.getenv('SCHWAB_TOKEN_PATH', os.path.expanduser('~/.config/schwab/token.json'))
+
     # Vision API (OpenAI-compatible)
     VISION_BASE_URL = os.getenv('VISION_BASE_URL', 'https://generativelanguage.googleapis.com/v1beta/openai/')
     VISION_API_KEY  = os.getenv('VISION_API_KEY', os.getenv('GEMINI_API_KEY', ''))

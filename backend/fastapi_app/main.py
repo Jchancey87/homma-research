@@ -2,9 +2,6 @@
 fastapi_app/main.py
 FastAPI application entry point.
 
-Run alongside Flask (which owns port 5000) during the migration:
-    uvicorn fastapi_app.main:app --port 8001 --reload
-
 The lifespan context manager handles asyncpg pool creation/teardown and
 APScheduler start/stop so both are ready before the first request lands.
 """
@@ -41,7 +38,7 @@ async def lifespan(app: FastAPI):
     await create_pool()
     log.info("[startup] Starting APScheduler…")
     start_scheduler()
-    log.info("[startup] FastAPI app ready on port 8001")
+    log.info("[startup] FastAPI app ready on port 5000")
     yield
     log.info("[shutdown] Stopping APScheduler…")
     stop_scheduler()
@@ -57,8 +54,7 @@ app = FastAPI(
     title=settings.app_title,
     version=settings.app_version,
     description=(
-        "Homma Research async API — FastAPI migration (running side-by-side "
-        "with Flask on port 5000 during transition)."
+        "Homma Research async API"
     ),
     lifespan=lifespan,
 )

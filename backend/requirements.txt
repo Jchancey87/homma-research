@@ -1,6 +1,4 @@
-flask
-flask-cors
-gunicorn
+
 yfinance
 finviz
 requests
@@ -19,3 +17,15 @@ pytz
 psycopg2-binary
 pydantic>=2.0
 massive>=2.7
+# --- FastAPI stack (Phase 2+) ---
+fastapi
+uvicorn[standard]
+asyncpg
+pytest-asyncio
+pytest-httpx
+python-multipart
+# --- Background scheduler (Phase 3) ---
+apscheduler[asyncio]
+# --- Task Queue (Phase 4) ---
+celery
+redis

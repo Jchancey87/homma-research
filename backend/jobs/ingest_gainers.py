@@ -103,9 +103,9 @@ def fetch_gainers(target_date: str) -> list[dict]:
 
     log.info(f"Polygon snapshot: {len(raw_snapshot)} tickers")
 
-    # Step 2 — grouped daily OHLCV (single Polygon call for whole market)
-    grouped = _get_polygon_grouped_daily(target_date)
-    log.info(f"Polygon grouped daily: {len(grouped)} bars for {target_date}")
+    # Step 2 — Schwab "grouped" daily (stub, returns {})
+    grouped = _get_schwab_grouped_daily(target_date)
+    log.info(f"Schwab grouped daily: {len(grouped)} bars for {target_date}")
 
     # Step 3–5 — enrich each ticker
     gainers = []
@@ -130,15 +130,15 @@ def _get_polygon_snapshot() -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Step 2 — Polygon Grouped Daily (single call for all OHLCV)
+# Step 2 — Schwab Daily Bars (Per-ticker fallback)
 # ---------------------------------------------------------------------------
 
-def _get_polygon_grouped_daily(date: str) -> dict[str, dict]:
+def _get_schwab_grouped_daily(date: str) -> dict[str, dict]:
     """
-    Fetch the full grouped daily bars for a given date via the official SDK.
-    Returns a dict keyed by ticker symbol for O(1) lookups.
+    Schwab does not support broad grouped daily snapshots. 
+    This is kept as a stub for the enrichment logic to check.
     """
-    return poly.get_grouped_daily(date, adjusted=True, include_otc=False)
+    return {}
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +196,13 @@ def _enrich_ticker(snap: dict, grouped: dict[str, dict], target_date: str) -> di
         return None
 
     # ── OHLCV from Grouped Daily (authoritative EOD bars) ─────────────────
-    bar     = grouped.get(ticker, {})
+    bar = grouped.get(ticker, {})
+    if not bar:
+        # Fallback: Fetch per-ticker daily bars from Schwab
+        bars = poly.get_daily_bars(ticker, target_date, target_date)
+        if bars:
+            bar = bars[-1] # use latest bar for that date
+    
     open_px = bar.get('o') or _gf(day_obj, 'o') or prev_close
     high_px = bar.get('h') or _gf(day_obj, 'h')
     low_px  = bar.get('l') or _gf(day_obj, 'l')

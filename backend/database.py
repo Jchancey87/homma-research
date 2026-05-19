@@ -80,6 +80,12 @@ def init_db() -> None:
     with open(schema_path, 'r') as f:
         schema = f.read()
 
+    # Apply Schwab schema (modular approach)
+    schwab_schema_path = os.path.join(os.path.dirname(__file__), '..', 'momentum_screener', 'db', 'schema_schwab.sql')
+    if os.path.exists(schwab_schema_path):
+        with open(schwab_schema_path, 'r') as f:
+            schema += "\n" + f.read()
+
     # Split on semicolons so each statement runs individually
     # (psycopg2 does not support executescript)
     statements = [s.strip() for s in schema.split(';') if s.strip()]

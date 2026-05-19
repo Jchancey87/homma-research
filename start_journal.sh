@@ -25,7 +25,7 @@ echo "Starting Trading Journal tmux session..."
 # ── Window 0: Backend ────────────────────────────────────────
 tmux new-session -d -s $SESSION -n 'backend'
 tmux send-keys -t $SESSION:0 \
-  "cd $PROJECT/backend && source venv/bin/activate && python3 app.py" C-m
+  "cd $PROJECT/backend && source venv/bin/activate && uvicorn fastapi_app.main:app --port 5000 --host 0.0.0.0 --reload" C-m
 
 # ── Window 1: Frontend ───────────────────────────────────────
 tmux new-window -t $SESSION -n 'frontend'
@@ -36,6 +36,11 @@ tmux send-keys -t $SESSION:1 \
 tmux new-window -t $SESSION -n 'scripts'
 tmux send-keys -t $SESSION:2 \
   "cd $PROJECT && source backend/venv/bin/activate && echo 'venv active — ready to run scripts'" C-m
+
+# ── Window 3: Celery Worker ──────────────────────────────────
+tmux new-window -t $SESSION -n 'celery'
+tmux send-keys -t $SESSION:3 \
+  "cd $PROJECT/backend && source venv/bin/activate && celery -A fastapi_app.celery_app worker --loglevel=info" C-m
 
 # Focus the backend window on attach
 tmux select-window -t $SESSION:0

@@ -1,9 +1,9 @@
 module.exports = {
   apps: [
     {
-      name: 'flask-backend',
-      script: '/opt/trading-journal/backend/venv/bin/gunicorn',
-      args: '-w 2 -b 0.0.0.0:5000 app:app',
+      name: 'fastapi-backend',
+      script: '/opt/trading-journal/backend/venv/bin/uvicorn',
+      args: 'fastapi_app.main:app --port 5000 --host 0.0.0.0 --workers 4',
       cwd: '/opt/trading-journal/backend',
       interpreter: 'none',
       watch: false,
@@ -12,8 +12,20 @@ module.exports = {
       env: {
         FLASK_ENV: 'production',
       },
-      error_file: '/var/log/trading-journal/flask-err.log',
-      out_file:   '/var/log/trading-journal/flask-out.log',
+      error_file: '/var/log/trading-journal/fastapi-err.log',
+      out_file:   '/var/log/trading-journal/fastapi-out.log',
+    },
+    {
+      name: 'celery-worker',
+      script: '/opt/trading-journal/backend/venv/bin/celery',
+      args: '-A fastapi_app.celery_app worker --loglevel=info',
+      cwd: '/opt/trading-journal/backend',
+      interpreter: 'none',
+      watch: false,
+      autorestart: true,
+      max_restarts: 10,
+      error_file: '/var/log/trading-journal/celery-err.log',
+      out_file:   '/var/log/trading-journal/celery-out.log',
     },
     {
       name: 'nextjs-frontend',
