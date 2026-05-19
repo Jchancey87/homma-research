@@ -17,8 +17,6 @@ git pull
 echo "🐍 Updating backend dependencies..."
 source $BACKEND_DIR/venv/bin/activate
 pip install -r $BACKEND_DIR/requirements.txt
-echo "🗄️  Syncing database schema..."
-python3 -c "from database import init_db; init_db()"
 deactivate
 
 # 3. Build Frontend
