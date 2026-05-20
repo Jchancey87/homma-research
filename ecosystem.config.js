@@ -38,7 +38,7 @@ module.exports = {
       env: {
         PORT: 3000,
         NODE_ENV: 'production',
-        HOSTNAME: '127.0.0.1',           // bind to localhost; NPM proxies externally
+        HOSTNAME: '0.0.0.0',           // bind to all interfaces; NPM proxies externally
         NEXT_PUBLIC_API_URL: 'http://192.168.0.202:5000',
       },
       error_file: '/var/log/trading-journal/nextjs-err.log',
