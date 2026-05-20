@@ -16,8 +16,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import asyncpg
 
-# Ensure backend/ is importable when running from the repo root.
+# Ensure backend/ and the repo root (for momentum_screener) are in sys.path.
 _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_REPO_ROOT = os.path.dirname(_BACKEND_DIR)
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 if _BACKEND_DIR not in sys.path:
     sys.path.insert(0, _BACKEND_DIR)
 
@@ -59,9 +62,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# If allow_credentials is True, allow_origins cannot contain "*".
+# We handle wildcard origins by using allow_origin_regex or parsing the request origin dynamically.
+cors_origins = [o for o in settings.cors_origins if o != "*"]
+allow_origin_regex = "https?://.*" if "*" in settings.cors_origins else None
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=cors_origins,
+    allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

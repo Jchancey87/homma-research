@@ -1,8 +1,11 @@
 import os
 import sys
 
-# Ensure backend directory is in sys.path so we can import modules
+# Ensure backend directory and repo root are in sys.path so we can import modules
 _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_REPO_ROOT = os.path.dirname(_BACKEND_DIR)
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
 if _BACKEND_DIR not in sys.path:
     sys.path.insert(0, _BACKEND_DIR)
 
