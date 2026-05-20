@@ -32,7 +32,7 @@ def get_quotes(symbols):
         return {}
     return resp.json()
 
-def get_movers(index_symbol, sort=Client.Movers.Sort.PERCENT_CHANGE_UP, frequency=None):
+def get_movers(index_symbol, sort=Client.Movers.SortOrder.PERCENT_CHANGE_UP, frequency=None):
     """
     index_symbol: 'NASDAQ', 'NYSE', 'AMEX' or specific symbols like '$COMPX'
     sort: PERCENT_CHANGE_UP, PERCENT_CHANGE_DOWN, VOLUME
