@@ -63,8 +63,8 @@ def build_heatmap_spec(
     mean_pivot  = pivot['mean'].reindex(index=RVOL_LABELS[::-1], columns=FLOAT_LABELS)
     count_pivot = pivot['count'].reindex(index=RVOL_LABELS[::-1], columns=FLOAT_LABELS)
 
-    z     = mean_pivot.values.tolist()
-    count = count_pivot.values.tolist()
+    z     = mean_pivot.astype(object).where(mean_pivot.notnull(), None).values.tolist()
+    count = count_pivot.fillna(0).astype(int).values.tolist()
     x     = FLOAT_LABELS
     y     = RVOL_LABELS[::-1]
 

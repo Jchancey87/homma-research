@@ -24,12 +24,16 @@ def get_client():
 
     try:
         # Attempt to create client from existing token
-        client = schwab.auth.client_from_token_file(TOKEN_PATH, api_key, api_secret)
+        client = schwab.auth.client_from_token_file(TOKEN_PATH, api_key, api_secret, enforce_enums=False)
         return client
     except FileNotFoundError:
-        # This will require interactive input if run from terminal
-        # In a headless environment, this might fail unless setup_oauth was run first.
-        return schwab.auth.easy_client(api_key, api_secret, callback_url, TOKEN_PATH)
+        # In background/headless environments, automatically triggering the easy_client
+        # interactive OAuth flow will hang the worker and cause port conflicts on 8182.
+        # Instead, raise FileNotFoundError so that background services fail cleanly and informatively.
+        raise FileNotFoundError(
+            f"Schwab token file not found at {TOKEN_PATH}. "
+            "Please run 'python schwab_auth_setup.py' interactively to authenticate."
+        )
 
 def setup_oauth():
     """
@@ -47,5 +51,5 @@ def setup_oauth():
     if token_dir:
         os.makedirs(token_dir, exist_ok=True)
         
-    print(f"Starting OAuth setup. Token will be saved to {TOKEN_PATH}")
-    schwab.auth.easy_client(api_key, api_secret, callback_url, TOKEN_PATH)
+    print(f"Starting manual OAuth setup for headless environment. Token will be saved to {TOKEN_PATH}")
+    schwab.auth.client_from_manual_flow(api_key, api_secret, callback_url, TOKEN_PATH)

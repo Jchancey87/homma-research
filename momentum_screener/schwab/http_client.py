@@ -38,11 +38,14 @@ def get_movers(index_symbol, sort=Client.Movers.SortOrder.PERCENT_CHANGE_UP, fre
     sort: PERCENT_CHANGE_UP, PERCENT_CHANGE_DOWN, VOLUME
     """
     client = get_http_client()
-    resp = client.get_movers(index_symbol, sort=sort, frequency=frequency)
+    resp = client.get_movers(index_symbol, sort_order=sort, frequency=frequency)
     if resp.status_code != 200:
         logger.error(f"Error fetching movers for {index_symbol}: {resp.text}")
         return []
-    return resp.json()
+    data = resp.json()
+    if isinstance(data, dict):
+        return data.get('screeners', [])
+    return data
 
 def get_price_history_every_minute(symbol, start_datetime=None, end_datetime=None):
     client = get_http_client()
