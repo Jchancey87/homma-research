@@ -87,9 +87,9 @@ function SkeletonRows() {
     <>
       {Array.from({ length: 10 }).map((_, i) => (
         <tr key={i} className="animate-pulse">
-          {Array.from({ length: 7 }).map((_, j) => (
+          {Array.from({ length: 9 }).map((_, j) => (
             <td key={j} className="py-3 pr-4">
-              <div className={`h-3 bg-gray-800 rounded ${j === 0 ? 'w-14' : j === 6 ? 'w-28' : 'w-12'}`} />
+              <div className={`h-3 bg-gray-800 rounded ${j === 0 ? 'w-14' : j === 8 ? 'w-28' : 'w-12'}`} />
             </td>
           ))}
         </tr>
@@ -201,12 +201,14 @@ export default function LiveGainers() {
           <thead>
             <tr className="text-left text-xs text-gray-500 border-b border-gray-800">
               <th className="pb-2 pr-4 font-medium">Ticker</th>
-              <th className="pb-2 pr-4 font-medium text-right">Gap %</th>
               <th className="pb-2 pr-4 font-medium text-right">Price</th>
-              <th className="pb-2 pr-3 font-medium text-right">RVOL</th>
+              <th className="pb-2 pr-4 font-medium text-right">Change(%)</th>
+              <th className="pb-2 pr-4 font-medium text-right">Float</th>
               <th className="pb-2 pr-4 font-medium text-right">Volume</th>
-              <th className="pb-2 pr-4 font-medium text-right">Prev Close</th>
-              <th className="pb-2 font-medium">Sector / Note</th>
+              <th className="pb-2 pr-3 font-medium text-right">RVOL</th>
+              <th className="pb-2 pr-4 font-medium text-right">Spr(%)</th>
+              <th className="pb-2 pr-4 font-medium text-right">Time</th>
+              <th className="pb-2 font-medium pl-4">Sector / Note</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800/60">
@@ -214,7 +216,7 @@ export default function LiveGainers() {
               <SkeletonRows />
             ) : gainers.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-10 text-center text-gray-600 text-sm">
+                <td colSpan={9} className="py-10 text-center text-gray-600 text-sm">
                   {session === 'closed'
                     ? 'Market is closed. Check back during pre-market (4 AM ET) or regular hours.'
                     : 'No gainers meeting criteria right now. Data refreshes every 5 minutes.'}
@@ -230,21 +232,37 @@ export default function LiveGainers() {
                   <td className="py-2.5 pr-4">
                     <div className="flex items-center gap-2">
                       <span className="text-gray-600 text-xs w-4">{i + 1}</span>
-                      <span className="font-bold text-white group-hover:text-emerald-400 transition-colors font-mono">
+                      <span className="font-bold text-white group-hover:text-emerald-400 transition-colors font-mono flex items-center">
                         {g.ticker}
+                        {g.is_hod && (
+                          <span className="ml-1.5 inline-flex items-center px-1 py-0.25 rounded text-[9px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                            HOD
+                          </span>
+                        )}
                       </span>
                     </div>
                   </td>
-                  <GapCell gap={g.gap_pct} />
                   <PriceCell last={g.last_price} prev={g.prev_close} />
-                  <RvolCell rvol={g.rvol_15m} />
+                  <GapCell gap={g.gap_pct} />
+                  <td className="py-2.5 pr-4 text-right font-mono text-xs text-gray-300">
+                    {fmtVol(g.float_shares)}
+                  </td>
                   <td className="py-2.5 pr-4 text-right font-mono text-xs text-gray-400">
                     {fmtVol(g.volume)}
                   </td>
-                  <td className="py-2.5 pr-4 text-right font-mono text-xs text-gray-500">
-                    {g.prev_close != null ? `$${g.prev_close.toFixed(2)}` : '—'}
+                  <RvolCell rvol={g.rvol_15m} />
+                  <td className="py-2.5 pr-4 text-right font-mono text-xs text-gray-400">
+                    {g.spread_pct != null ? `${g.spread_pct.toFixed(2)}%` : '—'}
                   </td>
-                  <td className="py-2.5">
+                  <td className="py-2.5 pr-4 text-right font-mono text-xs text-gray-400">
+                    {g.trade_time
+                      ? new Date(g.trade_time).toLocaleTimeString('en-US', {
+                          timeZone: 'America/New_York',
+                          hour12: false,
+                        })
+                      : '—'}
+                  </td>
+                  <td className="py-2.5 pl-4">
                     <span className="text-gray-500 text-xs">
                       {g.sector ?? (g.news_headline ?? '—')}
                     </span>

@@ -43,8 +43,8 @@ MIN_PRICE      = 0.10    # >= $0.10
 MAX_PRICE      = 100.00  # <= $100
 MAX_MARKET_CAP = 10_000e6 # < $10B
 
-TOP_N           = 10    # Number of tickers to surface in the live panel
-POLYGON_LIMIT   = 50    # How many tickers to pull from Polygon snapshot
+TOP_N           = 25    # Number of tickers to surface in the live panel
+POLYGON_LIMIT   = 100   # How many tickers to pull from Polygon snapshot
 
 
 # ── In-process state ───────────────────────────────────────────────────────────
@@ -168,10 +168,12 @@ def _enrich_snapshot_tickers(raw_tickers: list[dict]) -> list[dict]:
                 'prev_close':    round(prev_close, 4),
                 'volume':        int(volume),
                 'rvol_15m':      rvol,
-                # These require a yfinance call; left None for live cache
-                'float_shares':  None,
-                'sector':        None,
-                'market_cap':    None,
+                'float_shares':  t.get('float_shares'),
+                'sector':        t.get('sector'),
+                'market_cap':    t.get('market_cap'),
+                'spread_pct':    t.get('spread_pct'),
+                'trade_time':    t.get('trade_time'),
+                'is_hod':        t.get('is_hod'),
                 'news_headline': None,
                 'news_fresh':    None,
             })

@@ -11,9 +11,9 @@ from schwab.client import Client
 
 log = logging.getLogger(__name__)
 
-def _get_tradingview_candidates() -> List[str]:
+def _get_tradingview_candidates() -> Dict[str, Dict]:
     """
-    Fetches active/gaining tickers from TradingView.
+    Fetches active/gaining tickers from TradingView along with their metadata.
     Looks at regular session gainers, pre-market gainers, and post-market gainers.
     """
     url = "https://scanner.tradingview.com/america/scan"
@@ -22,7 +22,7 @@ def _get_tradingview_candidates() -> List[str]:
         "Content-Type": "application/json"
     }
     
-    candidates = set()
+    candidates = {}
     
     # 1. Regular gainers
     payload_reg = {
@@ -33,8 +33,9 @@ def _get_tradingview_candidates() -> List[str]:
         ],
         "options": {"active_symbols_only": True},
         "markets": ["america"],
-        "symbols": {"query": {"types": []}, "sortBy": "change", "sortOrder": "desc"},
-        "columns": ["name"],
+        "symbols": {"query": {"types": []}},
+        "sort": {"sortBy": "change", "sortOrder": "desc"},
+        "columns": ["name", "change", "close", "volume", "market_cap_basic", "float_shares_outstanding", "sector"],
         "range": [0, 100]
     }
     
@@ -47,8 +48,9 @@ def _get_tradingview_candidates() -> List[str]:
         ],
         "options": {"active_symbols_only": True},
         "markets": ["america"],
-        "symbols": {"query": {"types": []}, "sortBy": "premarket_change", "sortOrder": "desc"},
-        "columns": ["name"],
+        "symbols": {"query": {"types": []}},
+        "sort": {"sortBy": "premarket_change", "sortOrder": "desc"},
+        "columns": ["name", "premarket_change", "premarket_close", "premarket_volume", "market_cap_basic", "float_shares_outstanding", "sector"],
         "range": [0, 100]
     }
     
@@ -61,8 +63,9 @@ def _get_tradingview_candidates() -> List[str]:
         ],
         "options": {"active_symbols_only": True},
         "markets": ["america"],
-        "symbols": {"query": {"types": []}, "sortBy": "postmarket_change", "sortOrder": "desc"},
-        "columns": ["name"],
+        "symbols": {"query": {"types": []}},
+        "sort": {"sortBy": "postmarket_change", "sortOrder": "desc"},
+        "columns": ["name", "postmarket_change", "postmarket_close", "postmarket_volume", "market_cap_basic", "float_shares_outstanding", "sector"],
         "range": [0, 100]
     }
     
@@ -74,15 +77,33 @@ def _get_tradingview_candidates() -> List[str]:
                 rows = resp.json().get("data", [])
                 log.info(f"[TradingView] {label} returned {len(rows)} candidates")
                 for r in rows:
-                    sym = r.get("d", [None])[0]
+                    d = r.get("d", [])
+                    sym = d[0]
                     if sym and len(sym) <= 5:  # skip warrants/long weird symbols
-                        candidates.add(sym.upper())
+                        sym = sym.upper()
+                        change = d[1] or 0
+                        close = d[2] or 0
+                        volume = d[3] or 0
+                        mcap = d[4]
+                        float_sh = d[5]
+                        sector = d[6]
+                        
+                        # Update or add if change is higher
+                        if sym not in candidates or abs(change) > abs(candidates[sym]["change"]):
+                            candidates[sym] = {
+                                "change": change,
+                                "price": close,
+                                "volume": volume,
+                                "market_cap": mcap,
+                                "float_shares": float_sh,
+                                "sector": sector
+                            }
             else:
                 log.warning(f"[TradingView] {label} failed: {resp.status_code}")
         except Exception as e:
             log.warning(f"[TradingView] {label} error: {e}")
             
-    return sorted(list(candidates))
+    return candidates
 
 def get_gainers_snapshot(include_otc: bool = False) -> List[Dict]:
     """
@@ -91,34 +112,47 @@ def get_gainers_snapshot(include_otc: bool = False) -> List[Dict]:
     2. Fall back to Schwab's /movers endpoint if TradingView fails or returns nothing.
     3. Bulk fetch quotes from Schwab in chunks of 50.
     """
-    candidates = []
+    candidate_data = {}
     try:
-        candidates = _get_tradingview_candidates()
+        candidate_data = _get_tradingview_candidates()
     except Exception as e:
         log.warning(f"[Schwab Client] Failed to fetch candidates from TradingView: {e}")
         
-    if not candidates:
+    if not candidate_data:
         log.info("[Schwab Client] TradingView returned no candidates; falling back to Schwab Movers")
         try:
             # Fallback to Schwab Movers
             movers_raw = []
             for exch in ['NASDAQ', 'NYSE']:
                 movers_raw.extend(get_movers(exch))
-            candidates = [m['symbol'] for m in movers_raw]
+            for m in movers_raw:
+                sym = m['symbol']
+                change = m.get('percentChange') or m.get('change') or 0
+                candidate_data[sym] = {
+                    'change': change,
+                    'price': m.get('last') or 0,
+                    'volume': m.get('volume') or 0,
+                    'market_cap': None,
+                    'float_shares': None,
+                    'sector': None
+                }
         except Exception as e:
             log.warning(f"[Schwab Client] Schwab movers fallback failed: {e}")
             return []
 
-    if not candidates:
+    if not candidate_data:
         return []
 
-    # Enforce limit similar to Polygon (e.g. 150 candidates to avoid making too many quote calls)
-    candidates = candidates[:150]
+    # Sort candidates by change descending to ensure we keep the top movers
+    sorted_candidates = sorted(candidate_data.keys(), key=lambda x: abs(candidate_data[x].get('change', 0) or 0), reverse=True)
+    
+    # Enforce limit of 150 candidates to avoid making too many quote calls
+    top_candidates = sorted_candidates[:150]
 
     # Batch fetch quotes in chunks of 50 (Schwab limit)
     all_quotes = {}
-    for i in range(0, len(candidates), 50):
-        chunk = candidates[i:i+50]
+    for i in range(0, len(top_candidates), 50):
+        chunk = top_candidates[i:i+50]
         try:
             quotes = get_quotes(chunk)
             all_quotes.update(quotes)
@@ -129,6 +163,17 @@ def get_gainers_snapshot(include_otc: bool = False) -> List[Dict]:
     for sym, data in all_quotes.items():
         quote = data.get('quote', {})
         fund = data.get('fundamental', {})
+        cdata = candidate_data.get(sym, {})
+        
+        ask = quote.get('askPrice')
+        bid = quote.get('bidPrice')
+        spread_pct = round(((ask - bid) / bid) * 100, 2) if ask and bid and bid > 0 else None
+        
+        last_price = quote.get('lastPrice')
+        high_price = quote.get('highPrice')
+        is_hod = (last_price >= (high_price * 0.995)) if last_price and high_price and high_price > 0 else False
+        
+        trade_time = quote.get('tradeTime')
         
         # Map to legacy MassiveSnapshotTicker shape
         tickers.append({
@@ -144,8 +189,14 @@ def get_gainers_snapshot(include_otc: bool = False) -> List[Dict]:
             },
             'prevDay': {
                 'c': quote.get('closePrice'),
-                'v': fund.get('avg10DaysVolume') # proxy for prevDay vol if needed
-            }
+                'v': fund.get('avg10DaysVolume')
+            },
+            'float_shares': cdata.get('float_shares'),
+            'market_cap': cdata.get('market_cap'),
+            'sector': cdata.get('sector'),
+            'spread_pct': spread_pct,
+            'trade_time': trade_time,
+            'is_hod': is_hod
         })
     return tickers
 

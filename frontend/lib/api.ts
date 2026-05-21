@@ -119,6 +119,9 @@ export interface LiveGainerRow {
   float_shares:  number | null
   sector:        string | null
   market_cap:    number | null
+  spread_pct:    number | null
+  trade_time:    number | null
+  is_hod:        boolean | null
   news_headline: string | null
   news_fresh:    boolean | null
 }
