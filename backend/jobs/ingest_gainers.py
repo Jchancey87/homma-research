@@ -38,11 +38,11 @@ log = logging.getLogger(__name__)
 # Screening criteria constants
 # ---------------------------------------------------------------------------
 MIN_GAP_PCT    = 5.0    # Show anything > 5% gap
-MAX_FLOAT_M    = 200.0  # < 200M shares
+MAX_FLOAT_M    = 500.0  # < 500M shares
 MIN_RVOL       = 2.0    # > 2x RVOL
-MIN_PRICE      = 2.0    # >= $2
-MAX_PRICE      = 20.0   # <= $20
-MAX_MARKET_CAP = 1_000e6 # < $1B
+MIN_PRICE      = 0.10   # >= $0.10
+MAX_PRICE      = 100.00 # <= $100
+MAX_MARKET_CAP = 10_000e6 # < $10B
 
 POLYGON_SNAPSHOT_LIMIT = 50   # tickers to pull from Polygon gainers snapshot
 
@@ -223,7 +223,7 @@ def _enrich_ticker(snap: dict, grouped: dict[str, dict], target_date: str) -> di
         return None
 
     # ── RVOL — use FMP avg_volume if available, else prev-day proxy ────────
-    prev_vol = prevDay.get('v') or 0
+    prev_vol = prev_obj.get('v') or 0
     rvol_base = avg_vol or prev_vol or 0
     rvol = round(volume / rvol_base, 2) if rvol_base > 0 else None
     if rvol is not None and rvol < MIN_RVOL:

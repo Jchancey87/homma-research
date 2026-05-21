@@ -29,3 +29,9 @@ Solo day traders who need to filter 500+ daily gainers into a "Watchlist of 3" i
 - **Professional & Precise**: High density, low decoration.
 - **Restrained Aesthetic**: Emerald accents for "in play" signals, otherwise monochromatic.
 - **Trustworthy**: Data-driven, using professional APIs (Polygon, FMP).
+
+## Feature Backlog / Request List
+- **Schwab WebSocket Streamer**: Replace periodic HTTP polling with real-time Level 1 quote streaming client.
+- **Stateful Screener Filters**: Add UI sliders/inputs on the frontend to filter gainers dynamically by float, price, and volume.
+- **VWAP Tracker**: Add intraday volume-weighted average price calculation and show stock price relative to VWAP.
+- **Discord Webhook Alerts**: Push real-time alerts to a Discord channel when new gainers meet the criteria.

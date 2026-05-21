@@ -39,9 +39,9 @@ PERSIST_MINUTE_ET = 0
 MIN_GAP_PCT    = 5.0    # Show anything > 5% gap
 MAX_FLOAT_M    = 200.0  # < 200M shares
 MIN_RVOL       = 2.0    # > 2x RVOL
-MIN_PRICE      = 2.0    # >= $2
-MAX_PRICE      = 20.0   # <= $20
-MAX_MARKET_CAP = 1_000e6 # < $1B
+MIN_PRICE      = 0.10    # >= $0.10
+MAX_PRICE      = 100.00  # <= $100
+MAX_MARKET_CAP = 10_000e6 # < $10B
 
 TOP_N           = 10    # Number of tickers to surface in the live panel
 POLYGON_LIMIT   = 50    # How many tickers to pull from Polygon snapshot
