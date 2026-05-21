@@ -408,57 +408,9 @@ async def live_screener():
     Replaces the Polygon snapshot logic with the Schwab client.
     """
     import asyncio
+    from services.live_screener import get_live_gainers
     
-    def _fetch_live():
-        from services.schwab_client import get_movers
-        from services.live_screener import MIN_GAP_PCT, MIN_PRICE, MAX_PRICE
-        from services.live_screener import get_market_session, get_session_label
-        
-        now_et = datetime.now(timezone.utc) # Or EASTERN timezone if needed, handled in live_screener
-        session = get_market_session()
-        
-        # Schwab get_movers handles the API call
-        movers = get_movers('$COMPX') # or other index as appropriate
-        
-        gainers = []
-        if movers:
-            for m in movers:
-                ticker = m.get('symbol')
-                gap_pct = m.get('percentChange', 0)
-                last_price = m.get('last', 0)
-                
-                # Apply basic live screener thresholds
-                if gap_pct < MIN_GAP_PCT: continue
-                if last_price < MIN_PRICE or last_price > MAX_PRICE: continue
-                
-                gainers.append({
-                    'ticker': ticker,
-                    'gap_pct': round(gap_pct, 2),
-                    'last_price': round(last_price, 4),
-                    'open_price': None,
-                    'prev_close': None,
-                    'volume': m.get('totalVolume', 0),
-                    'rvol_15m': None, # Requires history
-                    'float_shares': None,
-                    'sector': None,
-                    'market_cap': None,
-                    'news_headline': None,
-                    'news_fresh': None,
-                })
-        
-        # Sort descending by gap
-        gainers.sort(key=lambda x: x['gap_pct'], reverse=True)
-        
-        return {
-            'session': session,
-            'session_label': get_session_label(session),
-            'fetched_at': datetime.utcnow().isoformat() + 'Z',
-            'gainers': gainers[:10],
-            'top_n': 10,
-            'cache_ttl_s': 300,
-        }
-        
-    return await asyncio.to_thread(_fetch_live)
+    return await asyncio.to_thread(get_live_gainers)
 
 # ---------------------------------------------------------------------------
 # GET /gainers/heatmap
