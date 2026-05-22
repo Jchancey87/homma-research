@@ -31,7 +31,7 @@ log = logging.getLogger(__name__)
 # ── Constants ──────────────────────────────────────────────────────────────────
 EASTERN = pytz.timezone('US/Eastern')
 
-CACHE_TTL_SECONDS = 300          # Re-fetch Polygon every 5 minutes
+CACHE_TTL_SECONDS = 60           # Re-fetch Polygon every 1 minute
 PERSIST_HOUR_ET   = 20           # 8:00 PM Eastern — after-hours close
 PERSIST_MINUTE_ET = 0
 
@@ -56,6 +56,139 @@ _cache: dict   = {
     'session':      None,   # str: 'pre_market' | 'open' | 'after_hours' | 'closed'
     'persisted_dates': set(),   # set of date strings already persisted today
 }
+
+_ma_cache = {}  # ticker -> (timestamp, data_dict)
+_ma_cache_lock = threading.Lock()
+
+def get_cached_sparkline_and_ma(ticker: str) -> dict:
+    now = time.time()
+    with _ma_cache_lock:
+        if ticker in _ma_cache:
+            ts, data = _ma_cache[ticker]
+            if now - ts < 3600:  # 1 hour cache
+                return data
+
+    try:
+        from momentum_screener.schwab.http_client import get_price_history_every_day
+        candles = get_price_history_every_day(ticker)
+        if not candles:
+            data = {
+                'sparkline_5d': [],
+                'sma20': None, 'sma50': None, 'sma100': None
+            }
+        else:
+            closes = [c.get('close') for c in candles if c.get('close') is not None]
+            if not closes:
+                data = {
+                    'sparkline_5d': [],
+                    'sma20': None, 'sma50': None, 'sma100': None
+                }
+            else:
+                sparkline_5d = closes[-5:]
+                
+                def sma(n):
+                    if len(closes) < n:
+                        return None
+                    return sum(closes[-n:]) / n
+                
+                data = {
+                    'sparkline_5d': sparkline_5d,
+                    'sma20': round(sma(20), 2) if sma(20) is not None else None,
+                    'sma50': round(sma(50), 2) if sma(50) is not None else None,
+                    'sma100': round(sma(100), 2) if sma(100) is not None else None,
+                }
+    except Exception as e:
+        log.warning(f"Error computing sparkline & MA for {ticker}: {e}")
+        data = {
+            'sparkline_5d': [],
+            'sma20': None, 'sma50': None, 'sma100': None
+        }
+
+    with _ma_cache_lock:
+        _ma_cache[ticker] = (now, data)
+    return data
+
+def check_tickers_history(tickers: list[str]) -> dict:
+    if not tickers:
+        return {}
+    try:
+        from database import get_connection
+        today_et = datetime.now(EASTERN).strftime('%Y-%m-%d')
+        with get_connection() as conn:
+            cur = conn.execute("SELECT MAX(date) as max_date FROM daily_gainers WHERE date < %s", (today_et,))
+            row = cur.fetchone()
+            recent_date = row['max_date'] if row else None
+            
+            if not recent_date:
+                return {}
+            
+            cur = conn.execute(
+                """
+                SELECT ticker, COUNT(*) as total_count,
+                       SUM(CASE WHEN date = %s THEN 1 ELSE 0 END) as yesterday_count
+                FROM daily_gainers
+                WHERE ticker = ANY(%s) AND date < %s
+                GROUP BY ticker
+                """,
+                (recent_date, list(tickers), today_et)
+            )
+            rows = cur.fetchall()
+            
+            history = {}
+            for r in rows:
+                history[r['ticker']] = {
+                    'is_repeat_runner': r['total_count'] > 0,
+                    'is_follow_through': r['yesterday_count'] > 0
+                }
+            return history
+    except Exception as e:
+        log.warning(f"Error checking ticker history: {e}")
+        return {}
+
+import concurrent.futures
+
+def enrich_gainers_with_sparklines_and_history(gainers: list[dict]) -> list[dict]:
+    if not gainers:
+        return gainers
+        
+    tickers = [g['ticker'] for g in gainers]
+    history = check_tickers_history(tickers)
+    
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(get_cached_sparkline_and_ma, g['ticker']): g for g in gainers}
+        for future in concurrent.futures.as_completed(futures):
+            g = futures[future]
+            try:
+                ma_data = future.result()
+                live_price = g.get('last_price')
+                
+                sparkline = ma_data['sparkline_5d']
+                if live_price is not None:
+                    sparkline = sparkline[-4:] + [live_price]
+                
+                g['sparkline_5d'] = sparkline
+                g['sma20'] = ma_data['sma20']
+                g['sma50'] = ma_data['sma50']
+                g['sma100'] = ma_data['sma100']
+                
+                g['above_sma20'] = live_price > ma_data['sma20'] if live_price is not None and ma_data['sma20'] is not None else False
+                g['above_sma50'] = live_price > ma_data['sma50'] if live_price is not None and ma_data['sma50'] is not None else False
+                g['above_sma100'] = live_price > ma_data['sma100'] if live_price is not None and ma_data['sma100'] is not None else False
+            except Exception as e:
+                log.warning(f"Failed to fetch MA/sparkline for {g['ticker']}: {e}")
+                g.update({
+                    'sparkline_5d': [],
+                    'above_sma20': False, 'above_sma50': False, 'above_sma100': False,
+                    'sma20': None, 'sma50': None, 'sma100': None
+                })
+                
+    for g in gainers:
+        ticker = g['ticker']
+        hist = history.get(ticker, {})
+        g['is_repeat_runner'] = hist.get('is_repeat_runner', False)
+        g['is_follow_through'] = hist.get('is_follow_through', False)
+        
+    return gainers
 
 
 # ── Market session logic ───────────────────────────────────────────────────────
@@ -218,6 +351,7 @@ def refresh_cache(force: bool = False) -> dict:
 
     raw = _fetch_polygon_snapshot()
     gainers = _enrich_snapshot_tickers(raw)
+    gainers = enrich_gainers_with_sparklines_and_history(gainers)
 
     with _cache_lock:
         _cache['raw_tickers']  = [t.get('ticker', '') for t in raw]

@@ -286,7 +286,8 @@ async def repeat_runners(db: asyncpg.Connection = Depends(get_db)):
             sys.path.insert(0, _backend)
         from services.live_screener import get_live_gainers
         snapshot = get_live_gainers()
-        today_tickers = [g["ticker"] for g in snapshot.get("gainers", [])]
+        gainers_by_ticker = {g["ticker"]: g for g in snapshot.get("gainers", [])}
+        today_tickers = list(gainers_by_ticker.keys())
     except Exception:
         return []
 
@@ -308,7 +309,20 @@ async def repeat_runners(db: asyncpg.Connection = Depends(get_db)):
         GROUP BY ticker
         ORDER BY appearances DESC, best_gap_pct DESC
     """, today_tickers)
-    return rows_to_list(rows)
+    
+    results = rows_to_list(rows)
+    for r in results:
+        g = gainers_by_ticker.get(r['ticker'], {})
+        r['sparkline_5d'] = g.get('sparkline_5d', [])
+        r['sma20'] = g.get('sma20')
+        r['sma50'] = g.get('sma50')
+        r['sma100'] = g.get('sma100')
+        r['above_sma20'] = g.get('above_sma20', False)
+        r['above_sma50'] = g.get('above_sma50', False)
+        r['above_sma100'] = g.get('above_sma100', False)
+        r['today_last'] = g.get('last_price')
+        r['today_gap_pct'] = g.get('gap_pct')
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -457,6 +471,8 @@ async def follow_through(db: asyncpg.Connection = Depends(get_db)):
     For each ticker in the most recent day's gainers, look up the next
     trading day's open price vs the gainer's close price.
     """
+    import asyncio
+    
     # 1. Find the most recent day in the DB before today
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     recent_date_row = await db.fetchrow(
@@ -469,27 +485,54 @@ async def follow_through(db: asyncpg.Connection = Depends(get_db)):
     
     # 2. Get the gainers from that date
     gainers = await db.fetch(
-        "SELECT ticker, date as prev_date, gap_pct as prev_gap, close_price as prev_close "
+        "SELECT ticker, date as prev_date, gap_pct as prev_gap, close_price as prev_close, float_shares "
         "FROM daily_gainers WHERE date = $1 ORDER BY gap_pct DESC LIMIT 10",
         recent_date
     )
     
+    tickers = [g['ticker'] for g in gainers]
+    if not tickers:
+        return {"date": str(recent_date), "results": []}
+        
+    # Try fetching live quotes for these tickers
+    try:
+        from momentum_screener.schwab.http_client import get_quotes
+        quotes = await asyncio.to_thread(get_quotes, tickers)
+    except Exception as e:
+        log.warning(f"Failed to fetch live quotes for follow-through tickers: {e}")
+        quotes = {}
+        
     results = []
     for g in gainers:
-        # Check if they appeared the NEXT day or if we need to fetch their open manually
-        # For simplicity, if they aren't in daily_gainers the next day, they faded/no data
-        next_day = await db.fetchrow(
-            "SELECT open_price FROM daily_gainers WHERE ticker=$1 AND date > $2 ORDER BY date ASC LIMIT 1",
-            g['ticker'], recent_date
-        )
+        ticker = g['ticker']
+        q_data = quotes.get(ticker, {}) if quotes else {}
+        quote = q_data.get('quote', {}) if q_data else {}
         
-        today_open = next_day['open_price'] if next_day else None
-        
+        if quote:
+            today_open = quote.get('openPrice')
+            today_last = quote.get('lastPrice')
+            today_volume = quote.get('totalVolume')
+        else:
+            # Fall back to database lookup for subsequent days
+            next_day = await db.fetchrow(
+                "SELECT open_price, close_price, volume FROM daily_gainers WHERE ticker=$1 AND date > $2 ORDER BY date ASC LIMIT 1",
+                ticker, recent_date
+            )
+            if next_day:
+                today_open = next_day['open_price']
+                today_last = next_day['close_price']
+                today_volume = next_day['volume']
+            else:
+                today_open = None
+                today_last = None
+                today_volume = None
+                
+        price_for_calc = today_last if today_last is not None else today_open
         change_pct = None
         status = 'no_data'
         
-        if today_open and g['prev_close']:
-            change_pct = round(((today_open - g['prev_close']) / g['prev_close']) * 100, 2)
+        if price_for_calc is not None and g['prev_close']:
+            change_pct = round(((price_for_calc - g['prev_close']) / g['prev_close']) * 100, 2)
             if change_pct > 2.0:
                 status = 'following'
             elif change_pct < -2.0:
@@ -498,13 +541,16 @@ async def follow_through(db: asyncpg.Connection = Depends(get_db)):
                 status = 'flat'
                 
         results.append({
-            'ticker': g['ticker'],
+            'ticker': ticker,
             'prev_date': str(g['prev_date']),
             'prev_gap': g['prev_gap'],
             'prev_close': g['prev_close'],
             'today_open': today_open,
+            'today_last': today_last,
+            'today_volume': today_volume,
             'change_pct': change_pct,
             'status': status,
+            'float_shares': g['float_shares'],
         })
         
     return {"date": str(recent_date), "results": results}

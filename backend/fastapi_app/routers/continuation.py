@@ -29,6 +29,8 @@ async def list_picks(
     limit: int = Query(50, ge=1, le=500),
     db: asyncpg.Connection = Depends(get_db),
 ):
+    import asyncio
+    
     if include_inactive:
         rows = await db.fetch(
             """SELECT * FROM continuation_picks
@@ -44,7 +46,30 @@ async def list_picks(
                LIMIT $1""",
             limit,
         )
-    return rows_to_list(rows)
+    
+    results = rows_to_list(rows)
+    if not results:
+        return results
+        
+    tickers = {r["ticker"] for r in results}
+    try:
+        from momentum_screener.schwab.http_client import get_quotes
+        quotes = await asyncio.to_thread(get_quotes, list(tickers))
+    except Exception as e:
+        log.warning(f"Failed to fetch live quotes for continuation picks: {e}")
+        quotes = {}
+        
+    for r in results:
+        ticker = r["ticker"]
+        q_data = quotes.get(ticker, {}) if quotes else {}
+        quote = q_data.get('quote', {}) if q_data else {}
+        
+        r["today_last"] = quote.get("lastPrice")
+        r["today_open"] = quote.get("openPrice")
+        r["today_volume"] = quote.get("totalVolume")
+        r["today_change_pct"] = quote.get("netPercentChange")
+        
+    return results
 
 
 @router.post("", status_code=201)

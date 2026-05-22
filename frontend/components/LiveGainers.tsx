@@ -80,6 +80,52 @@ function PriceCell({ last, prev }: { last: number | null; prev: number | null })
   )
 }
 
+function Sparkline({ points }: { points?: number[] }) {
+  if (!points || points.length < 2) return <div className="w-16 h-5" />
+  
+  const min = Math.min(...points)
+  const max = Math.max(...points)
+  const range = max - min
+  
+  const width = 64;
+  const height = 20;
+  const padding = 2;
+  
+  const coords = points.map((p, idx) => {
+    const x = (idx / (points.length - 1)) * (width - 2 * padding) + padding
+    const y = range === 0 
+      ? height / 2 
+      : height - padding - ((p - min) / range) * (height - 2 * padding)
+    return { x, y }
+  })
+  
+  const pathD = coords.reduce((acc, c, idx) => {
+    return acc + `${idx === 0 ? 'M' : 'L'} ${c.x.toFixed(1)} ${c.y.toFixed(1)}`
+  }, '')
+  
+  const lastPoint = coords[coords.length - 1]
+  const strokeColor = points[points.length - 1] >= points[0] ? '#10b981' : '#f43f5e'
+  
+  return (
+    <svg width={width} height={height} className="overflow-visible inline-block">
+      <path
+        d={pathD}
+        fill="none"
+        stroke={strokeColor}
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle
+        cx={lastPoint.x}
+        cy={lastPoint.y}
+        r="2"
+        fill={strokeColor}
+      />
+    </svg>
+  )
+}
+
 // ── Row skeleton ──────────────────────────────────────────────────────────────
 
 function SkeletonRows() {
@@ -87,9 +133,9 @@ function SkeletonRows() {
     <>
       {Array.from({ length: 10 }).map((_, i) => (
         <tr key={i} className="animate-pulse">
-          {Array.from({ length: 9 }).map((_, j) => (
+          {Array.from({ length: 10 }).map((_, j) => (
             <td key={j} className="py-3 pr-4">
-              <div className={`h-3 bg-gray-800 rounded ${j === 0 ? 'w-14' : j === 8 ? 'w-28' : 'w-12'}`} />
+              <div className={`h-3 bg-gray-800 rounded ${j === 0 ? 'w-14' : j === 9 ? 'w-28' : 'w-12'}`} />
             </td>
           ))}
         </tr>
@@ -126,8 +172,8 @@ export default function LiveGainers() {
   // Initial load + polling
   useEffect(() => {
     fetchData()
-    // Poll every 5 minutes — matches the backend cache TTL
-    timerRef.current = setInterval(() => fetchData(), 5 * 60 * 1000)
+    // Poll every 1 minute — matches the backend cache TTL
+    timerRef.current = setInterval(() => fetchData(), 60 * 1000)
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [fetchData])
 
@@ -165,7 +211,7 @@ export default function LiveGainers() {
           {isActive && !error && (
             <span className="flex items-center gap-1 text-[11px] text-gray-700">
               <Wifi size={10} className="text-emerald-600" />
-              auto-refresh 5m
+              auto-refresh 1m
             </span>
           )}
           {error && (
@@ -201,6 +247,7 @@ export default function LiveGainers() {
           <thead>
             <tr className="text-left text-xs text-gray-500 border-b border-gray-800">
               <th className="pb-2 pr-4 font-medium">Ticker</th>
+              <th className="pb-2 pr-4 font-medium text-center">Trend</th>
               <th className="pb-2 pr-4 font-medium text-right">Price</th>
               <th className="pb-2 pr-4 font-medium text-right">Change(%)</th>
               <th className="pb-2 pr-4 font-medium text-right">Float</th>
@@ -216,10 +263,10 @@ export default function LiveGainers() {
               <SkeletonRows />
             ) : gainers.length === 0 ? (
               <tr>
-                <td colSpan={9} className="py-10 text-center text-gray-600 text-sm">
+                <td colSpan={10} className="py-10 text-center text-gray-600 text-sm">
                   {session === 'closed'
                     ? 'Market is closed. Check back during pre-market (4 AM ET) or regular hours.'
-                    : 'No gainers meeting criteria right now. Data refreshes every 5 minutes.'}
+                    : 'No gainers meeting criteria right now. Data refreshes every 1 minute.'}
                 </td>
               </tr>
             ) : (
@@ -232,15 +279,30 @@ export default function LiveGainers() {
                   <td className="py-2.5 pr-4">
                     <div className="flex items-center gap-2">
                       <span className="text-gray-600 text-xs w-4">{i + 1}</span>
-                      <span className="font-bold text-white group-hover:text-emerald-400 transition-colors font-mono flex items-center">
+                      <span className="font-bold text-white group-hover:text-emerald-400 transition-colors font-mono flex items-center gap-1.5">
                         {g.ticker}
-                        {g.is_hod && (
-                          <span className="ml-1.5 inline-flex items-center px-1 py-0.25 rounded text-[9px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                            HOD
-                          </span>
-                        )}
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          {g.is_repeat_runner && (
+                            <span title="Repeat Runner" className="inline-flex items-center px-1 py-0.25 rounded text-[8px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                              RR
+                            </span>
+                          )}
+                          {g.is_follow_through && (
+                            <span title="Yesterday's Follow Through" className="inline-flex items-center px-1 py-0.25 rounded text-[8px] font-black bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                              FT
+                            </span>
+                          )}
+                          {g.is_hod && (
+                            <span title="HOD" className="inline-flex items-center px-1 py-0.25 rounded text-[8px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                              HOD
+                            </span>
+                          )}
+                        </div>
                       </span>
                     </div>
+                  </td>
+                  <td className="py-2.5 pr-4 text-center">
+                    <Sparkline points={g.sparkline_5d} />
                   </td>
                   <PriceCell last={g.last_price} prev={g.prev_close} />
                   <GapCell gap={g.gap_pct} />

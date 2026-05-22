@@ -90,7 +90,7 @@ async function ContinuationPicksPanel() {
       <PanelLabel icon={Zap} label="AI Continuation Picks" href="/watchlist" />
       {active.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-6 border border-dashed border-gray-200 dark:border-gray-800 rounded-xl gap-2 text-center bg-gray-50/50 dark:bg-gray-900/10">
-          <Zap size={22} className="text-gray-400 dark:text-gray-600" />
+          <Zap size={22} className="text-gray-400 dark:text-gray-650" />
           <p className="text-gray-500 dark:text-gray-400 text-xs font-medium">No active picks found</p>
           <Link
             href="/watchlist"
@@ -101,11 +101,11 @@ async function ContinuationPicksPanel() {
         </div>
       ) : (
         <div className="space-y-0.5">
-          <div className="flex text-[10px] text-gray-400 dark:text-gray-700 uppercase tracking-wide font-semibold px-2 pb-1">
+          <div className="flex text-[10px] text-gray-400 dark:text-gray-700 uppercase tracking-wide font-semibold px-2 pb-1 border-b border-gray-100 dark:border-gray-900 mb-1">
             <span className="w-6 shrink-0">#</span>
             <span className="flex-1">Ticker</span>
-            <span className="w-20 text-right">Gap</span>
-            <span className="w-16 text-right">RVOL</span>
+            <span className="w-16 text-right">Sel. Gap</span>
+            <span className="w-24 text-right">Today</span>
           </div>
           {active.map((p, i) => (
             <Link
@@ -114,17 +114,28 @@ async function ContinuationPicksPanel() {
               className="group flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors"
             >
               <span className="text-[11px] text-gray-400 dark:text-gray-700 w-6 shrink-0">#{i + 1}</span>
-              <span className="text-sm font-bold text-gray-900 dark:text-white font-mono flex-1">{p.ticker}</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-white font-mono flex-1 group-hover:text-emerald-400 transition-colors">{p.ticker}</span>
               {p.gap_pct != null && (
-                <span className="text-xs font-mono text-emerald-500 dark:text-emerald-400 w-20 text-right">
+                <span className="text-xs font-mono text-gray-550 dark:text-gray-400 w-16 text-right">
                   +{p.gap_pct.toFixed(1)}%
                 </span>
               )}
-              {p.rvol_15m != null && (
-                <span className="text-xs font-mono text-sky-555 dark:text-sky-400 w-16 text-right">
-                  {p.rvol_15m.toFixed(1)}x
-                </span>
-              )}
+              <div className="w-24 text-right flex flex-col items-end shrink-0">
+                {p.today_change_pct != null ? (
+                  <>
+                    <span className={`text-xs font-mono font-bold leading-none ${p.today_change_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {p.today_change_pct >= 0 ? '+' : ''}{p.today_change_pct.toFixed(1)}%
+                    </span>
+                    {p.today_last != null && (
+                      <span className="text-[9px] text-gray-500 font-mono mt-0.5">
+                        ${p.today_last.toFixed(2)}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-xs font-mono text-gray-500">—</span>
+                )}
+              </div>
             </Link>
           ))}
         </div>

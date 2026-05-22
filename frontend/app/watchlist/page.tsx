@@ -191,6 +191,24 @@ function PickRow({
         <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed line-clamp-2">{pick.reason ?? '—'}</p>
       </td>
 
+      {/* Today */}
+      <td className="px-4 py-3 align-middle w-24 text-right">
+        {pick.today_change_pct != null ? (
+          <div className="flex flex-col items-end">
+            <span className={`text-xs font-mono font-bold leading-none ${pick.today_change_pct >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+              {pick.today_change_pct >= 0 ? '+' : ''}{pick.today_change_pct.toFixed(1)}%
+            </span>
+            {pick.today_last != null && (
+              <span className="text-[10px] text-gray-500 dark:text-gray-400 font-mono mt-1">
+                ${pick.today_last.toFixed(2)}
+              </span>
+            )}
+          </div>
+        ) : (
+          <span className="text-xs font-mono text-gray-400 dark:text-gray-600">—</span>
+        )}
+      </td>
+
       {/* Metrics */}
       <td className="px-4 py-3 align-middle hidden md:table-cell">
         <div className="flex items-center gap-1.5">
@@ -379,6 +397,7 @@ export default function WatchlistPage() {
                   <th className="px-4 py-3 w-12 text-center">Rank</th>
                   <th className="px-4 py-3 w-28">Ticker</th>
                   <th className="px-4 py-3">Selection Reason</th>
+                  <th className="px-4 py-3 w-24 text-right">Today</th>
                   <th className="px-4 py-3 hidden md:table-cell">Key Metrics</th>
                   <th className="px-4 py-3 text-right" />
                 </tr>

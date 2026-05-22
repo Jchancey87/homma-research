@@ -124,6 +124,16 @@ export interface LiveGainerRow {
   is_hod:        boolean | null
   news_headline: string | null
   news_fresh:    boolean | null
+  // Enrichment fields (2026-05)
+  sparkline_5d?: number[]
+  sma20?: number | null
+  sma50?: number | null
+  sma100?: number | null
+  above_sma20?: boolean
+  above_sma50?: boolean
+  above_sma100?: boolean
+  is_repeat_runner?: boolean
+  is_follow_through?: boolean
 }
 
 export interface LiveGainerSnapshot {
@@ -366,6 +376,11 @@ export interface ContinuationPick {
   deactivated_at:       string | null
   deactivated_reason:   string | null
   created_at:           string
+  // Today's live details
+  today_last?:          number | null
+  today_open?:          number | null
+  today_volume?:         number | null
+  today_change_pct?:     number | null
 }
 
 export const getContinuationPicks = (includeInactive = false) =>
@@ -477,6 +492,15 @@ export interface RepeatRunner {
   first_seen:   string
   avg_rvol:     number | null
   avg_float_m:  number | null
+  sparkline_5d?: number[]
+  sma20?: number | null
+  sma50?: number | null
+  sma100?: number | null
+  above_sma20?: boolean
+  above_sma50?: boolean
+  above_sma100?: boolean
+  today_last?: number | null
+  today_gap_pct?: number | null
 }
 export const getRepeatRunners = () =>
   api.get<RepeatRunner[]>('/api/gainers/repeat-runners').then(r => r.data)
@@ -493,13 +517,16 @@ export const getFloatBuckets = (date?: string) =>
   }).then(r => r.data)
 
 export interface FollowThroughResult {
-  ticker:     string
-  prev_date:  string
-  prev_gap:   number | null
-  prev_close: number | null
-  today_open: number | null
-  change_pct: number | null
-  status:     'following' | 'fading' | 'flat' | 'no_data'
+  ticker:       string
+  prev_date:    string
+  prev_gap:     number | null
+  prev_close:   number | null
+  today_open:   number | null
+  change_pct:   number | null
+  status:       'following' | 'fading' | 'flat' | 'no_data'
+  float_shares?: number | null
+  today_last?:   number | null
+  today_volume?: number | null
 }
 export const getFollowThrough = () =>
   api.get<{ date: string; results: FollowThroughResult[] }>('/api/gainers/follow-through').then(r => r.data)
