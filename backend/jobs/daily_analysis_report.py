@@ -19,8 +19,13 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import date as date_cls
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+# Allow imports from backend/ and repo root
+_backend = os.path.normpath(os.path.join(os.path.dirname(__file__), '..'))
+_repo = os.path.dirname(_backend)
+if _repo not in sys.path:
+    sys.path.insert(0, _repo)
+if _backend not in sys.path:
+    sys.path.insert(0, _backend)
 
 import yfinance as yf
 import pandas as pd

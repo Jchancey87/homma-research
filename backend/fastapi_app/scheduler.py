@@ -71,6 +71,9 @@ async def _nightly_gainer_ingest() -> None:
         def _run() -> tuple[int, int]:
             import sys, os
             _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            _repo = os.path.dirname(_backend)
+            if _repo not in sys.path:
+                sys.path.insert(0, _repo)
             if _backend not in sys.path:
                 sys.path.insert(0, _backend)
             from jobs.ingest_gainers import fetch_gainers, write_gainers
@@ -103,7 +106,7 @@ async def _expire_continuation_picks() -> None:
                        deactivated_at = NOW(),
                        deactivated_reason = 'auto-expired (>3 days)'
                    WHERE is_active = TRUE
-                     AND date < (CURRENT_DATE - INTERVAL '3 days')"""
+                     AND date::date < (CURRENT_DATE - INTERVAL '3 days')"""
             )
         # result is e.g. "UPDATE 5"
         count = result.split()[-1] if result else "?"
