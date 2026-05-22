@@ -1,0 +1,85 @@
+---
+classification_schema:
+  authoritative: Reviewed, approved, and considered definitive for the project
+  draft: Work in progress, experimental, or in review
+  superseded: Replaced by newer version
+  duplicate: Identical content in multiple locations
+  background: Reference material only, not operational
+  unknown: Authority uncertain, needs clarification
+
+frontend:
+  package.json: authoritative
+  tsconfig.json: authoritative
+  tailwind.config.ts: authoritative
+  .next: superseded (build artifact)
+  .env.local: draft (should be in pockets/secrets/)
+
+backend:
+  main.py: authoritative
+  requirements.txt: authoritative
+  config.py: draft (should be in pockets/secrets/)
+  schwab_auth_setup.py: authoritative
+
+database:
+  schema.sql: authoritative
+  migrations: authoritative
+
+config:
+  deploy.sh: authoritative
+  ecosystem.config.js: authoritative
+  docker-compose.yml: authoritative
+
+docs:
+  README.md: authoritative
+  DESIGN.md: authoritative
+  PRODUCT.md: authoritative
+  handoffs/001-008_handoff.md: authoritative
+  devlogs.md: authoritative
+
+pocket_data:
+  source_inventory: authoritative
+  authority_map: authoritative
+  conflict_log: authoritative
+  missing_context: authoritative
+  handoff: authoritative
+
+version_families:
+  handoffs_001:
+    version: 1.0
+    superseded_by: handoffs_004
+  handoffs_002:
+    version: 1.0
+    superseded_by: handoffs_004
+  handoffs_003:
+    version: 1.0
+    superseded_by: handoffs_004
+  handoffs_004:
+    version: 2.0 (final)
+    status: authoritative
+
+authority_questions:
+  - id: AUTH-001
+    source: frontend/.next/prerender-manifest.json
+    question: File missing - should be auto-generated?
+    status: unresolved
+    impact: HIGH - causes build failure
+  - id: AUTH-002
+    source: backend/.env
+    question: API keys stored in code vs secret manager?
+    status: unresolved
+    impact: MEDIUM - security risk
+  - id: AUTH-003
+    source: frontend/.env.local
+    question: Should be tracked in pocket-data/secrets/ instead?
+    status: draft
+    impact: LOW - organizational improvement
+  - id: AUTH-004
+    source: unknown
+    question: Migration path from webpack to Next.js App Router?
+    status: unresolved
+    impact: HIGH - architectural question
+  - id: AUTH-005
+    source: docs/
+    question: Are docs complete and up to date?
+    status: unresolved
+    impact: MEDIUM - developer onboarding
