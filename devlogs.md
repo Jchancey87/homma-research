@@ -155,3 +155,38 @@ Addressed user concerns regarding missing tickers on the live gainer stream by f
 * **Problem**: Pushing local commits to GitHub was blocked due to credentials/HTTPS auth issues, preventing `deploy.sh` (which pulls from git) from updating `/opt/trading-journal`.
 * **Resolution**: Bypassed GitHub by copying the 4 modified backend/frontend files directly to the `/opt/trading-journal` directories via `sudo cp`, building the Next.js assets (`npm run build`), and restarting the PM2 instances.
 
+---
+
+## May 22, 2026
+
+### Objectives
+Integrate visual sparklines and technical indicator pills (SMA 20, 50, 100) on the frontend for Live Gainers and Repeat Runners, and fix issues preventing the nightly gainer ingestion and email notification from successfully running.
+
+### Git State
+* **Current Branch**: `master` (synchronized with `origin/master`)
+* **Recent Commits**:
+  * `0e7cc38` - fix: resolve scheduler import issue and SQL comparison type mismatch
+  * `33be041` - feat: enrich live gainers, repeat runners, and follow-through with sparklines and SMA indicators
+
+---
+
+### Struggles & Resolutions Along the Way
+
+#### 1. Missing Repository Root in Scheduler sys.path
+* **Problem**: Nightly gainer ingestion failed to run, preventing database updates and resulting in empty daily email reports.
+* **Cause**: Background tasks executing inside Python thread pools did not inherit the repository root `/opt/trading-journal` in their `sys.path`. When `schwab_client.py` attempted to load modules from `momentum_screener`, it failed with `ModuleNotFoundError`.
+* **Resolution**: Added explicit repository root path injections into `sys.path` within `scheduler.py`, `ingest_gainers.py`, and `daily_analysis_report.py`.
+
+#### 2. SQL Type Mismatch in Expiration Query
+* **Problem**: Automatic continuation pick expiration was failing.
+* **Cause**: The PostgreSQL query in `scheduler.py` tried to compare the `date` column (stored as `TEXT`) directly with a timestamp without time zone (`CURRENT_DATE - INTERVAL '3 days'`), causing a syntax/operator error.
+* **Resolution**: Added an explicit cast (`date::date`) to convert the text dates before comparison.
+
+#### 3. Enhancing the UI with Historical Metrics
+* **Problem**: Repeat Runners and Live Gainers lacked historical context (like price trends and moving average relationships) on the dashboard.
+* **Resolution**:
+  * Implemented a lightweight SVG `<Sparkline>` component in React to render 5-day price trajectories.
+  * Added `<SmaPills>` indicating whether a stock is currently trading above or below its SMA 20, 50, and 100 lines.
+  * Passed new technical indicator fields (SMA/Above SMA) and historical data points from the backend Schwab clients to the frontend views.
+
+
