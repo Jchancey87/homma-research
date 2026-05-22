@@ -4,7 +4,7 @@ import { useDropzone } from 'react-dropzone'
 import { Upload, X } from 'lucide-react'
 import TagSelector from './TagSelector'
 import { uploadChart } from '@/lib/api'
-import { PatternTag, VALID_TAGS } from '@/lib/geminiPrompt'
+import { PatternTag } from '@/lib/geminiPrompt'
 
 interface Props {
   onSuccess?: (id: number) => void
@@ -76,22 +76,24 @@ export default function ChartUpload({ onSuccess }: Props) {
       <div
         {...getRootProps()}
         className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors
-          ${isDragActive ? 'border-emerald-500 bg-emerald-500/5' : 'border-gray-700 hover:border-gray-500'}`}
+          ${isDragActive
+            ? 'border-emerald-500 bg-emerald-500/5 dark:bg-emerald-500/10'
+            : 'border-gray-300 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500 bg-gray-50/50 dark:bg-gray-900/50'}`}
       >
         <input {...getInputProps()} />
         {preview ? (
           <div className="relative inline-block">
             <img src={preview} alt="preview" className="max-h-48 rounded-lg mx-auto" />
             <button type="button" onClick={e => { e.stopPropagation(); setFile(null); setPreview(null) }}
-              className="absolute -top-2 -right-2 bg-red-600 rounded-full p-0.5">
+              className="absolute -top-2 -right-2 bg-red-650 text-white rounded-full p-1 shadow-md hover:bg-red-700 transition-colors">
               <X size={14} />
             </button>
           </div>
         ) : (
-          <div className="space-y-2 text-gray-500">
-            <Upload className="mx-auto" size={32} />
-            <p className="text-sm">Drop chart screenshot here or click to browse</p>
-            <p className="text-xs">PNG, JPG, WEBP — max 10 MB</p>
+          <div className="space-y-2 text-gray-500 dark:text-gray-400">
+            <Upload className="mx-auto text-emerald-500 dark:text-emerald-400" size={32} />
+            <p className="text-sm font-medium">Drop chart screenshot here or click to browse</p>
+            <p className="text-xs text-gray-450 dark:text-gray-500">PNG, JPG, WEBP — max 10 MB</p>
           </div>
         )}
       </div>
@@ -99,60 +101,62 @@ export default function ChartUpload({ onSuccess }: Props) {
       {/* Fields */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="text-xs text-gray-400 mb-1 block">Ticker *</label>
+          <label className="text-xs text-gray-505 dark:text-gray-405 mb-1 block font-medium">Ticker *</label>
           <input value={ticker} onChange={e => setTicker(e.target.value.toUpperCase())}
             placeholder="NVDA" maxLength={10}
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500" />
+            className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-905 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" />
         </div>
         <div>
-          <label className="text-xs text-gray-400 mb-1 block">Date *</label>
+          <label className="text-xs text-gray-505 dark:text-gray-405 mb-1 block font-medium">Date *</label>
           <input type="date" value={date} onChange={e => setDate(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500" />
+            className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-905 dark:text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" />
         </div>
         <div>
-          <label className="text-xs text-gray-400 mb-1 block">Timeframe</label>
+          <label className="text-xs text-gray-505 dark:text-gray-405 mb-1 block font-medium">Timeframe</label>
           <select value={timeframe} onChange={e => setTimeframe(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500">
-            <option value="">— select —</option>
-            {TIMEFRAMES.map(t => <option key={t} value={t}>{t}</option>)}
+            className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-905 dark:text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+            <option value="" className="text-gray-500 dark:text-gray-400">— select —</option>
+            {TIMEFRAMES.map(t => <option key={t} value={t} className="text-gray-900 dark:text-white">{t}</option>)}
           </select>
         </div>
         <div>
-          <label className="text-xs text-gray-400 mb-1 block">Setup Type</label>
+          <label className="text-xs text-gray-505 dark:text-gray-405 mb-1 block font-medium">Setup Type</label>
           <select value={setupType} onChange={e => setSetupType(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500">
-            <option value="">— select —</option>
-            {SETUP_TYPES.map(s => <option key={s} value={s}>{s}</option>)}
+            className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-905 dark:text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+            <option value="" className="text-gray-500 dark:text-gray-400">— select —</option>
+            {SETUP_TYPES.map(s => <option key={s} value={s} className="text-gray-900 dark:text-white">{s}</option>)}
           </select>
         </div>
       </div>
 
       {/* Cleanliness score */}
       <div>
-        <label className="text-xs text-gray-400 mb-1 block">Cleanliness Score: <span className="text-white font-semibold">{score}/10</span></label>
+        <label className="text-xs text-gray-505 dark:text-gray-405 mb-1 block font-medium">
+          Cleanliness Score: <span className="text-gray-900 dark:text-white font-bold">{score}/10</span>
+        </label>
         <input type="range" min={1} max={10} value={score} onChange={e => setScore(Number(e.target.value))}
-          className="w-full accent-emerald-500" />
+          className="w-full accent-emerald-500 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none h-2" />
       </div>
 
       {/* Tags */}
       <div>
-        <label className="text-xs text-gray-400 mb-2 block">Pattern Tags</label>
+        <label className="text-xs text-gray-505 dark:text-gray-405 mb-2 block font-medium">Pattern Tags</label>
         <TagSelector selected={tags} onChange={setTags} />
       </div>
 
       {/* Notes */}
       <div>
-        <label className="text-xs text-gray-400 mb-1 block">Notes</label>
+        <label className="text-xs text-gray-505 dark:text-gray-405 mb-1 block font-medium">Notes</label>
         <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
           placeholder="Trade notes, observations…"
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500 resize-none" />
+          className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-905 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 resize-none" />
       </div>
 
-      {error   && <p className="text-red-400 text-sm">{error}</p>}
-      {success && <p className="text-emerald-400 text-sm">✓ Chart uploaded successfully</p>}
+      {error   && <p className="text-red-500 dark:text-red-400 text-sm font-medium">{error}</p>}
+      {success && <p className="text-emerald-600 dark:text-emerald-450 text-sm font-medium">✓ Chart uploaded successfully</p>}
 
       <button type="submit" disabled={loading}
-        className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg transition-colors text-sm">
+        className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-2.5 rounded-xl transition-colors text-sm shadow-md shadow-emerald-650/10">
         {loading ? 'Uploading…' : 'Upload Chart'}
       </button>
     </form>
