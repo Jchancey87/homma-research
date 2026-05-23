@@ -123,9 +123,29 @@ chmod +x start_journal.sh
 | `1: frontend` | Next.js server (Port 3000) | `Ctrl+b`, `1` |
 | `2: scripts` | Ingestion / Enrichment | `Ctrl+b`, `2` |
 | `3: celery` | Celery Worker process | `Ctrl+b`, `3` |
+| `4: streamer` | Schwab WebSocket Streamer Daemon | `Ctrl+b`, `4` |
 
 **Detach** (keep running in background): `Ctrl+b`, then `d`  
 **Re-attach**: `./start_journal.sh`
+
+---
+
+## 🗄️ TimescaleDB Optimization
+
+The database is built on **TimescaleDB** (PostgreSQL 18 compatible) to support high-frequency market data ingestion.
+
+### Hypertables & Compression
+* **Hypertables**: `price_history_1min`, `options_snapshot`, and `screener_alerts` are structured as hypertables partitioned into **7-day chunks**.
+* **Compression**: Automaterialized compression is configured for data older than **7 days** (segmentby = `symbol`), reducing disk footprints by ~90%.
+* **Data Retention**:
+  - `price_history_1min`: Automatically dropped after **90 days**.
+  - `options_snapshot`: Automatically dropped after **30 days**.
+  - `screener_alerts`: Automatically dropped after **365 days**.
+
+### Continuous Aggregates (OHLCV)
+* **`price_history_5min`**: Real-time 5-minute candles automatically rolled up from 1-minute data.
+* **`price_history_15min`**: Real-time 15-minute candles automatically rolled up from 1-minute data.
+* *Aggregates automatically update in the background every 5 and 15 minutes.*
 
 ---
 

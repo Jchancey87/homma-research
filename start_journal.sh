@@ -42,6 +42,11 @@ tmux new-window -t $SESSION -n 'celery'
 tmux send-keys -t $SESSION:3 \
   "cd $PROJECT/backend && source venv/bin/activate && celery -A fastapi_app.celery_app worker --loglevel=info" C-m
 
+# ── Window 4: Schwab Streamer ────────────────────────────────
+tmux new-window -t $SESSION -n 'streamer'
+tmux send-keys -t $SESSION:4 \
+  "cd $PROJECT && source backend/venv/bin/activate && python3 momentum_screener/schwab/stream_client.py" C-m
+
 # Focus the backend window on attach
 tmux select-window -t $SESSION:0
 

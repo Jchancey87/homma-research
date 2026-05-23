@@ -114,6 +114,35 @@ Addressed multiple webpage and backend issues that prevented the frontend from c
 
 ---
 
+## [2026-05-23] Milestone: TimescaleDB Migration & Real-Time Schwab Ingestion/Streaming
+
+### Summary
+Migrated the core time-series tables to TimescaleDB to optimize market data storage and analytics. Implemented a nightly 1-minute candle ingestion job and a persistent Level 1 WebSocket streaming daemon (`schwab-streamer`) that evaluates momentum filters and broadcasts alerts in real-time.
+
+### Git State
+* **Current Branch**: `master` (synchronized with `origin/master`)
+* **Recent Commits**:
+  * `8ba00d1` - feat: implement 1-min candle ingestion and level 1 websocket streaming daemon with real-time alerts
+  * `27e42a1` - feat: migrate to TimescaleDB with hypertables, compression, retention, and continuous aggregates
+
+---
+
+### Struggles & Resolutions Along the Way
+
+#### 1. Semicolon Splitting of PL/pgSQL Blocks
+* **Problem**: The database initializer `init_db()` splits SQL scripts on semicolons to execute them statement-by-statement. This breaks standard `DO $$ BEGIN ... END $$;` blocks used for idempotent policy creation.
+* **Resolution**: Replaced block-based logic with single-statement SQL queries using TimescaleDB's native `if_not_exists => TRUE` parameter in `add_compression_policy`, `add_retention_policy`, and `add_continuous_aggregate_policy`.
+
+#### 2. Unique Constraints on Hypertables
+* **Problem**: Converting `screener_alerts` to a hypertable failed because its primary key was defined on `id SERIAL` only, which violates TimescaleDB's rule that all unique constraints must include the time partitioning column.
+* **Resolution**: Dropped the existing empty tables and changed the primary key constraint to `PRIMARY KEY (id, alert_time)`, satisfying TimescaleDB's constraint while keeping the autoincrementing ID field.
+
+#### 3. Redis Pub/Sub Mocking in Tests
+* **Problem**: Unit tests for the SSE streaming endpoint hung or failed with `StopAsyncIteration` because the Redis connection mock's `get_message` side effect was exhausted during the infinite loop.
+* **Resolution**: Implemented a custom async mock function that yields the test quote payload once and then sleeps/blocks indefinitely to let the test client verify the response stream headers and exit cleanly.
+
+---
+
 ## [2026-05-21] Milestone: Live Gainer Stream Alignment, Dashboard Customization, and Direct Deployment
 
 ### Summary
