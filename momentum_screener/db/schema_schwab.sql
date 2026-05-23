@@ -1,6 +1,8 @@
 -- Schwab API Momentum Screener Tables
 -- Applied on startup via init_db()
 
+CREATE EXTENSION IF NOT EXISTS timescaledb;
+
 CREATE TABLE IF NOT EXISTS stock_fundamentals (
     symbol                VARCHAR(10)  PRIMARY KEY,
     company_name          TEXT,
@@ -74,6 +76,16 @@ CREATE TABLE IF NOT EXISTS price_history_1min (
     PRIMARY KEY (symbol, timestamp)
 );
 
+SELECT create_hypertable('price_history_1min', 'timestamp', if_not_exists => TRUE);
+
+ALTER TABLE price_history_1min SET (
+    timescaledb.compress,
+    timescaledb.compress_segmentby = 'symbol'
+);
+
+SELECT add_compression_policy('price_history_1min', INTERVAL '7 days', if_not_exists => TRUE);
+SELECT add_retention_policy('price_history_1min', INTERVAL '90 days', if_not_exists => TRUE);
+
 CREATE TABLE IF NOT EXISTS options_snapshot (
     symbol           VARCHAR(10),
     snapshot_time    TIMESTAMPTZ,
@@ -84,8 +96,18 @@ CREATE TABLE IF NOT EXISTS options_snapshot (
     PRIMARY KEY (symbol, snapshot_time)
 );
 
+SELECT create_hypertable('options_snapshot', 'snapshot_time', if_not_exists => TRUE);
+
+ALTER TABLE options_snapshot SET (
+    timescaledb.compress,
+    timescaledb.compress_segmentby = 'symbol'
+);
+
+SELECT add_compression_policy('options_snapshot', INTERVAL '7 days', if_not_exists => TRUE);
+SELECT add_retention_policy('options_snapshot', INTERVAL '30 days', if_not_exists => TRUE);
+
 CREATE TABLE IF NOT EXISTS screener_alerts (
-    id              SERIAL       PRIMARY KEY,
+    id              SERIAL,
     symbol          VARCHAR(10),
     alert_time      TIMESTAMPTZ  DEFAULT NOW(),
     trigger_price   FLOAT,
@@ -95,8 +117,19 @@ CREATE TABLE IF NOT EXISTS screener_alerts (
     short_int_float FLOAT,
     float_shares    BIGINT,
     alert_type      VARCHAR(30),
-    sent            BOOLEAN      DEFAULT FALSE
+    sent            BOOLEAN      DEFAULT FALSE,
+    PRIMARY KEY (id, alert_time)
 );
+
+SELECT create_hypertable('screener_alerts', 'alert_time', if_not_exists => TRUE);
+
+ALTER TABLE screener_alerts SET (
+    timescaledb.compress,
+    timescaledb.compress_segmentby = 'symbol'
+);
+
+SELECT add_compression_policy('screener_alerts', INTERVAL '7 days', if_not_exists => TRUE);
+SELECT add_retention_policy('screener_alerts', INTERVAL '365 days', if_not_exists => TRUE);
 
 CREATE INDEX IF NOT EXISTS idx_alerts_symbol_time ON screener_alerts(symbol, alert_time DESC);
 
@@ -113,3 +146,44 @@ CREATE TABLE IF NOT EXISTS screener_alerts_archive (
     alert_type      VARCHAR(30),
     archived_at     TIMESTAMPTZ  DEFAULT NOW()
 );
+
+-- Continuous Aggregates for price_history_1min
+CREATE MATERIALIZED VIEW IF NOT EXISTS price_history_5min
+WITH (timescaledb.continuous) AS
+SELECT
+    symbol,
+    time_bucket('5 minutes', timestamp) AS bucket,
+    first(open, timestamp) AS open,
+    max(high) AS high,
+    min(low) AS low,
+    last(close, timestamp) AS close,
+    sum(volume) AS volume
+FROM price_history_1min
+GROUP BY symbol, bucket
+WITH NO DATA;
+
+SELECT add_continuous_aggregate_policy('price_history_5min',
+    start_offset => INTERVAL '1 day',
+    end_offset => INTERVAL '1 hour',
+    schedule_interval => INTERVAL '5 minutes',
+    if_not_exists => TRUE);
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS price_history_15min
+WITH (timescaledb.continuous) AS
+SELECT
+    symbol,
+    time_bucket('15 minutes', timestamp) AS bucket,
+    first(open, timestamp) AS open,
+    max(high) AS high,
+    min(low) AS low,
+    last(close, timestamp) AS close,
+    sum(volume) AS volume
+FROM price_history_1min
+GROUP BY symbol, bucket
+WITH NO DATA;
+
+SELECT add_continuous_aggregate_policy('price_history_15min',
+    start_offset => INTERVAL '1 day',
+    end_offset => INTERVAL '1 hour',
+    schedule_interval => INTERVAL '15 minutes',
+    if_not_exists => TRUE);

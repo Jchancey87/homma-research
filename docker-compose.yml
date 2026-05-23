@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   postgres:
-    image: postgres:18
+    image: timescale/timescaledb:latest-pg18
     container_name: trading-journal-db
     environment:
       POSTGRES_DB: trading_journal
