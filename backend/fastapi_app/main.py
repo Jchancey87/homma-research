@@ -123,6 +123,7 @@ app.include_router(observations.router, prefix="/api")
 app.include_router(continuation.router, prefix="/api")
 
 # Phase 4 routers
-from .routers import analysis
+from .routers import analysis, alerts
 app.include_router(analysis.router, prefix="/api")
+app.include_router(alerts.router, prefix="/api")
 

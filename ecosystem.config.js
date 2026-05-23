@@ -44,5 +44,17 @@ module.exports = {
       error_file: '/var/log/trading-journal/nextjs-err.log',
       out_file:   '/var/log/trading-journal/nextjs-out.log',
     },
+    {
+      name: 'schwab-streamer',
+      script: '/opt/trading-journal/backend/venv/bin/python3',
+      args: 'momentum_screener/schwab/stream_client.py',
+      cwd: '/opt/trading-journal',
+      interpreter: 'none',
+      watch: false,
+      autorestart: true,
+      max_restarts: 10,
+      error_file: '/var/log/trading-journal/streamer-err.log',
+      out_file:   '/var/log/trading-journal/streamer-out.log',
+    },
   ],
 };
