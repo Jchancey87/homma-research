@@ -18,7 +18,7 @@ if _backend not in sys.path:
     sys.path.insert(0, _backend)
 
 from config import Config
-from .auth import get_client
+from momentum_screener.schwab.auth import get_client
 from schwab.streaming import StreamClient
 
 logger = logging.getLogger(__name__)
