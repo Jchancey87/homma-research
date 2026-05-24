@@ -197,6 +197,9 @@ def get_market_session(now_et: Optional[datetime] = None) -> str:
     """Return the current US market session label."""
     if now_et is None:
         now_et = datetime.now(EASTERN)
+    # Check if it's the weekend (Saturday or Sunday)
+    if now_et.weekday() >= 5:
+        return 'closed'
     hm = now_et.hour * 60 + now_et.minute
     if   4 * 60 <= hm < 9 * 60 + 30:
         return 'pre_market'
@@ -330,6 +333,73 @@ def _is_cache_fresh() -> bool:
     return age < CACHE_TTL_SECONDS
 
 
+def _load_fallback_gainers_from_db() -> list[dict]:
+    """
+    Query the daily_gainers table for the most recent trading day,
+    enrich them (including history & sparklines) so they match the
+    format expected by the live screener, and return them.
+    """
+    try:
+        from database import get_connection
+        with get_connection() as conn:
+            # 1. Find the most recent date in daily_gainers
+            cur = conn.execute("SELECT MAX(date) as max_date FROM daily_gainers")
+            row = cur.fetchone()
+            recent_date = row['max_date'] if row else None
+            
+            if not recent_date:
+                log.info("[LiveScreener] Fallback: No historical daily gainers found in DB.")
+                return []
+                
+            log.info(f"[LiveScreener] Fallback: Loading gainers from DB for date {recent_date}")
+            
+            # 2. Fetch gainers for that date
+            cur = conn.execute(
+                """
+                SELECT * FROM daily_gainers 
+                WHERE date = %s 
+                ORDER BY gap_pct DESC 
+                LIMIT %s
+                """,
+                (recent_date, TOP_N)
+            )
+            rows = cur.fetchall()
+            
+            gainers = []
+            for r in rows:
+                last_price = r.get('close_price')
+                high_price = r.get('high_price')
+                is_hod = (last_price >= (high_price * 0.995)) if last_price and high_price and high_price > 0 else False
+                
+                # Check close_location as fallback for is_hod if high_price was not populated properly
+                if not is_hod and r.get('close_location') is not None:
+                    is_hod = r.get('close_location') >= 0.995
+                
+                gainers.append({
+                    'ticker':        r.get('ticker'),
+                    'gap_pct':       r.get('gap_pct'),
+                    'last_price':    last_price,
+                    'open_price':    r.get('open_price'),
+                    'prev_close':    r.get('prev_close'),
+                    'volume':        int(r.get('volume')) if r.get('volume') is not None else 0,
+                    'rvol_15m':      r.get('rvol_15m'),
+                    'float_shares':  r.get('float_shares'),
+                    'sector':        r.get('sector'),
+                    'market_cap':    r.get('market_cap'),
+                    'spread_pct':    None,
+                    'trade_time':    None,
+                    'is_hod':        is_hod,
+                    'news_headline': r.get('news_headline'),
+                    'news_fresh':    r.get('news_fresh'),
+                })
+            
+            gainers = enrich_gainers_with_sparklines_and_history(gainers)
+            return gainers
+    except Exception as e:
+        log.error(f"[LiveScreener] Failed to load fallback gainers from DB: {e}", exc_info=True)
+        return []
+
+
 def refresh_cache(force: bool = False) -> dict:
     """
     Refresh the live gainer cache from Polygon if stale.
@@ -337,7 +407,8 @@ def refresh_cache(force: bool = False) -> dict:
     """
     if not force and _is_cache_fresh():
         with _cache_lock:
-            return dict(_cache)
+            if _cache['gainers']:
+                return dict(_cache)
 
     now_et  = datetime.now(EASTERN)
     session = get_market_session(now_et)
@@ -347,21 +418,28 @@ def refresh_cache(force: bool = False) -> dict:
     if 0 <= hm < 4 * 60 and not force:
         with _cache_lock:
             _cache['session'] = session
+            if not _cache['gainers']:
+                _cache['gainers'] = _load_fallback_gainers_from_db()
+                _cache['fetched_at'] = datetime.utcnow()
             return dict(_cache)
 
     raw = _fetch_polygon_snapshot()
     gainers = _enrich_snapshot_tickers(raw)
     gainers = enrich_gainers_with_sparklines_and_history(gainers)
 
+    if not gainers:
+        log.info("[LiveScreener] Live fetch returned 0 gainers, falling back to DB.")
+        gainers = _load_fallback_gainers_from_db()
+
     with _cache_lock:
-        _cache['raw_tickers']  = [t.get('ticker', '') for t in raw]
+        _cache['raw_tickers']  = [t.get('ticker', '') for t in raw] if raw else []
         _cache['gainers']      = gainers[:TOP_N]
         _cache['fetched_at']   = datetime.utcnow()
         _cache['session']      = session
         return dict(_cache)
 
 
-def get_live_gainers() -> dict:
+def get_live_gainers(force: bool = False) -> dict:
     """
     Public entry point for the API route.
     Returns:
@@ -374,7 +452,7 @@ def get_live_gainers() -> dict:
         cache_ttl_s:  int,
       }
     """
-    snap = refresh_cache()
+    snap = refresh_cache(force=force)
     fetched = snap['fetched_at']
     return {
         'session':       snap.get('session', 'closed'),

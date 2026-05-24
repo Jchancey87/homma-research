@@ -416,7 +416,7 @@ async def sector_rotation(db: asyncpg.Connection = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @router.get("/live")
-async def live_screener():
+async def live_screener(force: Optional[int] = Query(None)):
     """
     Live screener data from Schwab API.
     Replaces the Polygon snapshot logic with the Schwab client.
@@ -424,7 +424,8 @@ async def live_screener():
     import asyncio
     from services.live_screener import get_live_gainers
     
-    return await asyncio.to_thread(get_live_gainers)
+    should_force = (force == 1)
+    return await asyncio.to_thread(get_live_gainers, force=should_force)
 
 # ---------------------------------------------------------------------------
 # GET /gainers/heatmap
