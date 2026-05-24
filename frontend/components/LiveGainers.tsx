@@ -219,16 +219,14 @@ function Sparkline({ points }: { points?: number[] }) {
   )
 }
 
-// ── Row skeleton ──────────────────────────────────────────────────────────────
-
-function SkeletonRows() {
+function SkeletonRows({ cols = 6 }: { cols?: number }) {
   return (
     <>
       {Array.from({ length: 10 }).map((_, i) => (
         <tr key={i} className="animate-pulse">
-          {Array.from({ length: 6 }).map((_, j) => (
+          {Array.from({ length: cols }).map((_, j) => (
             <td key={j} className="py-3 pr-4">
-              <div className={`h-3 bg-gray-800 rounded ${j === 0 ? 'w-8' : j === 1 ? 'w-16' : 'w-12'}`} />
+              <div className={`h-3 bg-gray-850 rounded ${j === 0 && cols === 6 ? 'w-8' : j === 1 ? 'w-16' : 'w-12'}`} />
             </td>
           ))}
         </tr>
@@ -237,92 +235,35 @@ function SkeletonRows() {
   )
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+// ── Reusable Gainer Table Component ───────────────────────────────────────────
 
-export default function LiveGainers() {
-  const router = useRouter()
-  const [snap,        setSnap]        = useState<LiveGainerSnapshot | null>(null)
-  const [loading,     setLoading]     = useState(true)
-  const [error,       setError]       = useState<string | null>(null)
-  const [refreshing,  setRefreshing]  = useState(false)
-  const [ageStr,      setAgeStr]      = useState('')
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+interface GainerTableProps {
+  gainers: LiveGainerRow[]
+  fullList: LiveGainerRow[]
+  title: string
+  showRank?: boolean
+  emptyMessage: string
+  onOpenModal: (g: LiveGainerRow) => void
+  handleResearch: (g: LiveGainerRow) => void
+  loading?: boolean
+}
 
-  // UX states
+function GainerTable({
+  gainers,
+  fullList,
+  title,
+  showRank = true,
+  emptyMessage,
+  onOpenModal,
+  handleResearch,
+  loading = false,
+}: GainerTableProps) {
   const [expandedTicker, setExpandedTicker] = useState<string | null>(null)
-  const [modalGainer, setModalGainer]       = useState<LiveGainerRow | null>(null)
-  const [watchlist, setWatchlist]           = useState<WatchlistItem[]>([])
-  const [notesText, setNotesText]           = useState('')
-  const [savingNotes, setSavingNotes]       = useState(false)
-  const [watchlistLoading, setWatchlistLoading] = useState(false)
-
-  // Sorting states
   const [sortKey, setSortKey] = useState<'rank' | 'ticker' | 'price' | 'change' | 'trend' | 'float'>('rank')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
-  const fetchData = useCallback(async (force = false) => {
-    try {
-      if (force) setRefreshing(true)
-      const data = await getLiveGainers(force)
-      setSnap(data)
-      setError(null)
-    } catch (e: unknown) {
-      setError((e as Error)?.message ?? 'Failed to load live data')
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [])
-
-  const fetchWatchlist = useCallback(async () => {
-    try {
-      const items = await getWatchlist()
-      setWatchlist(items)
-    } catch (e) {
-      console.error('Failed to load watchlist', e)
-    }
-  }, [])
-
-  // Initial load + polling
-  useEffect(() => {
-    fetchData()
-    fetchWatchlist()
-    // Poll every 1 minute — matches the backend cache TTL
-    timerRef.current = setInterval(() => fetchData(), 60 * 1000)
-    return () => { if (timerRef.current) clearInterval(timerRef.current) }
-  }, [fetchData, fetchWatchlist])
-
-  // Live "X ago" counter (updates every 10s)
-  useEffect(() => {
-    const tick = () => setAgeStr(snap?.fetched_at ? fmtAge(snap.fetched_at) : '')
-    tick()
-    const id = setInterval(tick, 10_000)
-    return () => clearInterval(id)
-  }, [snap?.fetched_at])
-
-  // Sync watchlist notes when modal ticker changes
-  useEffect(() => {
-    if (modalGainer) {
-      const item = watchlist.find(w => w.ticker === modalGainer.ticker)
-      setNotesText(item?.notes ?? '')
-    }
-  }, [modalGainer, watchlist])
-
-  // Prevent background body scroll when detailed view modal is open
-  useEffect(() => {
-    if (modalGainer) {
-      document.body.classList.add('overflow-hidden')
-    } else {
-      document.body.classList.remove('overflow-hidden')
-    }
-    return () => {
-      document.body.classList.remove('overflow-hidden')
-    }
-  }, [modalGainer])
-
-  const handleResearch = (g: LiveGainerRow) => {
-    const today = new Date().toISOString().slice(0, 10)
-    router.push(`/research?ticker=${g.ticker}&date=${today}`)
+  const toggleExpand = (ticker: string) => {
+    setExpandedTicker(prev => (prev === ticker ? null : ticker))
   }
 
   const handleSort = (key: typeof sortKey) => {
@@ -334,48 +275,6 @@ export default function LiveGainers() {
     }
   }
 
-  const handleToggleWatchlist = async () => {
-    if (!modalGainer) return
-    setWatchlistLoading(true)
-    try {
-      const item = watchlist.find(w => w.ticker === modalGainer.ticker)
-      if (item) {
-        await removeFromWatchlist(modalGainer.ticker)
-      } else {
-        await addToWatchlist({
-          ticker: modalGainer.ticker,
-          sector: modalGainer.sector || undefined
-        })
-      }
-      await fetchWatchlist()
-    } catch {
-      alert('Failed to update watchlist')
-    } finally {
-      setWatchlistLoading(false)
-    }
-  }
-
-  const handleSaveNotes = async () => {
-    if (!modalGainer) return
-    setSavingNotes(true)
-    try {
-      await updateWatchlistItem(modalGainer.ticker, { notes: notesText })
-      await fetchWatchlist()
-    } catch {
-      alert('Failed to save notes')
-    } finally {
-      setSavingNotes(false)
-    }
-  }
-
-  const toggleExpand = (ticker: string) => {
-    setExpandedTicker(prev => (prev === ticker ? null : ticker))
-  }
-
-  const session    = snap?.session ?? 'closed'
-  const isActive   = session !== 'closed'
-  const gainers    = snap?.gainers ?? []
-
   // Apply sorting
   const sortedGainers = [...gainers].sort((a, b) => {
     let valA: string | number = 0
@@ -383,8 +282,8 @@ export default function LiveGainers() {
 
     switch (sortKey) {
       case 'rank':
-        valA = gainers.indexOf(a)
-        valB = gainers.indexOf(b)
+        valA = fullList.findIndex(x => x.ticker === a.ticker)
+        valB = fullList.findIndex(x => x.ticker === b.ticker)
         break
       case 'ticker':
         valA = a.ticker
@@ -433,80 +332,46 @@ export default function LiveGainers() {
     )
   }
 
+  const colSpanCount = showRank ? 6 : 5
+
   return (
-    <div className="space-y-4">
-      {/* Header row */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          {snap && (
-            <SessionBadge session={session} label={snap.session_label} />
-          )}
-          {ageStr && (
-            <span className="flex items-center gap-1 text-[11px] text-gray-600">
-              <Clock size={10} />
-              {ageStr}
-            </span>
-          )}
-          {isActive && !error && (
-            <span className="flex items-center gap-1 text-[11px] text-gray-700">
-              <Wifi size={10} className="text-emerald-600" />
-              auto-refresh 1m
-            </span>
-          )}
-          {error && (
-            <span className="flex items-center gap-1 text-[11px] text-red-500">
-              <WifiOff size={10} />
-              {error}
-            </span>
-          )}
+    <div className="bg-[#0b0b0f]/30 dark:bg-gray-950/10 border border-gray-800/80 rounded-2xl p-5 shadow-sm space-y-4">
+      <h3 className="text-xs font-bold text-gray-400 tracking-wider uppercase border-b border-gray-800/60 pb-3 flex items-center justify-between select-none">
+        <div className="flex items-center gap-2">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          {title}
         </div>
+        {!loading && (
+          <span className="text-[10px] text-gray-500 font-mono font-semibold normal-case bg-gray-900/40 border border-gray-800/50 px-2.5 py-0.5 rounded-md">
+            {gainers.length} Runners
+          </span>
+        )}
+      </h3>
 
-        <button
-          id="live-gainers-refresh"
-          onClick={() => fetchData(true)}
-          disabled={refreshing}
-          className="flex items-center gap-1 text-xs text-gray-500 hover:text-emerald-400 transition-colors disabled:opacity-40"
-        >
-          <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
-          Refresh
-        </button>
-      </div>
-
-      {/* EOD persist notice */}
-      {session === 'after_hours' && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-500/10 border border-violet-500/20 text-xs text-violet-300">
-          <TrendingUp size={12} className="shrink-0" />
-          These gainers will be automatically saved to your database at 8:00 PM ET.
-        </div>
-      )}
-
-      {/* Table */}
       <div className="overflow-x-auto overflow-y-hidden">
-        <table className="w-full text-sm table-fixed min-w-[700px]">
+        <table className="w-full text-sm table-fixed min-w-[500px]">
           <thead>
             <tr className="text-left text-xs text-gray-500 border-b border-gray-800">
-              <Th col="rank" label="Rank" width="w-[8%]" />
-              <Th col="ticker" label="Ticker" width="w-[22%]" />
-              <Th col="price" label="Price" align="right" width="w-[15%]" />
-              <Th col="change" label="Change(%)" align="right" width="w-[15%]" />
-              <Th col="trend" label="Trend" align="center" width="w-[20%]" />
-              <Th col="float" label="Float" align="right" width="w-[20%]" />
+              {showRank && <Th col="rank" label="Rank" width="w-[10%]" />}
+              <Th col="ticker" label="Ticker" width={showRank ? "w-[24%]" : "w-[30%]"} />
+              <Th col="price" label="Price" align="right" width={showRank ? "w-[15%]" : "w-[17%]"} />
+              <Th col="change" label="Change(%)" align="right" width={showRank ? "w-[15%]" : "w-[17%]"} />
+              <Th col="trend" label="Trend" align="center" width="w-[18%]" />
+              <Th col="float" label="Float" align="right" width={showRank ? "w-[18%]" : "w-[20%]"} />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800/40">
             {loading ? (
-              <SkeletonRows />
+              <SkeletonRows cols={colSpanCount} />
             ) : sortedGainers.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-10 text-center text-gray-600 text-sm">
-                  {session === 'closed'
-                    ? 'Market is closed. Check back during pre-market (4 AM ET) or regular hours.'
-                    : 'No gainers meeting criteria right now. Data refreshes every 1 minute.'}
+                <td colSpan={colSpanCount} className="py-10 text-center text-gray-600 text-xs">
+                  {emptyMessage}
                 </td>
               </tr>
             ) : (
               sortedGainers.map((g) => {
-                const originalRank = gainers.indexOf(g) + 1
+                const originalRank = fullList.findIndex(x => x.ticker === g.ticker) + 1
                 const isExpanded = expandedTicker === g.ticker
                 const trend = getTrendState(g)
 
@@ -520,9 +385,11 @@ export default function LiveGainers() {
                       onClick={() => toggleExpand(g.ticker)}
                     >
                       {/* 1. Rank */}
-                      <td className="py-2.5 pr-4 font-bold text-gray-500 text-xs w-12 pl-1 select-none">
-                        {originalRank}
-                      </td>
+                      {showRank && (
+                        <td className="py-2.5 pr-4 font-bold text-gray-500 text-xs w-12 pl-1 select-none">
+                          {originalRank}
+                        </td>
+                      )}
 
                       {/* 2. Ticker with standard badging & custom tooltip */}
                       <td className="py-2.5 pr-4">
@@ -550,7 +417,7 @@ export default function LiveGainers() {
                               </span>
                             )}
                             {g.is_hod && (
-                              <span className="relative group/tooltip inline-flex items-center px-1 py-0.25 rounded text-[8px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                              <span className="relative group/tooltip inline-flex items-center px-1 py-0.25 rounded text-[8px] font-black bg-rose-500/20 text-rose-350 border border-rose-500/30">
                                 HOD
                                 <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/tooltip:block bg-gray-950 border border-gray-800 text-white text-[10px] font-medium py-1 px-2 rounded shadow-2xl whitespace-nowrap z-50">
                                   HOD = High of Day
@@ -586,7 +453,7 @@ export default function LiveGainers() {
 
                     {/* Expandable details row */}
                     <tr key={`${g.ticker}-expand`} className={`bg-gray-900/10`}>
-                      <td colSpan={6} className="p-0 border-0">
+                      <td colSpan={colSpanCount} className="p-0 border-0">
                         <div
                           className={`grid transition-all duration-300 ease-in-out ${
                             isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
@@ -665,7 +532,7 @@ export default function LiveGainers() {
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setModalGainer(g);
+                                      onOpenModal(g);
                                     }}
                                     className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 border border-emerald-500/20 rounded-lg shadow transition-colors"
                                   >
@@ -695,6 +562,205 @@ export default function LiveGainers() {
             )}
           </tbody>
         </table>
+      </div>
+    </div>
+  )
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
+export default function LiveGainers() {
+  const router = useRouter()
+  const [snap,        setSnap]        = useState<LiveGainerSnapshot | null>(null)
+  const [loading,     setLoading]     = useState(true)
+  const [error,       setError]       = useState<string | null>(null)
+  const [refreshing,  setRefreshing]  = useState(false)
+  const [ageStr,      setAgeStr]      = useState('')
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // UX states
+  const [modalGainer, setModalGainer]       = useState<LiveGainerRow | null>(null)
+  const [watchlist, setWatchlist]           = useState<WatchlistItem[]>([])
+  const [notesText, setNotesText]           = useState('')
+  const [savingNotes, setSavingNotes]       = useState(false)
+  const [watchlistLoading, setWatchlistLoading] = useState(false)
+
+  const fetchData = useCallback(async (force = false) => {
+    try {
+      if (force) setRefreshing(true)
+      const data = await getLiveGainers(force)
+      setSnap(data)
+      setError(null)
+    } catch (e: unknown) {
+      setError((e as Error)?.message ?? 'Failed to load live data')
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }, [])
+
+  const fetchWatchlist = useCallback(async () => {
+    try {
+      const items = await getWatchlist()
+      setWatchlist(items)
+    } catch (e) {
+      console.error('Failed to load watchlist', e)
+    }
+  }, [])
+
+  // Initial load + polling
+  useEffect(() => {
+    fetchData()
+    fetchWatchlist()
+    // Poll every 1 minute — matches the backend cache TTL
+    timerRef.current = setInterval(() => fetchData(), 60 * 1000)
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+  }, [fetchData, fetchWatchlist])
+
+  // Live "X ago" counter (updates every 10s)
+  useEffect(() => {
+    const tick = () => setAgeStr(snap?.fetched_at ? fmtAge(snap.fetched_at) : '')
+    tick()
+    const id = setInterval(tick, 10_000)
+    return () => clearInterval(id)
+  }, [snap?.fetched_at])
+
+  // Sync watchlist notes when modal ticker changes
+  useEffect(() => {
+    if (modalGainer) {
+      const item = watchlist.find(w => w.ticker === modalGainer.ticker)
+      setNotesText(item?.notes ?? '')
+    }
+  }, [modalGainer, watchlist])
+
+  // Prevent background body scroll when detailed view modal is open
+  useEffect(() => {
+    if (modalGainer) {
+      document.body.classList.add('overflow-hidden')
+    } else {
+      document.body.classList.remove('overflow-hidden')
+    }
+    return () => {
+      document.body.classList.remove('overflow-hidden')
+    }
+  }, [modalGainer])
+
+  const handleResearch = (g: LiveGainerRow) => {
+    const today = new Date().toISOString().slice(0, 10)
+    router.push(`/research?ticker=${g.ticker}&date=${today}`)
+  }
+
+  const handleToggleWatchlist = async () => {
+    if (!modalGainer) return
+    setWatchlistLoading(true)
+    try {
+      const item = watchlist.find(w => w.ticker === modalGainer.ticker)
+      if (item) {
+        await removeFromWatchlist(modalGainer.ticker)
+      } else {
+        await addToWatchlist({
+          ticker: modalGainer.ticker,
+          sector: modalGainer.sector || undefined
+        })
+      }
+      await fetchWatchlist()
+    } catch {
+      alert('Failed to update watchlist')
+    } finally {
+      setWatchlistLoading(false)
+    }
+  }
+
+  const handleSaveNotes = async () => {
+    if (!modalGainer) return
+    setSavingNotes(true)
+    try {
+      await updateWatchlistItem(modalGainer.ticker, { notes: notesText })
+      await fetchWatchlist()
+    } catch {
+      alert('Failed to save notes')
+    } finally {
+      setSavingNotes(false)
+    }
+  }
+
+  const session    = snap?.session ?? 'closed'
+  const isActive   = session !== 'closed'
+  const gainers    = snap?.gainers ?? []
+
+  return (
+    <div className="space-y-4">
+      {/* Header row */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {snap && (
+            <SessionBadge session={session} label={snap.session_label} />
+          )}
+          {ageStr && (
+            <span className="flex items-center gap-1 text-[11px] text-gray-600">
+              <Clock size={10} />
+              {ageStr}
+            </span>
+          )}
+          {isActive && !error && (
+            <span className="flex items-center gap-1 text-[11px] text-gray-700">
+              <Wifi size={10} className="text-emerald-600" />
+              auto-refresh 1m
+            </span>
+          )}
+          {error && (
+            <span className="flex items-center gap-1 text-[11px] text-red-500">
+              <WifiOff size={10} />
+              {error}
+            </span>
+          )}
+        </div>
+
+        <button
+          id="live-gainers-refresh"
+          onClick={() => fetchData(true)}
+          disabled={refreshing}
+          className="flex items-center gap-1 text-xs text-gray-500 hover:text-emerald-400 transition-colors disabled:opacity-40"
+        >
+          <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+          Refresh
+        </button>
+      </div>
+
+      {/* EOD persist notice */}
+      {session === 'after_hours' && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-500/10 border border-violet-500/20 text-xs text-violet-300">
+          <TrendingUp size={12} className="shrink-0" />
+          These gainers will be automatically saved to your database at 8:00 PM ET.
+        </div>
+      )}
+
+      {/* Side-by-Side Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <GainerTable
+          gainers={loading ? [] : gainers}
+          fullList={loading ? [] : gainers}
+          title="All Live Gainers"
+          showRank={true}
+          emptyMessage={
+            session === 'closed'
+              ? 'Market is closed. Check back during pre-market (4 AM ET) or regular hours.'
+              : 'No gainers meeting criteria right now.'
+          }
+          onOpenModal={setModalGainer}
+          handleResearch={handleResearch}
+          loading={loading}
+        />
+        <GainerTable
+          gainers={loading ? [] : gainers.filter(g => g.is_hod)}
+          fullList={loading ? [] : gainers}
+          title="High of Day (HOD) Only"
+          showRank={false}
+          emptyMessage="No High of Day breakouts detected yet."
+          onOpenModal={setModalGainer}
+          handleResearch={handleResearch}
+          loading={loading}
+        />
       </div>
 
       {/* Footer — last DB ingest */}
