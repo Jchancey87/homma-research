@@ -48,7 +48,7 @@ POLYGON_LIMIT   = 100   # How many tickers to pull from Polygon snapshot
 
 
 # ── In-process state ───────────────────────────────────────────────────────────
-_cache_lock    = threading.Lock()
+_cache_lock    = threading.RLock()
 _cache: dict   = {
     'gainers':      [],     # list[dict] — enriched top-N
     'raw_tickers':  [],     # list[str]  — all tickers from Polygon, pre-filter
@@ -151,6 +151,14 @@ def enrich_gainers_with_sparklines_and_history(gainers: list[dict]) -> list[dict
     if not gainers:
         return gainers
         
+    # Pre-initialize Schwab HTTP client in main thread to prevent import deadlocks
+    # and concurrent OAuth token file reading/writing race conditions.
+    try:
+        from momentum_screener.schwab.http_client import get_http_client, get_price_history_every_day
+        get_http_client()
+    except Exception as e:
+        log.warning(f"Failed to pre-initialize Schwab HTTP client: {e}")
+
     tickers = [g['ticker'] for g in gainers]
     history = check_tickers_history(tickers)
     
@@ -405,23 +413,32 @@ def refresh_cache(force: bool = False) -> dict:
     Refresh the live gainer cache from Polygon if stale.
     Returns the current cache contents.
     """
-    if not force and _is_cache_fresh():
-        with _cache_lock:
-            if _cache['gainers']:
-                return dict(_cache)
-
     now_et  = datetime.now(EASTERN)
     session = get_market_session(now_et)
 
-    # During deep-closed hours (midnight to 3:59 AM ET) don't burn API calls
+    if not force:
+        with _cache_lock:
+            # 1. If cache is fresh, reuse it
+            fetched = _cache['fetched_at']
+            is_fresh = False
+            if fetched is not None:
+                age = (datetime.utcnow() - fetched).total_seconds()
+                is_fresh = age < CACHE_TTL_SECONDS
+            
+            if is_fresh and _cache['gainers']:
+                return dict(_cache)
+            # 2. If the market is currently closed, and we already have gainers cached,
+            # we can reuse it indefinitely since EOD data is static.
+            if session == 'closed' and _cache['gainers'] and _cache['session'] == 'closed':
+                return dict(_cache)
+
+    # During deep-closed hours (midnight to 3:59 AM ET) don't burn API calls if we already have data
     hm = now_et.hour * 60 + now_et.minute
     if 0 <= hm < 4 * 60 and not force:
         with _cache_lock:
-            _cache['session'] = session
-            if not _cache['gainers']:
-                _cache['gainers'] = _load_fallback_gainers_from_db()
-                _cache['fetched_at'] = datetime.utcnow()
-            return dict(_cache)
+            if _cache['gainers']:
+                _cache['session'] = session
+                return dict(_cache)
 
     raw = _fetch_polygon_snapshot()
     gainers = _enrich_snapshot_tickers(raw)
