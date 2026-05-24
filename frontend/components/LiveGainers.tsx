@@ -308,6 +308,18 @@ export default function LiveGainers() {
     }
   }, [modalGainer, watchlist])
 
+  // Prevent background body scroll when detailed view modal is open
+  useEffect(() => {
+    if (modalGainer) {
+      document.body.classList.add('overflow-hidden')
+    } else {
+      document.body.classList.remove('overflow-hidden')
+    }
+    return () => {
+      document.body.classList.remove('overflow-hidden')
+    }
+  }, [modalGainer])
+
   const handleResearch = (g: LiveGainerRow) => {
     const today = new Date().toISOString().slice(0, 10)
     router.push(`/research?ticker=${g.ticker}&date=${today}`)
@@ -469,7 +481,7 @@ export default function LiveGainers() {
       )}
 
       {/* Table */}
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto overflow-y-hidden">
         <table className="w-full text-sm table-fixed min-w-[700px]">
           <thead>
             <tr className="text-left text-xs text-gray-500 border-b border-gray-800">
