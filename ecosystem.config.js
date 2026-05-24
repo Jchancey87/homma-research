@@ -29,8 +29,8 @@ module.exports = {
     },
     {
       name: 'nextjs-frontend',
-      script: 'npx',
-      args: 'pnpm@9 start',
+      script: 'node_modules/next/dist/bin/next',
+      args: 'start',
       cwd: '/opt/trading-journal/frontend',
       watch: false,
       autorestart: true,

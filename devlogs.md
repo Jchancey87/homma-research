@@ -267,3 +267,13 @@ Refactor the Live Gainer Screener into a side-by-side split layout ("All Live Ga
 * **Problem**: Sequential testing of live cache functions hung indefinitely.
 * **Cause**: Multiple threads inside the `ThreadPoolExecutor` (max 10) were attempting to lazily import the Schwab client and read/refresh the `token.json` OAuth token file simultaneously, causing a Python import lock deadlock and file write conflicts.
 * **Resolution**: Changed `_cache_lock` to a re-entrant `threading.RLock`, and pre-initialized the Schwab client on the main thread of `enrich_gainers_with_sparklines_and_history` before spawning threads. This guarantees that only one thread handles token refresh and caches the client globally.
+
+#### 6. Next.js Production Port Redirection Failure (ERR_EMPTY_RESPONSE)
+* **Problem**: The frontend page failed to load with `ERR_EMPTY_RESPONSE` on `http://192.168.0.202` (port 80).
+* **Cause**: The production deployment file `/opt/trading-journal/ecosystem.config.js` was never updated to run the Next.js start binary directly. It still used `npx pnpm@9 start` which fails with `Unknown command: "pnpm@9"`. The server crashed and left port 3000 closed, causing the iptables port 80 redirect to fail. Additionally, previous terminal command attempts to reload/restart the PM2 service were suspended (`T` state) due to interactive `sudo` password prompts.
+* **Resolution**: Copied the updated `ecosystem.config.js` into `/opt/trading-journal/`, killed the suspended processes, ran `sudo pm2 start /opt/trading-journal/ecosystem.config.js --only nextjs-frontend`, and saved the PM2 configuration.
+
+#### 7. Schwab Streamer Method AttributeError
+* **Problem**: The `schwab-streamer` daemon failed to start and was marked as `errored` in PM2 after 98 restarts.
+* **Cause**: In `stream_client.py`, the Level 1 quote message handler registration was called using `self.stream_client.add_level1_equity_handler(...)` instead of the spelling expected by the `schwab-py` library, which is `add_level_one_equity_handler(...)`.
+* **Resolution**: Replaced the method call with `add_level_one_equity_handler`, copied `stream_client.py` to `/opt/trading-journal/momentum_screener/schwab/`, and restarted the daemon.

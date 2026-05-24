@@ -307,7 +307,7 @@ class SchwabStreamer:
         
         # 4. Subscribe to initial list
         # Fields: LAST_PRICE, BID_PRICE, ASK_PRICE, TOTAL_VOLUME, HIGH_PRICE, LOW_PRICE, OPEN_PRICE
-        self.stream_client.add_level1_equity_handler(self.on_level1_equity_message)
+        self.stream_client.add_level_one_equity_handler(self.on_level1_equity_message)
         await self.stream_client.level1_equity_subs(list(candidates))
         self.subscribed_symbols.update(candidates)
         
