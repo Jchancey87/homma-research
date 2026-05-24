@@ -293,8 +293,9 @@ export default function WatchlistPage() {
       setNewTicker(''); setNewNotes(''); setNewSector(''); setNewTags([])
       setShowAdd(false)
       await load()
-    } catch (e: any) {
-      setAddError(e?.response?.data?.error || 'Failed to add ticker')
+    } catch (e) {
+      const err = e as { response?: { data?: { error?: string } } }
+      setAddError(err?.response?.data?.error || 'Failed to add ticker')
     } finally {
       setAdding(false)
     }

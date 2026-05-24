@@ -20,7 +20,7 @@ export default function GainersPage() {
   const load = async () => {
     setLoading(true)
     try {
-      const params: any = {}
+      const params: Parameters<typeof getGainers>[0] = {}
       if (date)     params.date      = date
       if (minGap)   params.min_gap   = Number(minGap)
       if (maxFloat) params.max_float = Number(maxFloat)
@@ -31,10 +31,22 @@ export default function GainersPage() {
     } finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    const loadInitial = async () => {
+      setLoading(true)
+      try {
+        const [g, s] = await Promise.all([getGainers({}), getSectors()])
+        setGainers(g); setSectors(s)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadInitial()
+  }, [])
 
   const sorted = [...gainers].sort((a, b) => {
     if (!sortKey) return 0 // Respect backend order if no manual sort active
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const av = a[sortKey] as any, bv = b[sortKey] as any
     if (av === bv) {
       // Tie-break with gap_pct if sorting by date or other fields

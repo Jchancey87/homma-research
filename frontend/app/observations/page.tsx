@@ -145,8 +145,9 @@ export default function ObservationsPage() {
       setForm({ ticker: '', date: new Date().toISOString().split('T')[0], title: '', body: '', sentiment: 'neutral', tags: '' })
       setShowForm(false)
       await load()
-    } catch (e: any) {
-      setSaveError(e?.response?.data?.error || 'Failed to save')
+    } catch (e) {
+      const err = e as { response?: { data?: { error?: string } } }
+      setSaveError(err?.response?.data?.error || 'Failed to save')
     } finally {
       setSaving(false)
     }

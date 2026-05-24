@@ -7,8 +7,8 @@ import {
 } from '@/lib/api'
 import HeatMap from '@/components/HeatMap'
 import {
-  History, Search, ChevronDown, ChevronUp, ExternalLink,
-  BarChart2, TrendingUp, RefreshCw, ArrowUpDown, LayoutGrid, Download,
+  Search, ChevronDown, ChevronUp, ExternalLink,
+  BarChart2, RefreshCw, ArrowUpDown, LayoutGrid, Download,
 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -32,21 +32,7 @@ function daysBetween(a: string, b: string) {
   return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000)
 }
 
-// ── Appearance dot timeline ────────────────────────────────────────────────────
-function DotTimeline({ appearances }: { appearances: TickerAppearance[] }) {
-  const sorted = [...appearances].sort((a, b) => a.date.localeCompare(b.date))
-  return (
-    <div className="flex items-center gap-1 flex-wrap">
-      {sorted.map(a => (
-        <span
-          key={a.date}
-          title={`${a.date}  gap +${a.gap_pct?.toFixed(1)}%`}
-          className="w-2 h-2 rounded-full bg-emerald-400/60 hover:bg-emerald-400 hover:scale-150 transition-all cursor-default"
-        />
-      ))}
-    </div>
-  )
-}
+
 
 // ── Expanded detail row ────────────────────────────────────────────────────────
 function TickerDetail({

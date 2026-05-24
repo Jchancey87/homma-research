@@ -14,7 +14,7 @@ import {
   LineStyle,
   Time,
 } from 'lightweight-charts'
-import { Loader2, TrendingUp, BarChart2, Activity, Zap, Eye, EyeOff, Settings2 } from 'lucide-react'
+import { Loader2, TrendingUp, BarChart2, Activity, Settings2 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,9 +24,15 @@ interface HistoPt  { time: Time; value: number; color?: string }
 
 /** Sort ascending by time and remove duplicate timestamps (keep last occurrence). */
 function dedupSort<T extends { time: Time }>(data: T[]): T[] {
-  const map = new Map<any, T>()
+  const map = new Map<Time, T>()
   for (const bar of data) map.set(bar.time, bar)
-  return Array.from(map.values()).sort((a, b) => (a.time as any) - (b.time as any))
+  return Array.from(map.values()).sort((a, b) => {
+    const at = a.time as string | number
+    const bt = b.time as string | number
+    return typeof at === 'number' && typeof bt === 'number'
+      ? at - bt
+      : String(at).localeCompare(String(bt))
+  })
 }
 
 export interface ChartData {
@@ -100,8 +106,9 @@ export default function InteractiveSessionChart({ ticker, date }: Props) {
       }
       const json: ChartData = await res.json()
       setData(json)
-    } catch (e: any) {
-      setError(e.message ?? 'Failed to load chart data')
+    } catch (e) {
+      const err = e as Error
+      setError(err.message ?? 'Failed to load chart data')
     } finally {
       setLoading(false)
     }
@@ -193,7 +200,7 @@ export default function InteractiveSessionChart({ ticker, date }: Props) {
     // Crosshair data readout
     mc.subscribeCrosshairMove((param) => {
       if (param.time && candles) {
-        const bar = param.seriesData.get(candles) as any
+        const bar = param.seriesData.get(candles) as OhlcBar & { customValues?: { volume?: number } } | undefined
         if (bar) {
           setOhlcInfo({ o: bar.open, h: bar.high, l: bar.low, c: bar.close, v: bar.customValues?.volume ?? 0 })
         }
@@ -267,10 +274,10 @@ export default function InteractiveSessionChart({ ticker, date }: Props) {
     mc.subscribeCrosshairMove((param) => {
       if (param.time) {
         if (ac && adxSeriesRefs.current[0]) {
-          ac.setCrosshairPosition(0, param.time as any, adxSeriesRefs.current[0])
+          ac.setCrosshairPosition(0, param.time, adxSeriesRefs.current[0])
         }
         if (atc && atrSeriesRef.current) {
-          atc.setCrosshairPosition(0, param.time as any, atrSeriesRef.current)
+          atc.setCrosshairPosition(0, param.time, atrSeriesRef.current)
         }
       }
     })
@@ -292,7 +299,7 @@ export default function InteractiveSessionChart({ ticker, date }: Props) {
       ac.remove()
       atc.remove()
     }
-  }, [data, showAdx, showAtr])
+  }, [data, showAdx, showAtr]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Sync Visibility ───────────────────────────────────────────────────────
   useEffect(() => {

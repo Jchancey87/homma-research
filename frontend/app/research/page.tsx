@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Search, Loader2, AlertCircle, FileText,
   TrendingUp, ShieldAlert, BarChart3, CalendarDays, Landmark, History, Download,
@@ -47,35 +47,7 @@ const EMPTY_MAIN: MainState = {
   jobId: null, loading: false, report: null, error: null, status: null, model: null,
 }
 
-function useJobPoller(
-  jobId: string | null,
-  onDone: (output: string) => void,
-  onError: (msg: string) => void,
-  statusMessages: string[],
-) {
-  const statusIdx = useRef(0)
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  useEffect(() => {
-    if (!jobId) return
-    statusIdx.current = 0
-
-    intervalRef.current = setInterval(async () => {
-      try {
-        const job = await getJobStatus(jobId)
-        if (job.status === 'done') {
-          clearInterval(intervalRef.current!)
-          onDone(job.output ?? '')
-        } else if (job.status === 'error') {
-          clearInterval(intervalRef.current!)
-          onError(job.output ?? 'Unknown error')
-        }
-      } catch { /* network hiccup — keep polling */ }
-    }, 2000)
-
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
-  }, [jobId]) // eslint-disable-line react-hooks/exhaustive-deps
-}
 
 // ── Feature polling hook ───────────────────────────────────────────────────────
 
@@ -197,8 +169,9 @@ export default function ResearchPage() {
     try {
       const res = await startRiskDetection(ticker, force)
       applyFeatureRes(res, setRisk, setRiskMeta, 'Failed to start risk analysis')
-    } catch (e: any) {
-      setRisk({ ...EMPTY_FEATURE, error: e?.response?.data?.error ?? 'Failed to start risk analysis' })
+    } catch (e) {
+      const err = e as { response?: { data?: { error?: string } } }
+      setRisk({ ...EMPTY_FEATURE, error: err.response?.data?.error ?? 'Failed to start risk analysis' })
     }
   }, [ticker])
 
@@ -209,8 +182,9 @@ export default function ResearchPage() {
     try {
       const res = await startCatalystAnalysis(ticker, date || undefined, force)
       applyFeatureRes(res, setCatalyst, setCatalystMeta, 'Failed to start catalyst analysis')
-    } catch (e: any) {
-      setCatalyst({ ...EMPTY_FEATURE, error: e?.response?.data?.error ?? 'Failed to start catalyst analysis' })
+    } catch (e) {
+      const err = e as { response?: { data?: { error?: string } } }
+      setCatalyst({ ...EMPTY_FEATURE, error: err.response?.data?.error ?? 'Failed to start catalyst analysis' })
     }
   }, [ticker, date])
 
@@ -221,8 +195,9 @@ export default function ResearchPage() {
     try {
       const res = await startDeepContext(ticker, force)
       applyFeatureRes(res, setContext, setContextMeta, 'Failed to start deep context')
-    } catch (e: any) {
-      setContext({ ...EMPTY_FEATURE, error: e?.response?.data?.error ?? 'Failed to start deep context' })
+    } catch (e) {
+      const err = e as { response?: { data?: { error?: string } } }
+      setContext({ ...EMPTY_FEATURE, error: err.response?.data?.error ?? 'Failed to start deep context' })
     }
   }, [ticker])
 
@@ -232,8 +207,9 @@ export default function ResearchPage() {
     try {
       const res = await startPipeAnalysis(ticker, date || undefined)
       if ('job_id' in res) setPipe(s => ({ ...s, jobId: res.job_id }))
-    } catch (e: any) {
-      setPipe({ ...EMPTY_FEATURE, error: e?.response?.data?.error ?? 'Failed to start PIPE analysis' })
+    } catch (e) {
+      const err = e as { response?: { data?: { error?: string } } }
+      setPipe({ ...EMPTY_FEATURE, error: err.response?.data?.error ?? 'Failed to start PIPE analysis' })
     }
   }, [ticker, date])
 
@@ -297,7 +273,7 @@ export default function ResearchPage() {
         setPipe(s => ({ ...s, jobId: pipeRes.value.job_id }))
       else setPipe({ ...EMPTY_FEATURE, error: 'Failed to start PIPE analysis' })
 
-    } catch (err) {
+    } catch {
       setMain({ ...EMPTY_MAIN, error: 'Unexpected error starting research' })
       setRisk({ ...EMPTY_FEATURE, error: 'Unexpected error' })
       setCatalyst({ ...EMPTY_FEATURE, error: 'Unexpected error' })

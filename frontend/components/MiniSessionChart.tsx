@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import {
-  createChart, IChartApi, ISeriesApi,
+  createChart, IChartApi,
   CandlestickSeries, LineSeries, HistogramSeries,
   CrosshairMode, UTCTimestamp,
 } from 'lightweight-charts'
@@ -61,6 +61,23 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
   const [hovered, setHovered] = useState<{ o: number; h: number; l: number; c: number } | null>(null)
   const loaded = useRef(false)
 
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res  = await fetch(`${API_BASE}/api/research/chart-data?ticker=${ticker}&date=${date}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const json = await res.json()
+      // Only extract what we need to keep memory low
+      setData({ ohlcv: json.ohlcv, volume: json.volume, ema_21: json.ema_21 })
+    } catch (e) {
+      const err = e as Error
+      setError(err.message ?? 'No data')
+    } finally {
+      setLoading(false)
+    }
+  }, [ticker, date])
+
   // Lazy-load via IntersectionObserver — only fetch when scrolled into view
   useEffect(() => {
     const el = containerRef.current
@@ -78,23 +95,7 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
     )
     observer.observe(el)
     return () => observer.disconnect()
-  }, [ticker, date])
-
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res  = await fetch(`${API_BASE}/api/research/chart-data?ticker=${ticker}&date=${date}`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = await res.json()
-      // Only extract what we need to keep memory low
-      setData({ ohlcv: json.ohlcv, volume: json.volume, ema_21: json.ema_21 })
-    } catch (e: any) {
-      setError(e.message ?? 'No data')
-    } finally {
-      setLoading(false)
-    }
-  }, [ticker, date])
+  }, [fetchData])
 
   // Build chart
   useEffect(() => {
@@ -154,7 +155,7 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
     // Crosshair readout
     chart.subscribeCrosshairMove((param) => {
       if (param.time) {
-        const bar = param.seriesData.get(candles) as any
+        const bar = param.seriesData.get(candles) as OhlcBar | undefined
         if (bar) setHovered({ o: bar.open, h: bar.high, l: bar.low, c: bar.close })
       } else {
         setHovered(null)

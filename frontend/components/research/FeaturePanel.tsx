@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { Loader2, AlertCircle, RefreshCw, Clock, Download, type LucideIcon } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import { getJobStatus } from '@/lib/api'

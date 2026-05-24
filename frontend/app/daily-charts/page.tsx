@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { getGainersSummary, GainerSummary, getPipeScan, PipeScanResult } from '@/lib/api'
+import { getGainersSummary, GainerSummary, getPipeScan, PipeScanResult, Gainer } from '@/lib/api'
 import MiniSessionChart from '@/components/MiniSessionChart'
 import { BarChart2, RefreshCw, ChevronLeft, ChevronRight, Search } from 'lucide-react'
 
@@ -29,7 +29,6 @@ function DailyChartsContent() {
     searchParams.get('date') || ''
   )
   const [pipeMap, setPipeMap]   = useState<Record<string, PipeScanResult>>({})
-  const [pipeLoading, setPipeLoading] = useState(false)
 
   // ── Fetch summary for the active date ──────────────────────────────────────
   const load = useCallback(async () => {
@@ -50,7 +49,7 @@ function DailyChartsContent() {
         setSummary({
           date:    targetDate,
           total:   rows.length,
-          gainers: rows.slice(0, 9).map((g: any) => ({
+          gainers: rows.slice(0, 9).map((g: Gainer) => ({
             ticker:       g.ticker,
             gap_pct:      g.gap_pct,
             float_shares: g.float_shares,
@@ -67,7 +66,7 @@ function DailyChartsContent() {
         setSummary(s)
         if (!activeDate) setActiveDate(s.date)
       }
-    } catch (e) {
+    } catch {
       setSummary(null)
     } finally {
       setLoading(false)
@@ -79,7 +78,6 @@ function DailyChartsContent() {
   // Auto-scan for PIPE activity whenever the date and gainers are loaded
   useEffect(() => {
     if (!activeDate || loading) return
-    setPipeLoading(true)
     getPipeScan(activeDate)
       .then(results => {
         const map: Record<string, PipeScanResult> = {}
@@ -87,7 +85,6 @@ function DailyChartsContent() {
         setPipeMap(map)
       })
       .catch(() => {/* silent — PIPE badges are non-critical */})
-      .finally(() => setPipeLoading(false))
   }, [activeDate, loading])
 
   // ── Date navigation ────────────────────────────────────────────────────────

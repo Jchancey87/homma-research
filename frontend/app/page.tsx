@@ -10,7 +10,7 @@ import FloatBucketSummary from '@/components/FloatBucketSummary'
 import SectorRotation from '@/components/SectorRotation'
 import EconomicCalendar from '@/components/EconomicCalendar'
 import HelpGuide from '@/components/HelpGuide'
-import { getContinuationPicks } from '@/lib/api'
+import { getContinuationPicks, ContinuationPick } from '@/lib/api'
 import {
   TrendingUp, Bookmark, FileText, RotateCcw,
   BarChart2, ArrowRight, CalendarDays,
@@ -80,7 +80,7 @@ function MorningHeader() {
 // ── Continuation picks (promoted from watchlist page) ─────────────────────────
 
 async function ContinuationPicksPanel() {
-  let picks: any[] = []
+  let picks: ContinuationPick[] = []
   try { picks = await getContinuationPicks() } catch {}
 
   const active = picks.filter(p => p.is_active).slice(0, 5)

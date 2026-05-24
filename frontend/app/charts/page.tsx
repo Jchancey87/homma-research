@@ -19,7 +19,7 @@ export default function ChartsPage() {
   const load = async () => {
     setLoading(true)
     try {
-      const params: any = {}
+      const params: Parameters<typeof getCharts>[0] = {}
       if (filterTicker)   params.ticker          = filterTicker.toUpperCase()
       if (filterTag)      params.tag             = filterTag
       if (dateFrom)       params.date_from       = dateFrom
@@ -29,7 +29,17 @@ export default function ChartsPage() {
     } finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    const loadInitial = async () => {
+      setLoading(true)
+      try {
+        setCharts(await getCharts({}))
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadInitial()
+  }, [])
 
   return (
     <div className="space-y-6">
@@ -133,6 +143,7 @@ export default function ChartsPage() {
               <Link key={c.id} href={`/charts/${c.id}`}
                 className="group bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden hover:border-emerald-550 dark:hover:border-emerald-500/50 hover:shadow-md transition-all flex flex-col">
                 <div className="aspect-video bg-gray-100 dark:bg-gray-850 overflow-hidden relative border-b border-gray-200 dark:border-gray-800">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={chartImageUrl(c.image_path)} alt={`${c.ticker} ${c.capture_date}`}
                     className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300"
                     onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />

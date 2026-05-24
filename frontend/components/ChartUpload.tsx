@@ -63,7 +63,8 @@ export default function ChartUpload({ onSuccess }: Props) {
       // Reset
       setFile(null); setPreview(null); setTicker(''); setDate('')
       setTimeframe(''); setSetupType(''); setScore(5); setNotes(''); setTags([])
-    } catch (err: any) {
+    } catch (e) {
+      const err = e as { response?: { data?: { error?: string } } }
       setError(err?.response?.data?.error ?? 'Upload failed')
     } finally {
       setLoading(false)
@@ -83,6 +84,7 @@ export default function ChartUpload({ onSuccess }: Props) {
         <input {...getInputProps()} />
         {preview ? (
           <div className="relative inline-block">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={preview} alt="preview" className="max-h-48 rounded-lg mx-auto" />
             <button type="button" onClick={e => { e.stopPropagation(); setFile(null); setPreview(null) }}
               className="absolute -top-2 -right-2 bg-red-650 text-white rounded-full p-1 shadow-md hover:bg-red-700 transition-colors">

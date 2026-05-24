@@ -31,7 +31,7 @@ function fmtDate(iso: string) {
 export default function ResearchPanel({ defaultDate }: Props) {
   const [mode, setMode]         = useState<'research' | 'sentiment'>('research')
   const [ticker, setTicker]     = useState('')
-  const [date, setDate]         = useState(new Date().toLocaleDateString('en-CA')) // YYYY-MM-DD
+  const [date, setDate]         = useState(defaultDate || new Date().toLocaleDateString('en-CA')) // YYYY-MM-DD
   const [query, setQuery]       = useState('')
   const [activeJob, setActiveJob] = useState<LLMJob | null>(null)
   const [history, setHistory]   = useState<LLMJob[]>([])
@@ -83,7 +83,8 @@ export default function ResearchPanel({ defaultDate }: Props) {
         setActiveJob({ id: res.job_id, status: 'pending', type: mode } as LLMJob)
         await poll(res.job_id)
       }
-    } catch (err: any) {
+    } catch (e) {
+      const err = e as { response?: { data?: { error?: string } } }
       setError(err?.response?.data?.error ?? 'Request failed')
     } finally {
       setLoading(false)

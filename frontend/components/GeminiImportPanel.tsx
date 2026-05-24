@@ -32,7 +32,8 @@ export default function GeminiImportPanel({ chartId, existingAnnotation, onImpor
       await importGeminiAnalysis(chartId, text.trim(), annotImage ?? undefined)
       setSuccess(true)
       onImported?.()
-    } catch (err: any) {
+    } catch (e) {
+      const err = e as { response?: { data?: { error?: string } } }
       setError(err?.response?.data?.error ?? 'Import failed')
     } finally {
       setLoading(false)

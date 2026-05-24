@@ -1,8 +1,7 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Trash2, ExternalLink } from 'lucide-react'
-import ReactMarkdown from 'react-markdown'
+import { ArrowLeft, Trash2 } from 'lucide-react'
 import { getChart, updateChart, deleteChart, ChartCapture, chartImageUrl } from '@/lib/api'
 import GeminiImportPanel from '@/components/GeminiImportPanel'
 import TagSelector from '@/components/TagSelector'
@@ -22,15 +21,17 @@ export default function ChartDetailPage() {
   const [saving, setSaving]     = useState(false)
   const [tab, setTab]           = useState<'info' | 'gemini'>('info')
 
-  const reload = async () => {
+  const reload = useCallback(async () => {
     const c = await getChart(chartId)
     setChart(c)
     setNotes(c.notes ?? '')
     setScore(c.cleanliness_score ?? 5)
     try { setTags(JSON.parse(c.tags) as PatternTag[]) } catch { setTags([]) }
-  }
+  }, [chartId])
 
-  useEffect(() => { reload().finally(() => setLoading(false)) }, [chartId])
+  useEffect(() => {
+    reload().finally(() => setLoading(false))
+  }, [reload])
 
   const handleSave = async () => {
     setSaving(true)
@@ -72,12 +73,14 @@ export default function ChartDetailPage() {
         {/* Chart image — takes 3 cols */}
         <div className="lg:col-span-3 space-y-4">
           <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={chartImageUrl(chart.image_path)} alt={`${chart.ticker} chart`}
               className="w-full object-contain max-h-[480px]" />
           </div>
           {chart.gemini_image_path && (
             <div className="bg-gray-900 border border-violet-800/50 rounded-2xl overflow-hidden">
               <div className="px-4 py-2 border-b border-gray-800 text-xs text-violet-400 font-semibold">✦ Gemini Annotated</div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={chartImageUrl(chart.gemini_image_path)} alt="Gemini annotated"
                 className="w-full object-contain max-h-[480px]" />
             </div>
