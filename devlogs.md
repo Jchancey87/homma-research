@@ -218,4 +218,52 @@ Integrate visual sparklines and technical indicator pills (SMA 20, 50, 100) on t
   * Added `<SmaPills>` indicating whether a stock is currently trading above or below its SMA 20, 50, and 100 lines.
   * Passed new technical indicator fields (SMA/Above SMA) and historical data points from the backend Schwab clients to the frontend views.
 
+---
 
+### May 24, 2026
+
+### Objectives
+Refactor the Live Gainer Screener into a side-by-side split layout ("All Live Gainers" and "HOD Only"), style badge widths, fix jittery row expansions, and resolve the issue of empty/incorrect stock lists on weekends and after service restarts.
+
+### Git State
+* **Current Branch**: `master` (synchronized with `origin/master`)
+* **Recent Commits**:
+  * `551a178` - fix: optimize caching, resolve import deadlocks, and restore correct Friday runners in live screener
+  * `16ccafc` - fix: implement DB fallback for live screener on weekend/restart
+  * `a99c4ee` - feat: refactor live gainer layout to side-by-side grid, customize scrollbars, and fix row animations
+
+---
+
+### Struggles & Resolutions Along the Way
+
+#### 1. Split Table Refactoring and Jittery Row Animations
+* **Problem**: The live screener was too wide, had excessive empty space, and row-expansion details were jittery and layout-shifting.
+* **Resolution**:
+  - Extracted the screener table into a reusable `GainerTable` component inside `LiveGainers.tsx`.
+  - Implemented a responsive grid columns layout (`grid-cols-1 lg:grid-cols-2`) to show "All Live Gainers" on the left and "HOD Only" on the right.
+  - Replaced the CSS `max-height` transition with a modern CSS Grid template row transition (`grid-rows-[0fr]` to `grid-rows-[1fr]`) to animate row expansions smoothly.
+  - Styled Trend and Float badges to be wider, utilizing more spacing without wrapping.
+
+#### 2. Layout Jumps on Modal Open/Close
+* **Problem**: Clicking a stock to open the details modal caused a white scrollbar to flash and the background layout to shift/jump.
+* **Resolution**:
+  - Appended custom dark scrollbar styles to `globals.css` that match the overall zinc theme.
+  - Added `scrollbar-gutter: stable` to the main `html` element so that scrollbar space remains reserved, preventing layout shifts.
+  - Locked background page scrolling (`overflow-hidden`) when a details modal is active.
+
+#### 3. Erroneous Weekend Session State
+* **Problem**: On Saturdays and Sundays, the session badge could display "Market Open" during daytime hours.
+* **Resolution**: Updated `get_market_session` in `live_screener.py` to check `now_et.weekday() >= 5` first, returning `'closed'` immediately for all weekend requests.
+
+#### 4. Empty/Incorrect Stocks on Weekends & Service Restarts
+* **Problem**: The live screener and depending views (like Repeat Runners) were completely empty after deploying service updates on weekends.
+* **Cause**: Uvicorn restarts reset the in-memory cache to empty, and the deep-closed hours block prevented the backend from performing live Schwab/TradingView queries, returning an empty list. Furthermore, using a database fallback returned open-gap gainers (sorted by opening gap) instead of the correct EOD change % runners that include extended-hours moves.
+* **Resolution**:
+  - Optimized `refresh_cache` to allow a single live fetch on start/restart during closed hours or weekends. This fetches the correct EOD runners (sorted by EOD change %) and populates the cache.
+  - Reused this cache indefinitely as long as the session is `closed`, preventing any further API calls until the session transitions to `pre_market` on Monday.
+  - Enabled query parameter support for `force=1` on `/api/gainers/live` to pass force commands from the frontend Refresh button.
+
+#### 5. Schwab Thread Deadlock & Token Write Race Condition
+* **Problem**: Sequential testing of live cache functions hung indefinitely.
+* **Cause**: Multiple threads inside the `ThreadPoolExecutor` (max 10) were attempting to lazily import the Schwab client and read/refresh the `token.json` OAuth token file simultaneously, causing a Python import lock deadlock and file write conflicts.
+* **Resolution**: Changed `_cache_lock` to a re-entrant `threading.RLock`, and pre-initialized the Schwab client on the main thread of `enrich_gainers_with_sparklines_and_history` before spawning threads. This guarantees that only one thread handles token refresh and caches the client globally.
