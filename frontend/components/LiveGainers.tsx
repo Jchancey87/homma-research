@@ -108,12 +108,27 @@ function getTrendState(g: LiveGainerRow) {
   const prev = g.prev_close ?? 0
   const gap = g.gap_pct ?? 0
   if (last >= prev && gap > 0) {
-    return { label: '↗️', title: 'Bullish (Price up & Change up)', className: 'text-emerald-400 font-bold' }
+    return {
+      label: '↗',
+      text: 'Bullish',
+      title: 'Bullish (Price up & Change up)',
+      className: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+    }
   }
   if (last < prev && gap < 0) {
-    return { label: '↘️', title: 'Bearish (Price down & Change down)', className: 'text-rose-400 font-bold' }
+    return {
+      label: '↘',
+      text: 'Bearish',
+      title: 'Bearish (Price down & Change down)',
+      className: 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+    }
   }
-  return { label: '➡️', title: 'Mixed signals', className: 'text-amber-400' }
+  return {
+    label: '→',
+    text: 'Neutral',
+    title: 'Mixed signals',
+    className: 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+  }
 }
 
 // ── Session badge ──────────────────────────────────────────────────────────────
@@ -372,8 +387,8 @@ export default function LiveGainers() {
         valB = b.gap_pct ?? 0
         break
       case 'trend':
-        valA = getTrendState(a).label === '↗️' ? 2 : getTrendState(a).label === '➡️' ? 1 : 0
-        valB = getTrendState(b).label === '↗️' ? 2 : getTrendState(b).label === '➡️' ? 1 : 0
+        valA = getTrendState(a).text === 'Bullish' ? 2 : getTrendState(a).text === 'Neutral' ? 1 : 0
+        valB = getTrendState(b).text === 'Bullish' ? 2 : getTrendState(b).text === 'Neutral' ? 1 : 0
         break
       case 'float':
         valA = a.float_shares ?? 0
@@ -387,11 +402,11 @@ export default function LiveGainers() {
   })
 
   // Table header helper component to handle sorting UI
-  const Th = ({ col, label, align = 'left' }: { col: typeof sortKey; label: string; align?: 'left' | 'right' | 'center' }) => {
+  const Th = ({ col, label, align = 'left', width }: { col: typeof sortKey; label: string; align?: 'left' | 'right' | 'center'; width?: string }) => {
     const isSorted = sortKey === col
     return (
       <th
-        className={`pb-2 pr-4 font-semibold cursor-pointer select-none hover:text-white transition-colors group/th ${
+        className={`pb-2 pr-4 font-semibold cursor-pointer select-none hover:text-white transition-colors group/th ${width || ''} ${
           align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left'
         }`}
         onClick={() => handleSort(col)}
@@ -455,15 +470,15 @@ export default function LiveGainers() {
 
       {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm table-fixed min-w-[700px]">
           <thead>
             <tr className="text-left text-xs text-gray-500 border-b border-gray-800">
-              <Th col="rank" label="Rank" />
-              <Th col="ticker" label="Ticker" />
-              <Th col="price" label="Price" align="right" />
-              <Th col="change" label="Change(%)" align="right" />
-              <Th col="trend" label="Trend" align="center" />
-              <Th col="float" label="Float" align="right" />
+              <Th col="rank" label="Rank" width="w-[8%]" />
+              <Th col="ticker" label="Ticker" width="w-[22%]" />
+              <Th col="price" label="Price" align="right" width="w-[15%]" />
+              <Th col="change" label="Change(%)" align="right" width="w-[15%]" />
+              <Th col="trend" label="Trend" align="center" width="w-[20%]" />
+              <Th col="float" label="Float" align="right" width="w-[20%]" />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800/40">
@@ -542,14 +557,17 @@ export default function LiveGainers() {
                       <GapCell gap={g.gap_pct} />
 
                       {/* 5. Trend */}
-                      <td className="py-2.5 pr-4 text-center select-none" title={trend.title}>
-                        <span className={`text-sm ${trend.className}`}>{trend.label}</span>
+                      <td className="py-2.5 pr-4 text-center select-none animate-in fade-in duration-200" title={trend.title}>
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold ${trend.className}`}>
+                          <span className="text-xs">{trend.label}</span>
+                          <span>{trend.text}</span>
+                        </span>
                       </td>
 
                       {/* 6. Float */}
-                      <td className="py-2.5 pr-4 text-right">
-                        <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ${getFloatBadgeStyle(g.float_shares).className}`}>
-                          {fmtVol(g.float_shares)}
+                      <td className="py-2.5 pr-4 text-right animate-in fade-in duration-200">
+                        <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-mono font-bold ${getFloatBadgeStyle(g.float_shares).className}`}>
+                          {getFloatBadgeStyle(g.float_shares).label}
                         </span>
                       </td>
                     </tr>
@@ -558,104 +576,102 @@ export default function LiveGainers() {
                     <tr key={`${g.ticker}-expand`} className={`bg-gray-900/10`}>
                       <td colSpan={6} className="p-0 border-0">
                         <div
-                          className="transition-all duration-300 ease-in-out overflow-hidden"
-                          style={{
-                            maxHeight: isExpanded ? '400px' : '0px',
-                            opacity: isExpanded ? 1 : 0,
-                            paddingTop: isExpanded ? '16px' : '0px',
-                            paddingBottom: isExpanded ? '16px' : '0px',
-                            paddingLeft: '24px',
-                            paddingRight: '24px',
-                          }}
+                          className={`grid transition-all duration-300 ease-in-out ${
+                            isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                          }`}
                         >
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm text-gray-300">
-                            {/* Left Column: Detailed Metrics */}
-                            <div className="space-y-2">
-                              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Secondary Metrics</h4>
-                              <div className="grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-xs">
-                                <span className="text-gray-500">Volume:</span>
-                                <span className="text-white font-semibold">{fmtVol(g.volume)}</span>
+                          <div className="overflow-hidden">
+                            <div className="py-4 px-6">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm text-gray-300">
+                                {/* Left Column: Detailed Metrics */}
+                                <div className="space-y-2">
+                                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Secondary Metrics</h4>
+                                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-xs">
+                                    <span className="text-gray-500">Volume:</span>
+                                    <span className="text-white font-semibold">{fmtVol(g.volume)}</span>
 
-                                <span className="text-gray-500">RVOL (15m):</span>
-                                <div>
-                                  <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] ${getRvolBadgeStyle(g.rvol_15m).className}`}>
-                                    {getRvolBadgeStyle(g.rvol_15m).label}
-                                  </span>
-                                </div>
-
-                                <span className="text-gray-500">Spread:</span>
-                                <div>
-                                  <span className={getSpreadBadgeStyle(g.spread_pct).className}>
-                                    {getSpreadBadgeStyle(g.spread_pct).label}
-                                  </span>
-                                </div>
-
-                                <span className="text-gray-500">Trade Time:</span>
-                                <div className="flex flex-col gap-1">
-                                  <span>
-                                    {g.trade_time
-                                      ? new Date(g.trade_time).toLocaleTimeString('en-US', {
-                                          timeZone: 'America/New_York',
-                                          hour12: false,
-                                        })
-                                      : '—'} EST
-                                  </span>
-                                  {g.trade_time && (
+                                    <span className="text-gray-500">RVOL (15m):</span>
                                     <div>
-                                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] ${getTimeAgoBadge(g.trade_time)?.className}`}>
-                                        {getTimeAgoBadge(g.trade_time)?.label}
+                                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] ${getRvolBadgeStyle(g.rvol_15m).className}`}>
+                                        {getRvolBadgeStyle(g.rvol_15m).label}
                                       </span>
+                                    </div>
+
+                                    <span className="text-gray-500">Spread:</span>
+                                    <div>
+                                      <span className={getSpreadBadgeStyle(g.spread_pct).className}>
+                                        {getSpreadBadgeStyle(g.spread_pct).label}
+                                      </span>
+                                    </div>
+
+                                    <span className="text-gray-500">Trade Time:</span>
+                                    <div className="flex flex-col gap-1">
+                                      <span>
+                                        {g.trade_time
+                                          ? new Date(g.trade_time).toLocaleTimeString('en-US', {
+                                              timeZone: 'America/New_York',
+                                              hour12: false,
+                                            })
+                                          : '—'} EST
+                                      </span>
+                                      {g.trade_time && (
+                                        <div>
+                                          <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] ${getTimeAgoBadge(g.trade_time)?.className}`}>
+                                            {getTimeAgoBadge(g.trade_time)?.label}
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Middle Column: Sector, Notes & Sparkline */}
+                                <div className="space-y-2">
+                                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Sector & Headline</h4>
+                                  <div className="space-y-1.5 text-xs">
+                                    <div>
+                                      <span className="text-gray-500">Sector: </span>
+                                      <span className="text-white">{g.sector ?? '—'}</span>
+                                    </div>
+                                    <div>
+                                      <span className="text-gray-500">Headline: </span>
+                                      <span className="text-gray-400 italic block mt-0.5 leading-relaxed truncate max-w-xs">{g.news_headline ?? 'No recent news'}</span>
+                                    </div>
+                                  </div>
+                                  {g.sparkline_5d && g.sparkline_5d.length > 0 && (
+                                    <div className="pt-2">
+                                      <span className="text-[10px] text-gray-500 block mb-1">5d Trend Sparkline:</span>
+                                      <div className="bg-[#0b0b0f] p-1.5 rounded border border-gray-800/80 inline-block">
+                                        <Sparkline points={g.sparkline_5d} />
+                                      </div>
                                     </div>
                                   )}
                                 </div>
-                              </div>
-                            </div>
 
-                            {/* Middle Column: Sector, Notes & Sparkline */}
-                            <div className="space-y-2">
-                              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Sector & Headline</h4>
-                              <div className="space-y-1.5 text-xs">
-                                <div>
-                                  <span className="text-gray-500">Sector: </span>
-                                  <span className="text-white">{g.sector ?? '—'}</span>
-                                </div>
-                                <div>
-                                  <span className="text-gray-500">Headline: </span>
-                                  <span className="text-gray-400 italic block mt-0.5 leading-relaxed truncate max-w-xs">{g.news_headline ?? 'No recent news'}</span>
+                                {/* Right Column: Actions */}
+                                <div className="flex flex-col justify-end items-start md:items-end gap-3 select-none">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setModalGainer(g);
+                                    }}
+                                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 border border-emerald-500/20 rounded-lg shadow transition-colors"
+                                  >
+                                    <Maximize2 size={12} />
+                                    Open Detailed View
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleResearch(g);
+                                    }}
+                                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-300 hover:text-white bg-gray-850 hover:bg-gray-850 border border-gray-700 rounded-lg transition-colors"
+                                  >
+                                    <ExternalLink size={12} />
+                                    Research Ticker
+                                  </button>
                                 </div>
                               </div>
-                              {g.sparkline_5d && g.sparkline_5d.length > 0 && (
-                                <div className="pt-2">
-                                  <span className="text-[10px] text-gray-500 block mb-1">5d Trend Sparkline:</span>
-                                  <div className="bg-[#0b0b0f] p-1.5 rounded border border-gray-800/80 inline-block">
-                                    <Sparkline points={g.sparkline_5d} />
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Right Column: Actions */}
-                            <div className="flex flex-col justify-end items-start md:items-end gap-3 select-none">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setModalGainer(g);
-                                }}
-                                className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 border border-emerald-500/20 rounded-lg shadow transition-colors"
-                              >
-                                <Maximize2 size={12} />
-                                Open Detailed View
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleResearch(g);
-                                }}
-                                className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-300 hover:text-white bg-gray-850 hover:bg-gray-850 border border-gray-700 rounded-lg transition-colors"
-                              >
-                                <ExternalLink size={12} />
-                                Research Ticker
-                              </button>
                             </div>
                           </div>
                         </div>
