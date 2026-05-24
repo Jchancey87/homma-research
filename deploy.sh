@@ -22,8 +22,8 @@ deactivate
 # 3. Build Frontend
 echo "🏗️  Building frontend..."
 cd $FRONTEND_DIR
-npm install  # Ensures new packages are installed
-npm run build
+npx pnpm@9 install --frozen-lockfile  # Ensures exact pinned packages are installed
+npx pnpm@9 run build
 
 # 4. Restart Services
 echo "🔄 Restarting services with PM2..."

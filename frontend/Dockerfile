@@ -3,9 +3,12 @@ FROM node:18-alpine AS builder
 
 WORKDIR /app
 
+# Install pnpm compatible with Node 18
+RUN npm install -g pnpm@9
+
 # Copy package files and install dependencies
-COPY package.json package-lock.json* ./
-RUN npm ci
+COPY package.json pnpm-lock.yaml* ./
+RUN pnpm install --frozen-lockfile
 
 # Copy the rest of the frontend code
 COPY . .
@@ -15,7 +18,7 @@ ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 # Build the Next.js application
-RUN npm run build
+RUN pnpm run build
 
 # Stage 2: Run the application
 FROM node:18-alpine AS runner
@@ -23,6 +26,9 @@ FROM node:18-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV production
+
+# Install pnpm for runtime script execution
+RUN npm install -g pnpm@9
 
 # Copy built artifacts from builder stage
 COPY --from=builder /app/.next ./.next
@@ -33,4 +39,4 @@ COPY --from=builder /app/package.json ./package.json
 EXPOSE 3000
 
 # Start the application
-CMD ["npm", "start"]
+CMD ["pnpm", "start"]
