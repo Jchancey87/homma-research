@@ -475,6 +475,24 @@ function GainerTable({
                                 </span>
                               </span>
                             )}
+                            {g.catalyst === 'Technical / No News' && (
+                              <span className="relative group/tooltip inline-flex items-center px-1 py-0.25 rounded text-[8px] font-black bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                                ⚠️ NNP
+                                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/tooltip:block bg-gray-950 border border-gray-800 text-white text-[10px] font-medium py-1 px-2 rounded shadow-2xl whitespace-nowrap z-50">
+                                  No-News Pump — speculative volatility, no fundamental catalyst
+                                  <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-950" />
+                                </span>
+                              </span>
+                            )}
+                            {g.catalyst === 'Speculative' && (
+                              <span className="relative group/tooltip inline-flex items-center px-1 py-0.25 rounded text-[8px] font-black bg-gray-500/20 text-gray-400 border border-gray-500/30">
+                                ? SPEC
+                                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/tooltip:block bg-gray-950 border border-gray-800 text-white text-[10px] font-medium py-1 px-2 rounded shadow-2xl whitespace-nowrap z-50">
+                                  Speculative — low/unknown RVOL, no confirmed catalyst
+                                  <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-950" />
+                                </span>
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -630,7 +648,25 @@ function GainerTable({
                               {/* Headline Footer */}
                               <div className="mt-4 pt-3 border-t border-gray-800/50 flex items-start gap-2 text-xs">
                                 <span className="text-gray-500 font-bold uppercase select-none shrink-0 mt-0.5">Headline:</span>
-                                <span className="text-gray-300 italic leading-relaxed block max-w-2xl">{g.news_headline ?? 'No recent news'}</span>
+                                {g.catalyst === 'Technical / No News' ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold bg-orange-500/15 text-orange-300 border border-orange-500/30">
+                                    ⚠️ Speculative Volatility / No News
+                                    <span className="text-orange-400/70 font-normal text-[10px]">
+                                      — High RVOL, no fundamental catalyst detected in last 24h
+                                    </span>
+                                  </span>
+                                ) : g.catalyst === 'Speculative' ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold bg-gray-700/30 text-gray-400 border border-gray-600/30">
+                                    ? Unconfirmed Momentum
+                                    <span className="text-gray-500 font-normal text-[10px]">
+                                      — Low or unknown RVOL, no news confirmed
+                                    </span>
+                                  </span>
+                                ) : g.catalyst === 'Confirmed Catalyst' && g.news_headline ? (
+                                  <span className="text-gray-300 italic leading-relaxed block max-w-2xl">{g.news_headline}</span>
+                                ) : (
+                                  <span className="text-gray-500 italic">No recent news</span>
+                                )}
                               </div>
                             </div>
                           </div>

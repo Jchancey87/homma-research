@@ -255,6 +255,18 @@ def _enrich_ticker(snap: dict, grouped: dict[str, dict], target_date: str) -> di
     headline   = poly.get_latest_headline(ticker)
     news_fresh = _classify_news(headline)
 
+    # ── Catalyst classification ──────────────────────────────────
+    try:
+        from services.pump_classifier import classify_catalyst
+        _partial = {
+            'news_headline': headline,
+            'gap_pct':       gap_pct,
+            'rvol_15m':      rvol,
+        }
+        catalyst = classify_catalyst(_partial)
+    except Exception:
+        catalyst = None
+
     return {
         'ticker':               ticker,
         'gap_pct':              gap_pct,
@@ -264,6 +276,7 @@ def _enrich_ticker(snap: dict, grouped: dict[str, dict], target_date: str) -> di
         'market_cap':           market_cap,
         'news_headline':        headline,
         'news_fresh':           news_fresh,
+        'catalyst':             catalyst,
         'close_price':          round(last_price, 4),
         'open_price':           round(open_px, 4),
         # new enrichment fields
@@ -359,11 +372,12 @@ def write_gainers(gainers: list[dict], target_date: str) -> tuple[int, int]:
                 conn.execute(
                     """INSERT INTO daily_gainers
                        (date, ticker, gap_pct, float_shares, rvol_15m, sector,
-                        market_cap, news_headline, news_fresh, close_price, open_price,
+                        market_cap, news_headline, news_fresh, catalyst,
+                        close_price, open_price,
                         high_price, low_price, prev_close, vwap,
                         dollar_volume, close_location, rs_vs_spy,
                         shares_outstanding, avg_volume)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                     (
                         target_date,
                         g['ticker'],
@@ -374,6 +388,7 @@ def write_gainers(gainers: list[dict], target_date: str) -> tuple[int, int]:
                         g['market_cap'],
                         g['news_headline'],
                         g['news_fresh'],
+                        g.get('catalyst'),
                         g['close_price'],
                         g['open_price'],
                         g.get('high_price'),
@@ -388,6 +403,10 @@ def write_gainers(gainers: list[dict], target_date: str) -> tuple[int, int]:
                     ),
                 )
                 inserted += 1
+
+                # Also persist to pump_classifications for historical tracking
+                _persist_pump_classification(conn, g, target_date)
+
             except Exception as e:
                 if 'unique' in str(e).lower():
                     skipped += 1
@@ -395,6 +414,36 @@ def write_gainers(gainers: list[dict], target_date: str) -> tuple[int, int]:
                     log.error(f"DB error for {g['ticker']}: {e}")
 
     return inserted, skipped
+
+
+def _persist_pump_classification(conn, gainer: dict, target_date: str):
+    """Upsert a pump_classifications row for EOD historical tracking."""
+    try:
+        conn.execute(
+            """
+            INSERT INTO pump_classifications
+                (ticker, date, catalyst_tag, gap_pct, rvol, float_shares, news_source)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (ticker, date) DO UPDATE
+                SET catalyst_tag  = EXCLUDED.catalyst_tag,
+                    gap_pct       = EXCLUDED.gap_pct,
+                    rvol          = EXCLUDED.rvol,
+                    float_shares  = EXCLUDED.float_shares,
+                    classified_at = now(),
+                    news_source   = EXCLUDED.news_source
+            """,
+            (
+                gainer['ticker'],
+                target_date,
+                gainer.get('catalyst', 'Speculative'),
+                gainer.get('gap_pct'),
+                gainer.get('rvol_15m'),
+                gainer.get('float_shares'),
+                'ingest_pipeline',
+            ),
+        )
+    except Exception as e:
+        log.warning(f"[Ingest] pump_classifications persist failed for {gainer.get('ticker')}: {e}")
 
 
 if __name__ == '__main__':

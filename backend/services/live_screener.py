@@ -621,6 +621,13 @@ def refresh_cache(force: bool = False) -> dict:
         log.info("[LiveScreener] Live fetch returned 0 gainers, falling back to DB.")
         gainers = _load_fallback_gainers_from_db()
 
+    # ── Phase 1 catalyst classification (lightweight, no I/O) ──────────────
+    try:
+        from services.pump_classifier import stamp_catalyst_tags
+        gainers = stamp_catalyst_tags(gainers)
+    except Exception as _e:
+        log.warning(f"[LiveScreener] Catalyst tagging failed: {_e}")
+
     with _cache_lock:
         _cache['raw_tickers']  = [t.get('ticker', '') for t in raw] if raw else []
         _cache['gainers']      = gainers[:TOP_N]
@@ -708,9 +715,23 @@ def _auto_persist_loop():
 
 def start_auto_persist():
     """
-    Launch the EOD auto-persist background thread.
+    Launch the EOD auto-persist background thread and the news enrichment loop.
     Called once from app.py during startup.
     """
+    # EOD persist watchdog
     t = threading.Thread(target=_auto_persist_loop, name='live-screener-persist', daemon=True)
     t.start()
     log.info("[LiveScreener] Auto-persist thread launched")
+
+    # Phase 2: background news verification loop (every 3 min during market hours)
+    try:
+        from services.pump_classifier import start_news_enrichment_loop
+
+        def _get_current_gainers() -> list[dict]:
+            """Return live reference to cached gainers for in-place mutation."""
+            with _cache_lock:
+                return _cache['gainers']
+
+        start_news_enrichment_loop(_get_current_gainers, interval_seconds=180)
+    except Exception as e:
+        log.warning(f"[LiveScreener] Failed to start news enrichment loop: {e}")
