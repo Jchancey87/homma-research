@@ -131,6 +131,47 @@ function getTrendState(g: LiveGainerRow) {
   }
 }
 
+function getMomStyle(mom: number | null | undefined) {
+  if (mom == null) return 'text-slate-500'
+  if (mom >= 4.0) return 'text-emerald-950 bg-emerald-400 font-extrabold shadow-sm shadow-emerald-400/50 animate-pulse px-1.5 py-0.5 rounded'
+  if (mom <= -3.0) return 'text-red-100 bg-red-800 font-extrabold shadow-sm shadow-red-800/50 px-1.5 py-0.5 rounded'
+  if (mom > 0) return 'text-emerald-400'
+  if (mom < 0) return 'text-red-400'
+  return 'text-slate-350'
+}
+
+function getAtrHodColor(val: number | null | undefined) {
+  if (val == null) return 'text-slate-500'
+  if (val === 0) return 'text-emerald-400 font-bold underline decoration-emerald-400/40'
+  if (val < 0.2) return 'text-emerald-300 font-bold'
+  if (val < 0.5) return 'text-emerald-400/70 font-semibold'
+  if (val < 1.0) return 'text-slate-300'
+  if (val < 2.0) return 'text-slate-400'
+  return 'text-slate-500'
+}
+
+const getAtrSpreadStyle = (val: number | null | undefined) => {
+  if (val == null) return { text: '—', className: 'text-slate-500' }
+  if (val <= 0.3) return { text: `${val.toFixed(2)} (Tight / Clean)`, className: 'text-emerald-400 font-bold' }
+  if (val > 1.0) return { text: `${val.toFixed(2)} (Dangerously Wide)`, className: 'text-rose-500 font-bold' }
+  return { text: `${val.toFixed(2)} (Moderate)`, className: 'text-slate-300' }
+}
+
+const getAtrVwapStyle = (val: number | null | undefined) => {
+  if (val == null) return { text: '—', className: 'text-slate-500' }
+  if (val > 3.0) return { text: `+${val.toFixed(2)} (Overextended / Long)`, className: 'text-fuchsia-400 font-bold animate-pulse' }
+  if (val < -3.0) return { text: `${val.toFixed(2)} (Heavily Short-Extended)`, className: 'text-orange-500 font-bold' }
+  if (Math.abs(val) <= 1.0) return { text: `${val >= 0 ? '+' : ''}${val.toFixed(2)} (Mean Reversion Zone)`, className: 'text-emerald-400' }
+  return { text: `${val >= 0 ? '+' : ''}${val.toFixed(2)} (Extending)`, className: 'text-slate-305' }
+}
+
+const getZenVStyle = (val: number | null | undefined) => {
+  if (val == null) return { text: '—', className: 'text-slate-500' }
+  if (val > 0) return { text: `▲ ${val.toFixed(2)}`, className: 'text-emerald-400 font-bold' }
+  if (val < 0) return { text: `▼ ${val.toFixed(2)}`, className: 'text-rose-500 font-bold' }
+  return { text: `▶ ${val.toFixed(2)}`, className: 'text-slate-400' }
+}
+
 // ── Session badge ──────────────────────────────────────────────────────────────
 
 const SESSION_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
@@ -246,6 +287,8 @@ interface GainerTableProps {
   onOpenModal: (g: LiveGainerRow) => void
   handleResearch: (g: LiveGainerRow) => void
   loading?: boolean
+  defaultSortKey?: 'rank' | 'ticker' | 'price' | 'change' | 'mom_2m' | 'atr_hod' | 'float'
+  defaultSortDir?: 'asc' | 'desc'
 }
 
 function GainerTable({
@@ -257,10 +300,12 @@ function GainerTable({
   onOpenModal,
   handleResearch,
   loading = false,
+  defaultSortKey = 'rank',
+  defaultSortDir = 'asc',
 }: GainerTableProps) {
   const [expandedTicker, setExpandedTicker] = useState<string | null>(null)
-  const [sortKey, setSortKey] = useState<'rank' | 'ticker' | 'price' | 'change' | 'trend' | 'float'>('rank')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [sortKey, setSortKey] = useState<'rank' | 'ticker' | 'price' | 'change' | 'mom_2m' | 'atr_hod' | 'float'>(defaultSortKey)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(defaultSortDir)
 
   const toggleExpand = (ticker: string) => {
     setExpandedTicker(prev => (prev === ticker ? null : ticker))
@@ -297,9 +342,13 @@ function GainerTable({
         valA = a.gap_pct ?? 0
         valB = b.gap_pct ?? 0
         break
-      case 'trend':
-        valA = getTrendState(a).text === 'Bullish' ? 2 : getTrendState(a).text === 'Neutral' ? 1 : 0
-        valB = getTrendState(b).text === 'Bullish' ? 2 : getTrendState(b).text === 'Neutral' ? 1 : 0
+      case 'mom_2m':
+        valA = a.mom_2m ?? -9999
+        valB = b.mom_2m ?? -9999
+        break
+      case 'atr_hod':
+        valA = a.atr_hod ?? 9999
+        valB = b.atr_hod ?? 9999
         break
       case 'float':
         valA = a.float_shares ?? 0
@@ -332,7 +381,7 @@ function GainerTable({
     )
   }
 
-  const colSpanCount = showRank ? 6 : 5
+  const colSpanCount = showRank ? 7 : 6
 
   return (
     <div className="bg-[#0b0b0f]/30 dark:bg-gray-950/10 border border-gray-800/80 rounded-2xl p-5 shadow-sm space-y-4">
@@ -352,12 +401,13 @@ function GainerTable({
         <table className="w-full text-sm table-fixed min-w-[500px]">
           <thead>
             <tr className="text-left text-xs text-gray-500 border-b border-gray-800">
-              {showRank && <Th col="rank" label="Rank" width="w-[10%]" />}
-              <Th col="ticker" label="Ticker" width={showRank ? "w-[24%]" : "w-[30%]"} />
-              <Th col="price" label="Price" align="right" width={showRank ? "w-[15%]" : "w-[17%]"} />
-              <Th col="change" label="Change(%)" align="right" width={showRank ? "w-[15%]" : "w-[17%]"} />
-              <Th col="trend" label="Trend" align="center" width="w-[18%]" />
-              <Th col="float" label="Float" align="right" width={showRank ? "w-[18%]" : "w-[20%]"} />
+              {showRank && <Th col="rank" label="Rank" width="w-[8%]" />}
+              <Th col="ticker" label="Ticker" width={showRank ? "w-[18%]" : "w-[24%]"} />
+              <Th col="price" label="Price" align="right" width={showRank ? "w-[14%]" : "w-[16%]"} />
+              <Th col="change" label="Change(%)" align="right" width={showRank ? "w-[14%]" : "w-[16%]"} />
+              <Th col="mom_2m" label="Mom %" align="right" width={showRank ? "w-[14%]" : "w-[16%]"} />
+              <Th col="atr_hod" label="AtrHoD" align="right" width={showRank ? "w-[16%]" : "w-[18%]"} />
+              <Th col="float" label="Float" align="right" width={showRank ? "w-[16%]" : "w-[18%]"} />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800/40">
@@ -435,15 +485,21 @@ function GainerTable({
                       {/* 4. Change (%) */}
                       <GapCell gap={g.gap_pct} />
 
-                      {/* 5. Trend */}
-                      <td className="py-2.5 pr-4 text-center select-none animate-in fade-in duration-200" title={trend.title}>
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold ${trend.className}`}>
-                          <span className="text-xs">{trend.label}</span>
-                          <span>{trend.text}</span>
+                      {/* 5. Mom % */}
+                      <td className="py-2.5 pr-4 text-right font-mono select-none animate-in fade-in duration-200">
+                        <span className={`font-bold transition-all duration-300 ${getMomStyle(g.mom_2m)}`}>
+                          {g.mom_2m != null ? (g.mom_2m >= 0 ? `+${g.mom_2m.toFixed(2)}%` : `${g.mom_2m.toFixed(2)}%`) : '—'}
                         </span>
                       </td>
 
-                      {/* 6. Float */}
+                      {/* 6. AtrHoD */}
+                      <td className="py-2.5 pr-4 text-right font-mono select-none animate-in fade-in duration-200">
+                        <span className={`font-semibold ${getAtrHodColor(g.atr_hod)}`}>
+                          {g.atr_hod != null ? g.atr_hod.toFixed(2) : '—'}
+                        </span>
+                      </td>
+
+                      {/* 7. Float */}
                       <td className="py-2.5 pr-4 text-right animate-in fade-in duration-200">
                         <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-mono font-bold ${getFloatBadgeStyle(g.float_shares).className}`}>
                           {getFloatBadgeStyle(g.float_shares).label}
@@ -460,11 +516,11 @@ function GainerTable({
                           }`}
                         >
                           <div className="overflow-hidden">
-                            <div className="py-4 px-6">
+                            <div className="py-4 px-6 border-t border-gray-800/40 bg-gray-950/20">
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm text-gray-300">
                                 {/* Left Column: Detailed Metrics */}
-                                <div className="space-y-2">
-                                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Secondary Metrics</h4>
+                                <div className="space-y-3">
+                                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider select-none">Secondary Metrics</h4>
                                   <div className="grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-xs">
                                     <span className="text-gray-500">Volume:</span>
                                     <span className="text-white font-semibold">{fmtVol(g.volume)}</span>
@@ -476,7 +532,7 @@ function GainerTable({
                                       </span>
                                     </div>
 
-                                    <span className="text-gray-500">Spread:</span>
+                                    <span className="text-gray-500">Spread %:</span>
                                     <div>
                                       <span className={getSpreadBadgeStyle(g.spread_pct).className}>
                                         {getSpreadBadgeStyle(g.spread_pct).label}
@@ -484,7 +540,7 @@ function GainerTable({
                                     </div>
 
                                     <span className="text-gray-500">Trade Time:</span>
-                                    <div className="flex flex-col gap-1">
+                                    <div className="flex flex-col gap-0.5 text-gray-400">
                                       <span>
                                         {g.trade_time
                                           ? new Date(g.trade_time).toLocaleTimeString('en-US', {
@@ -495,7 +551,7 @@ function GainerTable({
                                       </span>
                                       {g.trade_time && (
                                         <div>
-                                          <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] ${getTimeAgoBadge(g.trade_time)?.className}`}>
+                                          <span className={`inline-flex px-1 py-0.25 rounded text-[9px] ${getTimeAgoBadge(g.trade_time)?.className}`}>
                                             {getTimeAgoBadge(g.trade_time)?.label}
                                           </span>
                                         </div>
@@ -504,52 +560,77 @@ function GainerTable({
                                   </div>
                                 </div>
 
-                                {/* Middle Column: Sector, Notes & Sparkline */}
-                                <div className="space-y-2">
-                                  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Sector & Headline</h4>
-                                  <div className="space-y-1.5 text-xs">
+                                {/* Middle Column: Volatility & Relative Level */}
+                                <div className="space-y-3">
+                                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider select-none">Volatility & Relative Level</h4>
+                                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-xs">
+                                    <span className="text-gray-500">ATR Spread:</span>
                                     <div>
-                                      <span className="text-gray-500">Sector: </span>
-                                      <span className="text-white">{g.sector ?? '—'}</span>
+                                      <span className={getAtrSpreadStyle(g.atr_sprd).className}>
+                                        {getAtrSpreadStyle(g.atr_sprd).text}
+                                      </span>
                                     </div>
+
+                                    <span className="text-gray-500">ATR VWAP:</span>
                                     <div>
-                                      <span className="text-gray-500">Headline: </span>
-                                      <span className="text-gray-400 italic block mt-0.5 leading-relaxed truncate max-w-xs">{g.news_headline ?? 'No recent news'}</span>
+                                      <span className={getAtrVwapStyle(g.atr_vwap).className}>
+                                        {getAtrVwapStyle(g.atr_vwap).text}
+                                      </span>
                                     </div>
+
+                                    <span className="text-gray-500">ZenV (Slope):</span>
+                                    <div>
+                                      <span className={getZenVStyle(g.zen_v).className}>
+                                        {getZenVStyle(g.zen_v).text}
+                                      </span>
+                                    </div>
+
+                                    <span className="text-gray-500">Sector:</span>
+                                    <span className="text-white font-semibold font-sans">{g.sector ?? '—'}</span>
                                   </div>
-                                  {g.sparkline_5d && g.sparkline_5d.length > 0 && (
-                                    <div className="pt-2">
-                                      <span className="text-[10px] text-gray-500 block mb-1">5d Trend Sparkline:</span>
-                                      <div className="bg-[#0b0b0f] p-1.5 rounded border border-gray-800/80 inline-block">
+                                </div>
+
+                                {/* Right Column: Trend Sparkline & Actions */}
+                                <div className="flex flex-col justify-between gap-4">
+                                  {g.sparkline_5d && g.sparkline_5d.length > 0 ? (
+                                    <div className="space-y-1.5">
+                                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider select-none block">5d Trend Sparkline:</span>
+                                      <div className="bg-[#0b0b0f] p-2 rounded border border-gray-800/80 inline-block shadow-inner">
                                         <Sparkline points={g.sparkline_5d} />
                                       </div>
                                     </div>
+                                  ) : (
+                                    <div />
                                   )}
+                                  <div className="flex flex-row md:flex-col justify-end gap-3 select-none w-full">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onOpenModal(g);
+                                      }}
+                                      className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 border border-emerald-500/20 rounded-lg shadow transition-colors"
+                                    >
+                                      <Maximize2 size={12} />
+                                      Open Detailed View
+                                    </button>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleResearch(g);
+                                      }}
+                                      className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-300 hover:text-white bg-gray-850 hover:bg-gray-850 border border-gray-700 rounded-lg transition-colors"
+                                    >
+                                      <ExternalLink size={12} />
+                                      Research Ticker
+                                    </button>
+                                  </div>
                                 </div>
+                              </div>
 
-                                {/* Right Column: Actions */}
-                                <div className="flex flex-col justify-end items-start md:items-end gap-3 select-none">
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      onOpenModal(g);
-                                    }}
-                                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 border border-emerald-500/20 rounded-lg shadow transition-colors"
-                                  >
-                                    <Maximize2 size={12} />
-                                    Open Detailed View
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleResearch(g);
-                                    }}
-                                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-300 hover:text-white bg-gray-850 hover:bg-gray-850 border border-gray-700 rounded-lg transition-colors"
-                                  >
-                                    <ExternalLink size={12} />
-                                    Research Ticker
-                                  </button>
-                                </div>
+                              {/* Headline Footer */}
+                              <div className="mt-4 pt-3 border-t border-gray-800/50 flex items-start gap-2 text-xs">
+                                <span className="text-gray-500 font-bold uppercase select-none shrink-0 mt-0.5">Headline:</span>
+                                <span className="text-gray-300 italic leading-relaxed block max-w-2xl">{g.news_headline ?? 'No recent news'}</span>
                               </div>
                             </div>
                           </div>
@@ -752,14 +833,16 @@ export default function LiveGainers() {
           loading={loading}
         />
         <GainerTable
-          gainers={loading ? [] : gainers.filter(g => g.is_hod)}
+          gainers={loading ? [] : gainers.filter(g => g.atr_hod != null && g.atr_hod < 1.0)}
           fullList={loading ? [] : gainers}
-          title="High of Day (HOD) Only"
+          title="Near HOD Radar"
           showRank={false}
-          emptyMessage="No High of Day breakouts detected yet."
+          emptyMessage="No Near HOD breakout setups coiling right now (AtrHoD < 1.0)."
           onOpenModal={setModalGainer}
           handleResearch={handleResearch}
           loading={loading}
+          defaultSortKey="atr_hod"
+          defaultSortDir="asc"
         />
       </div>
 

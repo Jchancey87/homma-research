@@ -195,6 +195,8 @@ def get_gainers_snapshot(include_otc: bool = False) -> List[Dict]:
             'market_cap': cdata.get('market_cap'),
             'sector': cdata.get('sector'),
             'spread_pct': spread_pct,
+            'ask': ask,
+            'bid': bid,
             'trade_time': trade_time,
             'is_hod': is_hod
         })

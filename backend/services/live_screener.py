@@ -60,6 +60,9 @@ _cache: dict   = {
 _ma_cache = {}  # ticker -> (timestamp, data_dict)
 _ma_cache_lock = threading.Lock()
 
+_minute_cache = {}  # ticker -> (timestamp, metrics_dict)
+_minute_cache_lock = threading.Lock()
+
 def get_cached_sparkline_and_ma(ticker: str) -> dict:
     now = time.time()
     with _ma_cache_lock:
@@ -147,14 +150,165 @@ def check_tickers_history(tickers: list[str]) -> dict:
 
 import concurrent.futures
 
+def get_minute_metrics(ticker: str, last_price: Optional[float], high_price: Optional[float], bid: Optional[float], ask: Optional[float]) -> dict:
+    now = time.time()
+    with _minute_cache_lock:
+        if ticker in _minute_cache:
+            ts, data = _minute_cache[ticker]
+            if now - ts < 30:
+                # Update high-frequency values dynamically if we have a cached base
+                if last_price is not None and data.get('atr_14') and data['atr_14'] > 0:
+                    if high_price is not None:
+                        data['atr_hod'] = round((high_price - last_price) / data['atr_14'], 2)
+                    if bid is not None and ask is not None:
+                        data['atr_sprd'] = round((ask - bid) / data['atr_14'], 2)
+                    if data.get('vwap') is not None:
+                        data['atr_vwap'] = round((last_price - data['vwap']) / data['atr_14'], 2)
+                return data
+
+    try:
+        from services.schwab_client import get_minute_bars
+        candles = get_minute_bars(ticker)
+        if not candles:
+            metrics = {
+                'mom_2m': None,
+                'atr_hod': None,
+                'atr_sprd': None,
+                'atr_vwap': None,
+                'zen_v': None,
+                'atr_14': None,
+                'vwap': None
+            }
+        else:
+            # 1. Compute ATR(14)
+            tr_values = []
+            for i in range(1, len(candles)):
+                h = candles[i].get('h') or candles[i].get('c')
+                l = candles[i].get('l') or candles[i].get('c')
+                prev_c = candles[i-1].get('c')
+                if h is not None and l is not None and prev_c is not None:
+                    tr = max(h - l, abs(h - prev_c), abs(l - prev_c))
+                    tr_values.append(tr)
+            
+            atr = 0.0
+            if tr_values:
+                periods = min(14, len(tr_values))
+                atr = sum(tr_values[-periods:]) / periods
+            
+            if atr <= 0:
+                atr = (last_price or candles[-1].get('c') or 1.0) * 0.001
+
+            # 2. Compute 2Min % change
+            curr_p = last_price if last_price is not None else (candles[-1].get('c') or 0.0)
+            price_2min_ago = None
+            if len(candles) >= 3:
+                price_2min_ago = candles[-3].get('c')
+            elif len(candles) >= 2:
+                price_2min_ago = candles[-2].get('c')
+            elif len(candles) >= 1:
+                price_2min_ago = candles[-1].get('c')
+                
+            mom_2m = 0.0
+            if price_2min_ago and price_2min_ago > 0:
+                mom_2m = round(((curr_p - price_2min_ago) / price_2min_ago) * 100, 2)
+
+            # 3. Compute VWAP
+            total_vol = sum(c.get('v') or 0 for c in candles)
+            if total_vol > 0:
+                sum_pv = 0.0
+                for c in candles:
+                    h = c.get('h') or c.get('c') or 0.0
+                    l = c.get('l') or c.get('c') or 0.0
+                    close = c.get('c') or 0.0
+                    v = c.get('v') or 0
+                    tp = (h + l + close) / 3.0
+                    sum_pv += tp * v
+                vwap = sum_pv / total_vol
+            else:
+                vwap = curr_p
+
+            # 4. Compute ZenV (Slope)
+            zen_v = 0.0
+            if len(candles) >= 5:
+                y = [c.get('c') or 0.0 for c in candles[-5:]]
+                sum_iy = sum((i + 1) * y[i] for i in range(5))
+                sum_y = sum(y)
+                slope = (sum_iy - 3.0 * sum_y) / 10.0
+                zen_v = round(slope / atr, 2)
+            elif len(candles) >= 2:
+                n = len(candles)
+                y = [c.get('c') or 0.0 for c in candles[-n:]]
+                sum_x = sum(range(1, n + 1))
+                sum_x2 = sum(i * i for i in range(1, n + 1))
+                sum_y = sum(y)
+                sum_xy = sum((i + 1) * y[i] for i in range(n))
+                denom = (n * sum_x2 - sum_x * sum_x)
+                slope = (n * sum_xy - sum_x * sum_y) / denom if denom > 0 else 0.0
+                zen_v = round(slope / atr, 2)
+
+            # 5. Compute ATR Distance to High of Day (AtrHoD)
+            hod = high_price if high_price is not None else max((c.get('h') or 0.0) for c in candles)
+            atr_hod = round((hod - curr_p) / atr, 2) if hod and atr > 0 else 0.0
+            if atr_hod < 0:
+                atr_hod = 0.0
+
+            # 6. Compute ATR Spread
+            atr_sprd = None
+            if bid is not None and ask is not None:
+                atr_sprd = round((ask - bid) / atr, 2)
+
+            # 7. Compute ATR VWAP
+            atr_vwap = round((curr_p - vwap) / atr, 2) if atr > 0 else 0.0
+
+            metrics = {
+                'mom_2m': mom_2m,
+                'raw_mom_2m': mom_2m,
+                'atr_hod': atr_hod,
+                'atr_sprd': atr_sprd,
+                'atr_vwap': atr_vwap,
+                'zen_v': zen_v,
+                'atr_14': atr,
+                'vwap': vwap
+            }
+    except Exception as e:
+        log.warning(f"Error computing minute metrics for {ticker}: {e}", exc_info=True)
+        metrics = {
+            'mom_2m': None,
+            'atr_hod': None,
+            'atr_sprd': None,
+            'atr_vwap': None,
+            'zen_v': None,
+            'atr_14': None,
+            'vwap': None
+        }
+
+    with _minute_cache_lock:
+        _minute_cache[ticker] = (now, metrics)
+    return metrics
+
+def enrich_single_gainer(g: dict) -> dict:
+    ticker = g['ticker']
+    # 1. Daily indicators (1 hour cache)
+    ma_data = get_cached_sparkline_and_ma(ticker)
+    
+    # 2. Minute-level indicators (30 seconds cache)
+    last_price = g.get('last_price')
+    high_price = g.get('high_price')
+    bid = g.get('bid')
+    ask = g.get('ask')
+    min_metrics = get_minute_metrics(ticker, last_price, high_price, bid, ask)
+    
+    return {
+        'ma': ma_data,
+        'min': min_metrics
+    }
+
 def enrich_gainers_with_sparklines_and_history(gainers: list[dict]) -> list[dict]:
     if not gainers:
         return gainers
         
-    # Pre-initialize Schwab HTTP client in main thread to prevent import deadlocks
-    # and concurrent OAuth token file reading/writing race conditions.
     try:
-        from momentum_screener.schwab.http_client import get_http_client, get_price_history_every_day
+        from momentum_screener.schwab.http_client import get_http_client
         get_http_client()
     except Exception as e:
         log.warning(f"Failed to pre-initialize Schwab HTTP client: {e}")
@@ -163,13 +317,16 @@ def enrich_gainers_with_sparklines_and_history(gainers: list[dict]) -> list[dict
     history = check_tickers_history(tickers)
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        futures = {executor.submit(get_cached_sparkline_and_ma, g['ticker']): g for g in gainers}
+        futures = {executor.submit(enrich_single_gainer, g): g for g in gainers}
         for future in concurrent.futures.as_completed(futures):
             g = futures[future]
             try:
-                ma_data = future.result()
-                live_price = g.get('last_price')
+                res = future.result()
+                ma_data = res['ma']
+                min_metrics = res['min']
                 
+                # Apply daily metrics
+                live_price = g.get('last_price')
                 sparkline = ma_data['sparkline_5d']
                 if live_price is not None:
                     sparkline = sparkline[-4:] + [live_price]
@@ -182,12 +339,21 @@ def enrich_gainers_with_sparklines_and_history(gainers: list[dict]) -> list[dict
                 g['above_sma20'] = live_price > ma_data['sma20'] if live_price is not None and ma_data['sma20'] is not None else False
                 g['above_sma50'] = live_price > ma_data['sma50'] if live_price is not None and ma_data['sma50'] is not None else False
                 g['above_sma100'] = live_price > ma_data['sma100'] if live_price is not None and ma_data['sma100'] is not None else False
+                
+                # Apply minute-level metrics
+                g['mom_2m'] = min_metrics['mom_2m']
+                g['atr_hod'] = min_metrics['atr_hod']
+                g['atr_sprd'] = min_metrics['atr_sprd']
+                g['atr_vwap'] = min_metrics['atr_vwap']
+                g['zen_v'] = min_metrics['zen_v']
+                
             except Exception as e:
-                log.warning(f"Failed to fetch MA/sparkline for {g['ticker']}: {e}")
+                log.warning(f"Failed to enrich {g['ticker']}: {e}")
                 g.update({
                     'sparkline_5d': [],
                     'above_sma20': False, 'above_sma50': False, 'above_sma100': False,
-                    'sma20': None, 'sma50': None, 'sma100': None
+                    'sma20': None, 'sma50': None, 'sma100': None,
+                    'mom_2m': None, 'atr_hod': None, 'atr_sprd': None, 'atr_vwap': None, 'zen_v': None
                 })
                 
     for g in gainers:
@@ -308,6 +474,7 @@ def _enrich_snapshot_tickers(raw_tickers: list[dict]) -> list[dict]:
                 'ticker':        sym,
                 'gap_pct':       gap_pct,
                 'last_price':    round(last_price, 4),
+                'high_price':    round(t.get('day', {}).get('h', last_price), 4) if t.get('day', {}).get('h') else round(last_price, 4),
                 'open_price':    round(open_price, 4) if open_price else None,
                 'prev_close':    round(prev_close, 4),
                 'volume':        int(volume),
@@ -316,6 +483,8 @@ def _enrich_snapshot_tickers(raw_tickers: list[dict]) -> list[dict]:
                 'sector':        t.get('sector'),
                 'market_cap':    t.get('market_cap'),
                 'spread_pct':    t.get('spread_pct'),
+                'ask':           t.get('ask'),
+                'bid':           t.get('bid'),
                 'trade_time':    t.get('trade_time'),
                 'is_hod':        t.get('is_hod'),
                 'news_headline': None,
@@ -387,6 +556,7 @@ def _load_fallback_gainers_from_db() -> list[dict]:
                     'ticker':        r.get('ticker'),
                     'gap_pct':       r.get('gap_pct'),
                     'last_price':    last_price,
+                    'high_price':    high_price,
                     'open_price':    r.get('open_price'),
                     'prev_close':    r.get('prev_close'),
                     'volume':        int(r.get('volume')) if r.get('volume') is not None else 0,
@@ -395,6 +565,8 @@ def _load_fallback_gainers_from_db() -> list[dict]:
                     'sector':        r.get('sector'),
                     'market_cap':    r.get('market_cap'),
                     'spread_pct':    None,
+                    'ask':           None,
+                    'bid':           None,
                     'trade_time':    None,
                     'is_hod':        is_hod,
                     'news_headline': r.get('news_headline'),

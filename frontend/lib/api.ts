@@ -134,6 +134,15 @@ export interface LiveGainerRow {
   above_sma100?: boolean
   is_repeat_runner?: boolean
   is_follow_through?: boolean
+  // Real-time Momentum & Volatility (2026-05)
+  mom_2m?:       number | null
+  atr_hod?:      number | null
+  atr_sprd?:     number | null
+  atr_vwap?:     number | null
+  zen_v?:        number | null
+  ask?:          number | null
+  bid?:          number | null
+  high_price?:   number | null
 }
 
 export interface LiveGainerSnapshot {
