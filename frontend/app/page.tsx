@@ -153,21 +153,10 @@ export default async function DashboardPage() {
       {/* ── Morning header ── */}
       <MorningHeader />
 
-      {/* ── Help Guide ── */}
-      <HelpGuide />
-
       {/* ── Market breadth strip (full width) ── */}
       <Suspense fallback={<div className="h-10 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800/80 rounded-2xl animate-pulse" />}>
         <MarketBreadthBar />
       </Suspense>
-
-      {/* ── Economic calendar (full width, compact) ── */}
-      <Panel>
-        <PanelLabel icon={CalendarDays} label="This Week's Calendar" />
-        <Suspense fallback={<div className="h-8 bg-gray-150 dark:bg-gray-800/40 rounded animate-pulse" />}>
-          <EconomicCalendar />
-        </Suspense>
-      </Panel>
 
       {/* ── Row 1: Live screener (full width) ── */}
       <Panel>
@@ -242,6 +231,17 @@ export default async function DashboardPage() {
           </Suspense>
         </Panel>
       </div>
+
+      {/* ── Economic calendar (full width, compact) ── */}
+      <Panel>
+        <PanelLabel icon={CalendarDays} label="This Week's Calendar" />
+        <Suspense fallback={<div className="h-8 bg-gray-150 dark:bg-gray-800/40 rounded animate-pulse" />}>
+          <EconomicCalendar />
+        </Suspense>
+      </Panel>
+
+      {/* ── Help Guide ── */}
+      <HelpGuide />
 
     </div>
   )

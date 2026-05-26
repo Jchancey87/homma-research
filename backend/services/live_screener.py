@@ -36,7 +36,7 @@ PERSIST_HOUR_ET   = 20           # 8:00 PM Eastern — after-hours close
 PERSIST_MINUTE_ET = 0
 
 # Screening thresholds (same as ingest job)
-MIN_GAP_PCT    = 5.0    # Show anything > 5% gap
+MIN_GAP_PCT    = 30.0    # Show anything > 30% gap
 MAX_FLOAT_M    = 200.0  # < 200M shares
 MIN_RVOL       = 2.0    # > 2x RVOL
 MIN_PRICE      = 0.10    # >= $0.10
@@ -530,15 +530,16 @@ def _load_fallback_gainers_from_db() -> list[dict]:
                 
             log.info(f"[LiveScreener] Fallback: Loading gainers from DB for date {recent_date}")
             
-            # 2. Fetch gainers for that date
+            # 2. Fetch gappers for that date with gap_pct >= MIN_GAP_PCT
             cur = conn.execute(
                 """
                 SELECT * FROM daily_gainers 
                 WHERE date = %s 
+                  AND gap_pct >= %s
                 ORDER BY gap_pct DESC 
                 LIMIT %s
                 """,
-                (recent_date, TOP_N)
+                (recent_date, MIN_GAP_PCT, TOP_N)
             )
             rows = cur.fetchall()
             
