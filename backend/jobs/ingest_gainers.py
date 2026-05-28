@@ -251,8 +251,16 @@ def _enrich_ticker(snap: dict, grouped: dict[str, dict], target_date: str) -> di
     else:
         rs_vs_spy = None
 
-    # ── News headline from Polygon ─────────────────────────────────────────
-    headline   = poly.get_latest_headline(ticker)
+    # ── News headline from NewsAggregator (YFinance fallback since Schwab has no news) ──
+    try:
+        from services.news_aggregator import get_default_aggregator
+        aggregator = get_default_aggregator()
+        articles   = aggregator.get_news(ticker, hours_back=24)
+        headline   = articles[0]['title'] if articles else None
+    except Exception as e:
+        log.warning(f"Failed to fetch news headline for {ticker} via NewsAggregator: {e}")
+        headline   = None
+
     news_fresh = _classify_news(headline)
 
     # ── Catalyst classification ──────────────────────────────────

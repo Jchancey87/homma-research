@@ -66,7 +66,9 @@ async def _nightly_gainer_ingest() -> None:
 
     log.info("[scheduler] nightly_gainer_ingest starting")
     try:
-        target_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        import pytz
+        eastern = pytz.timezone("US/Eastern")
+        target_date = datetime.now(eastern).strftime("%Y-%m-%d")
 
         def _run() -> tuple[int, int]:
             import sys, os

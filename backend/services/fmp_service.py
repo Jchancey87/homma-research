@@ -42,7 +42,7 @@ _TIMEOUT = 10
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _get(path: str, params: dict | None = None, version: int = 3) -> dict | list | None:
+def _get(path: str, params: dict | None = None, version: int = 3, stable: bool = False) -> dict | list | None:
     """
     Make a GET request to the FMP API.
     Returns parsed JSON or None on error / missing key.
@@ -52,7 +52,11 @@ def _get(path: str, params: dict | None = None, version: int = 3) -> dict | list
         log.debug('[FMP] FMP_API_KEY not configured — skipping FMP call.')
         return None
 
-    url = f'{_BASE}/v{version}/{path}'
+    if stable:
+        url = f'https://financialmodelingprep.com/stable/{path}'
+    else:
+        url = f'{_BASE}/v{version}/{path}'
+
     p   = {'apikey': api_key}
     if params:
         p.update(params)
@@ -98,14 +102,25 @@ def get_earnings_calendar(ticker: str) -> dict:
         }
     """
     today = _today_et().date()
-    raw   = _get(f'historical/earning_calendar/{ticker.upper()}')
+    today = _today_et().date()
+    raw = _get('earnings', {'symbol': ticker.upper()}, stable=True)
 
     if not raw or not isinstance(raw, list):
         return {'_source': 'fmp_unavailable', '_data_as_of': str(today)}
 
+    # Map epsActual -> eps, revenueActual -> revenue
+    mapped_raw = []
+    for item in raw:
+        m = dict(item)
+        if 'epsActual' in m and 'eps' not in m:
+            m['eps'] = m['epsActual']
+        if 'revenueActual' in m and 'revenue' not in m:
+            m['revenue'] = m['revenueActual']
+        mapped_raw.append(m)
+
     _ta = TypeAdapter(list[FMPEarningsEvent])
     try:
-        events = _ta.validate_python(raw)
+        events = _ta.validate_python(mapped_raw)
     except ValidationError as exc:
         log.warning(f'[FMP] EarningsCalendar schema mismatch for {ticker}: {exc}')
         return {'_source': 'fmp_schema_error', '_data_as_of': str(today)}
@@ -135,27 +150,54 @@ def get_earnings_calendar(ticker: str) -> dict:
 
 def get_company_profile(ticker: str) -> dict:
     """
-    Return key company fundamentals from FMP's /profile endpoint.
-
-    Covers: market cap, float, shares outstanding, beta, sector, industry,
-    52-week high/low, average volume, current price, description.
+    Return key company fundamentals from FMP's stable profile and shares-float endpoints.
+    Falls back to Schwab get_ticker_details on missing float/profile.
     """
-    raw = _get(f'profile/{ticker.upper()}')
-    if not raw or not isinstance(raw, list) or not raw[0]:
-        log.info(f'[FMP] Profile missing for {ticker}, trying Polygon fallback...')
-        poly_data = get_ticker_details(ticker)
-        if poly_data:
-            poly_data['_data_as_of'] = str(_today_et().date())
-            return poly_data
+    today = _today_et().date()
+    
+    # 1. Fetch stable profile
+    profile_raw = _get('profile', {'symbol': ticker.upper()}, stable=True)
+    if not profile_raw or not isinstance(profile_raw, list) or not profile_raw[0]:
+        log.info(f'[FMP] Stable profile missing for {ticker}, trying Schwab fallback...')
+        schwab_data = get_ticker_details(ticker)
+        if schwab_data:
+            schwab_data['_data_as_of'] = str(today)
+            return schwab_data
         return {}
 
+    profile_data = dict(profile_raw[0])
+
+    # Map keys to match FMPProfile schema
+    if 'marketCap' in profile_data:
+        profile_data['mktCap'] = profile_data['marketCap']
+    if 'averageVolume' in profile_data:
+        profile_data['volAvg'] = profile_data['averageVolume']
+    if 'exchange' in profile_data:
+        profile_data['exchangeShortName'] = profile_data['exchange']
+
+    # 2. Fetch stable shares-float
+    float_raw = _get('shares-float', {'symbol': ticker.upper()}, stable=True)
+    if float_raw and isinstance(float_raw, list) and float_raw[0]:
+        float_data = float_raw[0]
+        profile_data['floatShares'] = float_data.get('floatShares')
+        profile_data['sharesOutstanding'] = float_data.get('outstandingShares')
+
+    # Schwab enrichment fallback for missing float or shares outstanding
+    if profile_data.get('floatShares') is None or profile_data.get('sharesOutstanding') is None:
+        log.info(f'[FMP] Share float missing in stable FMP, enriching from Schwab...')
+        schwab_data = get_ticker_details(ticker)
+        if schwab_data:
+            if profile_data.get('sharesOutstanding') is None:
+                profile_data['sharesOutstanding'] = schwab_data.get('shares_outstanding')
+            if profile_data.get('sector') is None:
+                profile_data['sector'] = schwab_data.get('sector')
+
     try:
-        p = FMPProfile.model_validate(raw[0])
+        p = FMPProfile.model_validate(profile_data)
     except ValidationError as exc:
         log.warning(f'[FMP] Profile schema mismatch for {ticker}: {exc}')
         return {}
 
-    today = _today_et().date()
     rng   = p.range or ''
     parts = rng.split('-')
 
@@ -189,13 +231,34 @@ def get_analyst_estimates(ticker: str) -> list[dict]:
     Return forward EPS and revenue estimates from analyst consensus.
     Returns a list of quarterly estimate records, most recent first.
     """
-    raw = _get(f'analyst-estimates/{ticker.upper()}', {'period': 'quarter', 'limit': 4})
+    # Try quarter first
+    raw = _get('analyst-estimates', {'symbol': ticker.upper(), 'period': 'quarter', 'limit': 4}, stable=True)
+    if not raw or (isinstance(raw, dict) and 'Error Message' in raw):
+        log.info(f'[FMP] Analyst estimates quarter premium error, trying annual fallback...')
+        raw = _get('analyst-estimates', {'symbol': ticker.upper(), 'period': 'annual', 'limit': 4}, stable=True)
+
     if not raw or not isinstance(raw, list):
         return []
 
+    # Map the stable keys to FMPAnalystEstimate schema
+    mapped_raw = []
+    for item in raw:
+        m = dict(item)
+        if 'epsAvg' in m:
+            m['estimatedEpsAvg'] = m['epsAvg']
+        if 'epsHigh' in m:
+            m['estimatedEpsHigh'] = m['epsHigh']
+        if 'epsLow' in m:
+            m['estimatedEpsLow'] = m['epsLow']
+        if 'revenueAvg' in m:
+            m['estimatedRevenueAvg'] = m['revenueAvg']
+        if 'numAnalystsEps' in m:
+            m['numberAnalystEstimatedEps'] = m['numAnalystsEps']
+        mapped_raw.append(m)
+
     _ta = TypeAdapter(list[FMPAnalystEstimate])
     try:
-        estimates = _ta.validate_python(raw)
+        estimates = _ta.validate_python(mapped_raw)
     except ValidationError as exc:
         log.warning(f'[FMP] AnalystEstimates schema mismatch for {ticker}: {exc}')
         return []
@@ -222,14 +285,22 @@ def get_income_statement(ticker: str, quarters: int = 4) -> list[dict]:
     Return trailing quarterly income statement data.
     Covers: revenue, gross profit, net income, EPS (basic/diluted).
     """
-    raw = _get(f'income-statement/{ticker.upper()}',
-               {'period': 'quarter', 'limit': quarters})
+    raw = _get('income-statement',
+               {'symbol': ticker.upper(), 'period': 'quarter', 'limit': quarters}, stable=True)
     if not raw or not isinstance(raw, list):
         return []
 
+    # Map epsDiluted -> epsdiluted
+    mapped_raw = []
+    for item in raw:
+        m = dict(item)
+        if 'epsDiluted' in m:
+            m['epsdiluted'] = m['epsDiluted']
+        mapped_raw.append(m)
+
     _ta = TypeAdapter(list[FMPIncomeStatement])
     try:
-        statements = _ta.validate_python(raw)
+        statements = _ta.validate_python(mapped_raw)
     except ValidationError as exc:
         log.warning(f'[FMP] IncomeStatement schema mismatch for {ticker}: {exc}')
         return []
@@ -256,12 +327,23 @@ def get_key_metrics(ticker: str) -> dict:
     Return latest TTM key metrics: P/E, P/S, debt-to-equity, short interest,
     current ratio, free cash flow per share, etc.
     """
-    raw = _get(f'key-metrics-ttm/{ticker.upper()}')
+    # Use ratios-ttm stable endpoint since key-metrics-ttm stable has missing keys
+    raw = _get('ratios-ttm', {'symbol': ticker.upper()}, stable=True)
     if not raw or not isinstance(raw, list) or not raw[0]:
         return {}
 
+    metrics_data = dict(raw[0])
+
+    # Map the stable keys to FMPKeyMetrics schema
+    if 'priceToEarningsRatioTTM' in metrics_data:
+        metrics_data['peRatioTTM'] = metrics_data['priceToEarningsRatioTTM']
+    if 'priceToBookRatioTTM' in metrics_data:
+        metrics_data['pbRatioTTM'] = metrics_data['priceToBookRatioTTM']
+    if 'debtToEquityRatioTTM' in metrics_data:
+        metrics_data['debtToEquityTTM'] = metrics_data['debtToEquityRatioTTM']
+
     try:
-        m = FMPKeyMetrics.model_validate(raw[0])
+        m = FMPKeyMetrics.model_validate(metrics_data)
     except ValidationError as exc:
         log.warning(f'[FMP] KeyMetrics schema mismatch for {ticker}: {exc}')
         return {}
@@ -290,8 +372,9 @@ def get_insider_transactions(ticker: str, days_back: int = 90) -> dict:
     today   = _today_et().date()
     cutoff  = (today - timedelta(days=days_back)).isoformat()
 
-    raw = _get('insider-trading',
-               {'symbol': ticker.upper(), 'transactionType': 'P-Purchase,S-Sale', 'limit': 50})
+    # Query stable search endpoint; will fallback gracefully on 402/403/404
+    raw = _get('insider-trading/search',
+               {'symbol': ticker.upper(), 'limit': 50}, stable=True)
     if not raw or not isinstance(raw, list):
         return {'net_shares': None, 'transactions': [], '_source': 'fmp_unavailable'}
 
@@ -337,8 +420,8 @@ def get_cash_position(ticker: str) -> dict:
     Return the most recent quarterly cash and total assets from FMP.
     More reliable for small-caps than yfinance's balance sheet scraper.
     """
-    raw = _get(f'balance-sheet-statement/{ticker.upper()}',
-               {'period': 'quarter', 'limit': 1})
+    raw = _get('balance-sheet-statement',
+               {'symbol': ticker.upper(), 'period': 'quarter', 'limit': 1}, stable=True)
     if not raw or not isinstance(raw, list) or not raw[0]:
         return {}
 
@@ -365,7 +448,8 @@ def get_institutional_holders(ticker: str) -> list[dict]:
     """
     Return top institutional holders from FMP.
     """
-    raw = _get(f'institutional-holders/{ticker.upper()}')
+    # Use stable positions summary; will fallback gracefully on 402/403/404
+    raw = _get('institutional-ownership/symbol-positions-summary', {'symbol': ticker.upper()}, stable=True)
     if not raw or not isinstance(raw, list):
         return []
 
@@ -396,7 +480,8 @@ def get_stock_news(ticker: str, limit: int = 10) -> list[dict]:
     Return recent news articles for a ticker from FMP.
     Often more comprehensive for small-caps than yfinance.
     """
-    raw = _get('stock_news', {'tickers': ticker.upper(), 'limit': limit})
+    # Use stable stock news search; will fallback gracefully on 402/403/404
+    raw = _get('news/stock', {'symbols': ticker.upper(), 'limit': limit}, stable=True)
     if not raw or not isinstance(raw, list):
         return []
 
