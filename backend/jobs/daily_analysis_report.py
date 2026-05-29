@@ -162,6 +162,49 @@ def fetch_top_gainers_from_db(target_date: str, limit: int) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def get_yf_quarterly_metric(df, keys: list[str]) -> float | None:
+    if df is None or df.empty:
+        return None
+    for k in keys:
+        if k in df.index:
+            row = df.loc[k]
+            if hasattr(row, 'iloc'):
+                val = row.iloc[0]
+            else:
+                val = row
+            import pandas as pd
+            if pd.notna(val):
+                return float(val)
+    return None
+
+
+def get_yf_insider_net_shares(t, days_back=90) -> int | None:
+    try:
+        df = t.insider_transactions
+        if df is None or df.empty:
+            return None
+        import pandas as pd
+        cutoff = pd.Timestamp.now() - pd.Timedelta(days=days_back)
+        df['Start Date'] = pd.to_datetime(df['Start Date'])
+        recent = df[df['Start Date'] >= cutoff]
+        net_shares = 0
+        found = False
+        for idx, row in recent.iterrows():
+            shares = row.get('Shares')
+            text = str(row.get('Text') or '').lower()
+            if not shares or pd.isna(shares):
+                continue
+            if 'purchase' in text or 'buy' in text:
+                net_shares += int(shares)
+                found = True
+            elif 'sale' in text or 'sell' in text:
+                net_shares -= int(shares)
+                found = True
+        return net_shares if found else None
+    except Exception:
+        return None
+
+
 def enrich_deep_technicals(gainers: list[dict]) -> list[dict]:
     enriched = []
     for g in gainers:
@@ -195,26 +238,99 @@ def enrich_deep_technicals(gainers: list[dict]) -> list[dict]:
                     rsi = 100 - (100 / (1 + rs))
                     rsi_14 = round(rsi.iloc[-1], 2)
             
-            # Fetch FMP deep fundamentals
-            fmp_data = {}
+            # Fetch FMP deep fundamentals with individual try-except blocks
+            profile = {}
             try:
                 profile = get_company_profile(ticker)
-                earnings = get_earnings_calendar(ticker)
-                cash = get_cash_position(ticker)
-                income = get_income_statement(ticker, quarters=1)
-                insider = get_insider_transactions(ticker, days_back=90)
-                
-                fmp_data = {
-                    'FMP True Float': format_large_number(profile.get('float_shares')),
-                    'FMP Shares Out': format_large_number(profile.get('shares_outstanding')),
-                    'Next Earnings Date': earnings.get('next_earnings_date', 'N/A'),
-                    'Next Earnings Status': earnings.get('next_earnings_status', 'N/A'),
-                    'Cash Position': format_large_number(cash.get('cash')),
-                    'Net Income (Latest Q)': format_large_number(income[0].get('net_income') if income else None),
-                    'Insider Net Shares (90d)': insider.get('net_shares', 'N/A')
-                }
             except Exception as e:
-                log.warning(f"Failed to fetch FMP data for {ticker}: {e}")
+                log.warning(f"Failed to fetch FMP profile for {ticker}: {e}")
+
+            earnings = {}
+            try:
+                earnings = get_earnings_calendar(ticker)
+            except Exception as e:
+                log.warning(f"Failed to fetch FMP earnings for {ticker}: {e}")
+
+            cash = {}
+            try:
+                cash = get_cash_position(ticker)
+            except Exception as e:
+                log.warning(f"Failed to fetch FMP cash for {ticker}: {e}")
+
+            income = []
+            try:
+                income = get_income_statement(ticker, quarters=1)
+            except Exception as e:
+                log.warning(f"Failed to fetch FMP income for {ticker}: {e}")
+
+            insider = {}
+            try:
+                insider = get_insider_transactions(ticker, days_back=90)
+            except Exception as e:
+                log.warning(f"Failed to fetch FMP insider transactions for {ticker}: {e}")
+
+            true_float = profile.get('float_shares')
+            shares_out = profile.get('shares_outstanding')
+            next_earnings = earnings.get('next_earnings_date')
+            earnings_status = earnings.get('next_earnings_status')
+            cash_val = cash.get('cash')
+            net_income_val = income[0].get('net_income') if income else None
+            insider_net = insider.get('net_shares')
+
+            # --- YFinance fallbacks ---
+            if true_float is None:
+                true_float = info.get('floatShares')
+            if shares_out is None:
+                shares_out = info.get('sharesOutstanding')
+
+            if not next_earnings or next_earnings == 'N/A':
+                try:
+                    calendar = t.calendar
+                    if calendar and 'Earnings Date' in calendar:
+                        dates = calendar['Earnings Date']
+                        if isinstance(dates, list) and len(dates) > 0:
+                            next_earnings = str(dates[0])
+                            earnings_status = 'upcoming'
+                        elif dates:
+                            next_earnings = str(dates)
+                            earnings_status = 'upcoming'
+                except Exception:
+                    pass
+
+            if cash_val is None:
+                try:
+                    cash_val = get_yf_quarterly_metric(t.quarterly_balance_sheet, [
+                        'Cash Cash Equivalents And Short Term Investments',
+                        'Cash And Cash Equivalents',
+                        'Cash Financial'
+                    ])
+                except Exception:
+                    pass
+
+            if net_income_val is None:
+                try:
+                    net_income_val = get_yf_quarterly_metric(t.quarterly_financials, [
+                        'Net Income',
+                        'Net Income Common Stockholders'
+                    ])
+                except Exception:
+                    pass
+
+            if insider_net is None:
+                try:
+                    insider_net = get_yf_insider_net_shares(t, days_back=90)
+                except Exception:
+                    pass
+
+            fmp_data = {
+                'FMP True Float': format_large_number(true_float),
+                'FMP Shares Out': format_large_number(shares_out),
+                'Next Earnings Date': next_earnings if next_earnings else 'N/A',
+                'Next Earnings Status': earnings_status if earnings_status else 'N/A',
+                'Cash Position': format_large_number(cash_val),
+                'Net Income (Latest Q)': format_large_number(net_income_val),
+                'Insider Net Shares (90d)': insider_net if insider_net is not None else 'N/A'
+            }
 
             enriched.append({
                 'ticker': ticker,

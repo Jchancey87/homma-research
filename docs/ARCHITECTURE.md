@@ -16,12 +16,14 @@ The Trading Pattern Journal is a self-hosted, distributed local application cons
 | **yfinance** | Fallback fundamentals, insider/institutional data | None |
 | **finviz** | Short interest confirmation, screener data | None |
 
-### 2. Backend Service Layer (Flask)
+### 2. Backend Service Layer (FastAPI + Celery)
 
-- **Modular Blueprints**: The API is segmented into `gainers`, `market`, `watchlist`, `charts`, and `analysis` blueprints, each registered at `/api`.
-- **Market Intelligence Blueprint**: A specialized high-performance route providing live index status (SPY/QQQ/IWM) and high-impact economic events (FMP Economic Calendar) with aggressive caching (15min/6h) to preserve API quotas.
+- **Modular Routers**: The API is segmented into `gainers`, `market`, `watchlist`, `charts`, `analysis`, and `alerts` routers registered at `/api`.
+- **Market Intelligence Router**: A specialized high-performance route providing live index status (SPY/QQQ/IWM) and high-impact economic events (FMP Economic Calendar) with aggressive caching (15min/6h) to preserve API quotas.
 - **Service-Oriented Design**: All data gathering lives in `services/`, completely decoupled from routes. Market data calls are centralised through `services/polygon_client.py` (official Massive SDK adapter) — no raw HTTP calls to Massive/Polygon endpoints outside this module.
-- **Async Job Pattern**: All LLM-heavy operations (`/api/research/*`) immediately return a `job_id` and run in daemon threads. The frontend polls `GET /api/jobs/<job_id>` until completion. Jobs are persisted to PostgreSQL (`llm_jobs` table).
+- **Async Job Pattern**: All LLM-heavy operations (`/api/research/*`) immediately return a `job_id` and run via Celery workers. The frontend polls `GET /api/jobs/<job_id>` until completion. Jobs are persisted to PostgreSQL (`llm_jobs` table).
+- **`services/news_aggregator.py`**: Pluggable news aggregation layer. `NewsSource` abstract base class defines the interface; `YFinanceNewsSource` is the live implementation; `BenzingaNewsSource` is a stub for a future in-house aggregator. `NewsAggregator` fan-out orchestrator merges results from all sources. Wire new sources in `get_default_aggregator()`.
+- **`services/pump_classifier.py`**: No-News Pump detector. Phase 1 (`stamp_catalyst_tags`) runs on every screener refresh with zero I/O. Phase 2 (`start_news_enrichment_loop`) runs a daemon thread every 3 minutes during market hours, calling `NewsAggregator` to verify and upgrade tags. Writes to `pump_classifications` table.
 
 ### 3. AI Analysis Engine
 
@@ -54,7 +56,9 @@ The AI layer has two clients and six prompt functions:
 Market Close (4pm ET)
   → ingest_gainers.py: Massive.com top gainers snapshot (ET-aware)
       gap% = (day_open - prev_close) / prev_close   ← authoritative grouped daily bar
-      → PostgreSQL daily_gainers table
+      → pump_classifier.classify_catalyst()          ← stamps Confirmed Catalyst / Technical / No News / Speculative
+      → PostgreSQL daily_gainers table (incl. catalyst column)
+      → PostgreSQL pump_classifications table (historical tag log)
   → daily_analysis_report.py: Top 3 gainers → Groq analysis → email
 
 Morning Briefing (4am – 9:30am ET)
@@ -62,6 +66,14 @@ Morning Briefing (4am – 9:30am ET)
   → /api/gainers/repeat-runners: Cross-reference live gainers vs DB history
   → /api/watchlist/prices: Batch Polygon snapshots for user watchlist
   → /api/market/calendar: FMP high-impact event feed
+
+Live Screener (every 60 seconds during market hours)
+  → live_screener.refresh_cache(): Polygon snapshot → Schwab enrichment
+      → stamp_catalyst_tags()      ← Phase 1: instant in-memory classification
+      → [background thread, every 3 min]
+          → NewsAggregator.has_news() ← Phase 2: yfinance verification
+          → upgrades tag to 'Confirmed Catalyst' if news found
+          → pump_classifications upsert
 ```
 
 ### On-Demand Research (parallel)
@@ -92,7 +104,9 @@ Each thread writes to `llm_jobs` in PostgreSQL. Frontend polls all 4 `job_id`s i
 
 ## 🗄️ Database Schema
 
-**`daily_gainers`**: One row per ticker per date. Core market metrics (gap%, float, RVOL, sector, headlines).
+**`daily_gainers`**: One row per ticker per date. Core market metrics (gap%, float, RVOL, sector, headlines, catalyst tag).
+
+**`pump_classifications`**: Historical log of No-News Pump catalyst tags per ticker per date. Columns: `ticker`, `date`, `catalyst_tag` (`Confirmed Catalyst` | `Technical / No News` | `Speculative`), `gap_pct`, `rvol`, `float_shares`, `classified_at`, `news_source` (`lightweight_check` | `yfinance_verify` | `ingest_pipeline`). Unique constraint on `(ticker, date)` with upsert to track intraday upgrades.
 
 **`chart_captures`**: Trade screenshots with tags, cleanliness score, Gemini annotation, and optional re-uploaded annotated image.
 

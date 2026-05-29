@@ -13,16 +13,16 @@ def check_db():
     try:
         with get_connection() as conn:
             # Query recent daily gainers
-            rows = conn.execute("SELECT date, COUNT(*) FROM daily_gainers GROUP BY date ORDER BY date DESC LIMIT 5").fetchall()
+            rows = conn.execute("SELECT date, COUNT(*) as count FROM daily_gainers GROUP BY date ORDER BY date DESC LIMIT 5").fetchall()
             print("Recent Gainer Ingestions:")
             for r in rows:
-                print(f"  Date: {r['date']}, Count: {r[1]}")
+                print(f"  Date: {r['date']}, Count: {r['count']}")
             
             # Query continuation picks
-            picks = conn.execute("SELECT date, count(*) FROM continuation_picks GROUP BY date ORDER BY date DESC LIMIT 5").fetchall()
+            picks = conn.execute("SELECT date, count(*) as count FROM continuation_picks GROUP BY date ORDER BY date DESC LIMIT 5").fetchall()
             print("\nRecent Continuation Picks:")
             for p in picks:
-                print(f"  Date: {p['date']}, Count: {p[1]}")
+                print(f"  Date: {p['date']}, Count: {p['count']}")
                 
             # Query llm_jobs
             jobs = conn.execute("SELECT type, status, created_at FROM llm_jobs ORDER BY created_at DESC LIMIT 5").fetchall()

@@ -139,13 +139,13 @@ class SchwabStreamer:
                     logger.info(f"Subscribing to new symbols: {to_sub}")
                     # Subscribe Level 1 Quotes
                     # Fields: 0: LAST_PRICE, 1: BID_PRICE, 2: ASK_PRICE, 3: TOTAL_VOLUME, 4: HIGH_PRICE, 5: LOW_PRICE, 6: OPEN_PRICE
-                    await self.stream_client.level1_equity_subs(list(to_sub))
+                    await self.stream_client.level_one_equity_subs(list(to_sub))
                     self.subscribed_symbols.update(to_sub)
                     
                 if to_unsub:
                     logger.info(f"Unsubscribing from cold symbols: {to_unsub}")
                     # Unsubscribe
-                    await self.stream_client.level1_equity_unsubs(list(to_unsub))
+                    await self.stream_client.level_one_equity_unsubs(list(to_unsub))
                     self.subscribed_symbols.difference_update(to_unsub)
                     for s in to_unsub:
                         self.fundamentals_cache.pop(s, None)
@@ -305,18 +305,23 @@ class SchwabStreamer:
         # 3. Load fundamentals
         await self.load_fundamentals(candidates)
         
-        # 4. Subscribe to initial list
+        # 4. Login to streaming server
+        logger.info("Logging into streaming server...")
+        await self.stream_client.login()
+        
+        # 5. Subscribe to initial list
         # Fields: LAST_PRICE, BID_PRICE, ASK_PRICE, TOTAL_VOLUME, HIGH_PRICE, LOW_PRICE, OPEN_PRICE
         self.stream_client.add_level_one_equity_handler(self.on_level1_equity_message)
-        await self.stream_client.level1_equity_subs(list(candidates))
+        await self.stream_client.level_one_equity_subs(list(candidates))
         self.subscribed_symbols.update(candidates)
         
-        # 5. Launch background dynamic subscription loop
+        # 6. Launch background dynamic subscription loop
         asyncio.create_task(self.update_subscriptions())
         
-        # 6. Start the stream loop (runs indefinitely)
+        # 7. Start the stream loop (runs indefinitely)
         logger.info("Starting Level 1 streaming client...")
-        await self.stream_client.run()
+        while True:
+            await self.stream_client.handle_message()
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')

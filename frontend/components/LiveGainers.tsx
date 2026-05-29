@@ -25,7 +25,8 @@ import {
   BookmarkCheck,
   ExternalLink,
   X,
-  Sparkles
+  Sparkles,
+  Pin
 } from 'lucide-react'
 import MiniSessionChart from '@/components/MiniSessionChart'
 
@@ -101,34 +102,6 @@ function getSpreadBadgeStyle(spreadPct: number | null) {
     return { label: `${formatted} (High)`, className: 'bg-orange-500/10 text-orange-400 border border-orange-500/20 px-1.5 py-0.5 rounded text-[10px] font-mono' }
   }
   return { label: `${formatted} (Extreme)`, className: 'bg-rose-500/20 text-rose-300 border border-rose-500/30 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono' }
-}
-
-function getTrendState(g: LiveGainerRow) {
-  const last = g.last_price ?? 0
-  const prev = g.prev_close ?? 0
-  const gap = g.gap_pct ?? 0
-  if (last >= prev && gap > 0) {
-    return {
-      label: '↗',
-      text: 'Bullish',
-      title: 'Bullish (Price up & Change up)',
-      className: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-    }
-  }
-  if (last < prev && gap < 0) {
-    return {
-      label: '↘',
-      text: 'Bearish',
-      title: 'Bearish (Price down & Change down)',
-      className: 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-    }
-  }
-  return {
-    label: '→',
-    text: 'Neutral',
-    title: 'Mixed signals',
-    className: 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-  }
 }
 
 function getMomStyle(mom: number | null | undefined) {
@@ -303,12 +276,54 @@ function GainerTable({
   defaultSortKey = 'rank',
   defaultSortDir = 'asc',
 }: GainerTableProps) {
-  const [expandedTicker, setExpandedTicker] = useState<string | null>(null)
+  const [hoveredTicker, setHoveredTicker] = useState<string | null>(null)
+  const [lockedTicker, setLockedTicker] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<'rank' | 'ticker' | 'price' | 'change' | 'mom_2m' | 'atr_hod' | 'float'>(defaultSortKey)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(defaultSortDir)
 
-  const toggleExpand = (ticker: string) => {
-    setExpandedTicker(prev => (prev === ticker ? null : ticker))
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const leaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
+      if (leaveTimeoutRef.current) clearTimeout(leaveTimeoutRef.current)
+    }
+  }, [])
+
+  const handleRowMouseEnter = (ticker: string) => {
+    if (leaveTimeoutRef.current) {
+      clearTimeout(leaveTimeoutRef.current)
+      leaveTimeoutRef.current = null
+    }
+    if (hoveredTicker === ticker) return
+
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current)
+    }
+
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoveredTicker(ticker)
+    }, 150)
+  }
+
+  const handleRowMouseLeave = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current)
+      hoverTimeoutRef.current = null
+    }
+
+    if (leaveTimeoutRef.current) {
+      clearTimeout(leaveTimeoutRef.current)
+    }
+
+    leaveTimeoutRef.current = setTimeout(() => {
+      setHoveredTicker(null)
+    }, 100)
+  }
+
+  const handleRowClick = (ticker: string) => {
+    setLockedTicker(prev => (prev === ticker ? null : ticker))
   }
 
   const handleSort = (key: typeof sortKey) => {
@@ -422,8 +437,7 @@ function GainerTable({
             ) : (
               sortedGainers.map((g) => {
                 const originalRank = fullList.findIndex(x => x.ticker === g.ticker) + 1
-                const isExpanded = expandedTicker === g.ticker
-                const trend = getTrendState(g)
+                const isExpanded = hoveredTicker === g.ticker || (lockedTicker === g.ticker && !hoveredTicker)
 
                 return (
                   <>
@@ -432,7 +446,9 @@ function GainerTable({
                       className={`hover:bg-gray-850/40 transition-colors group cursor-pointer ${
                         isExpanded ? 'bg-gray-850/20' : ''
                       }`}
-                      onClick={() => toggleExpand(g.ticker)}
+                      onClick={() => handleRowClick(g.ticker)}
+                      onMouseEnter={() => handleRowMouseEnter(g.ticker)}
+                      onMouseLeave={() => handleRowMouseLeave()}
                     >
                       {/* 1. Rank */}
                       {showRank && (
@@ -448,6 +464,15 @@ function GainerTable({
                             {g.ticker}
                           </span>
                           <div className="flex items-center gap-0.5 shrink-0 select-none">
+                            {lockedTicker === g.ticker && (
+                              <span className="relative group/tooltip inline-flex items-center p-0.5 rounded text-[8px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                <Pin size={8} className="fill-current" />
+                                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/tooltip:block bg-gray-950 border border-gray-800 text-white text-[10px] font-medium py-1 px-2 rounded shadow-2xl whitespace-nowrap z-50">
+                                  Pinned open (Click to toggle)
+                                  <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-950" />
+                                </span>
+                              </span>
+                            )}
                             {g.is_repeat_runner && (
                               <span className="relative group/tooltip inline-flex items-center px-1 py-0.25 rounded text-[8px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30">
                                 RR
@@ -526,7 +551,12 @@ function GainerTable({
                     </tr>
 
                     {/* Expandable details row */}
-                    <tr key={`${g.ticker}-expand`} className={`bg-gray-900/10`}>
+                    <tr 
+                      key={`${g.ticker}-expand`} 
+                      className={`bg-gray-900/10`}
+                      onMouseEnter={() => handleRowMouseEnter(g.ticker)}
+                      onMouseLeave={() => handleRowMouseLeave()}
+                    >
                       <td colSpan={colSpanCount} className="p-0 border-0">
                         <div
                           className={`grid transition-all duration-300 ease-in-out ${

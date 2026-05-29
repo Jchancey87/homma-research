@@ -277,3 +277,96 @@ Refactor the Live Gainer Screener into a side-by-side split layout ("All Live Ga
 * **Problem**: The `schwab-streamer` daemon failed to start and was marked as `errored` in PM2 after 98 restarts.
 * **Cause**: In `stream_client.py`, the Level 1 quote message handler registration was called using `self.stream_client.add_level1_equity_handler(...)` instead of the spelling expected by the `schwab-py` library, which is `add_level_one_equity_handler(...)`.
 * **Resolution**: Replaced the method call with `add_level_one_equity_handler`, copied `stream_client.py` to `/opt/trading-journal/momentum_screener/schwab/`, and restarted the daemon.
+
+---
+
+## [2026-05-26] Milestone: No-News Pump Classifier & Pluggable News Aggregator
+
+### Summary
+Designed and implemented a full-stack "No-News Pump" detection system that automatically classifies every live gainer with a three-tier catalyst tag. The system distinguishes between fundamental catalyst-driven moves and pure tape-speed speculation with no news — a critical signal for momentum scalpers deciding whether to engage or sit out. Simultaneously built a pluggable `NewsAggregator` abstract base class architecture to support a future in-house news aggregator without requiring changes to the classifier logic.
+
+### Git State
+* **Current Branch**: `master`
+* **New Files**:
+  * `backend/services/news_aggregator.py` — pluggable news source ABC + YFinance live implementation + Benzinga stub
+  * `backend/services/pump_classifier.py` — three-tier classifier + async 3-minute background enrichment loop
+  * `backend/scripts/migrate_add_catalyst.sql` — DB migration (already applied)
+
+---
+
+### Architecture Decisions
+
+#### 1. Three-Tier Catalyst Taxonomy
+Instead of a binary "has news / no news" flag, three meaningful tiers were created:
+| Tier | Condition | UI Treatment |
+|---|---|---|
+| `Confirmed Catalyst` | `news_headline` is populated | Existing italic headline text |
+| `Technical / No News` | No news + gap > 30% + RVOL > 2x | Orange ⚠️ badge — `Speculative Volatility / No News` |
+| `Speculative` | No news + low/unknown RVOL | Gray `? Unconfirmed Momentum` badge |
+
+#### 2. Two-Phase Classification
+* **Phase 1 (lightweight)**: `stamp_catalyst_tags()` runs on every 60-second screener refresh with zero I/O — it only reads the in-memory gainer fields (`news_headline`, `gap_pct`, `rvol_15m`).
+* **Phase 2 (async verify)**: A background thread (`pump-classifier-enrichment`) runs every 3 minutes during market hours (04:00–19:59 ET). It calls the `NewsAggregator` to actively verify all `Technical / No News` tickers and upgrades their tag to `Confirmed Catalyst` if news is found.
+
+#### 3. Pluggable NewsAggregator (ABC Pattern)
+Built with future expansion as the primary design constraint:
+* `NewsSource` — abstract base class with a single `get_news(ticker, hours_back) -> list[dict]` method
+* `YFinanceNewsSource` — live implementation, handles 3 different yfinance API response shapes
+* `BenzingaNewsSource` — stub ready for a future custom in-house aggregator; raises `NotImplementedError`
+* `NewsAggregator` — fan-out orchestrator that merges and de-duplicates results across all sources
+* `get_default_aggregator()` — singleton factory; update this one function to wire in future sources
+
+#### 4. Dual Database Persistence
+Two write paths were added:
+* `daily_gainers.catalyst` (TEXT column) — stamped at EOD ingest for historical filtering and backtesting
+* `pump_classifications` (new table) — full history log with `ticker`, `date`, `catalyst_tag`, `gap_pct`, `rvol`, `float_shares`, `classified_at`, `news_source`; uses `ON CONFLICT DO UPDATE` so intraday tag upgrades are tracked
+
+---
+
+### Database Changes (Applied)
+```sql
+ALTER TABLE daily_gainers ADD COLUMN IF NOT EXISTS catalyst TEXT;
+
+CREATE TABLE IF NOT EXISTS pump_classifications (
+    id             SERIAL PRIMARY KEY,
+    ticker         TEXT        NOT NULL,
+    date           DATE        NOT NULL,
+    catalyst_tag   TEXT        NOT NULL,
+    gap_pct        NUMERIC(8,2),
+    rvol           NUMERIC(8,2),
+    float_shares   BIGINT,
+    classified_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    news_source    TEXT,
+    UNIQUE (ticker, date)
+);
+```
+
+---
+
+### UI Changes
+* **Table row**: `⚠️ NNP` (orange) and `? SPEC` (gray) badge pills added to the ticker column, matching the style of existing `RR`, `FT`, and `HOD` badges. Hovering shows a tooltip explaining the classification.
+* **Headline drawer section**: Replaced the plain `{g.news_headline ?? 'No recent news'}` with tier-specific rendering:
+  - `Technical / No News` → styled orange badge with subtext
+  - `Speculative` → gray badge with subtext
+  - `Confirmed Catalyst` with a headline → existing italic text
+  - Fallback → `No recent news` (unchanged)
+
+---
+
+### Struggles & Resolutions
+
+#### 1. Schwab vs Polygon Ingestion Ownership
+* **Question**: The ingest pipeline (`ingest_gainers.py`) still references Polygon for the gainers snapshot and news headline (`poly.get_latest_headline`), while the live screener uses Schwab for per-ticker bar data and minute metrics.
+* **Resolution**: The catalyst classifier was wired correctly to work with whatever `news_headline` field is already present, regardless of source. No Polygon/Schwab ambiguity affects the classifier logic — it's source-agnostic.
+
+#### 2. Cache Mutation Safety (Phase 2 In-Place Upgrades)
+* **Question**: The async enrichment loop mutates gainer dicts in-place inside `_cache['gainers']`. Could this cause races with the screener refresh loop?
+* **Resolution**: Phase 1 stamping has a guard: if an existing `catalyst == 'Confirmed Catalyst'` but `news_headline` is still null (meaning Phase 2 upgraded it), Phase 1 preserves the async-verified tag and does not downgrade it on the next refresh.
+
+---
+
+### Verification
+* **Python smoke test**: All three tiers (`Confirmed Catalyst`, `Technical / No News`, `Speculative`) classified and stamped correctly.
+* **DB migration**: `ALTER TABLE` and `CREATE TABLE` confirmed applied. Both `daily_gainers.catalyst` column and `pump_classifications` table verified via `\d` inspection.
+* **TypeScript**: `catalyst?: string | null` added to `LiveGainerRow` interface in `lib/api.ts`.
+

@@ -24,6 +24,8 @@ Solo day traders who need to filter 500+ daily gainers into a "Watchlist of 3" i
 - **Economic Calendar**: High-impact events (CPI, FOMC) with countdown.
 - **Watchlist with Live Prices**: Real-time monitoring of saved tickers with "Wake Up" alerts.
 - **AI Continuation Picks**: Advanced screening for multi-day runners.
+- **No-News Pump Classifier**: Automatically tags every live gainer with a three-tier catalyst label (`Confirmed Catalyst` / `Technical / No News` / `Speculative`). Orange ⚠️ NNP badge in the screener table row + styled Headline drawer section. Two-phase: instant in-memory stamp every 60s, async yfinance verification every 3 min.
+- **Pluggable News Aggregator**: Abstract `NewsSource` interface in `services/news_aggregator.py` with `YFinanceNewsSource` live and `BenzingaNewsSource` stub. Designed for easy swap-in of a future in-house aggregator by updating `get_default_aggregator()` only.
 
 ## Tone & Brand
 - **Professional & Precise**: High density, low decoration.
@@ -31,7 +33,7 @@ Solo day traders who need to filter 500+ daily gainers into a "Watchlist of 3" i
 - **Trustworthy**: Data-driven, using professional APIs (Polygon, FMP).
 
 ## Feature Backlog / Request List
-- **Schwab WebSocket Streamer**: Replace periodic HTTP polling with real-time Level 1 quote streaming client.
+- **Custom In-House News Aggregator**: Build a proprietary `NewsSource` implementation backed by your own scraper or paid API. Register it in `get_default_aggregator()` in `services/news_aggregator.py` — no other code changes required.
 - **Stateful Screener Filters**: Add UI sliders/inputs on the frontend to filter gainers dynamically by float, price, and volume.
-- **VWAP Tracker**: Add intraday volume-weighted average price calculation and show stock price relative to VWAP.
+- **pump_classifications Analytics View**: A dashboard page querying the `pump_classifications` table to show historical no-news pump patterns, success rates by tier, and float/RVOL correlations.
 - **Discord Webhook Alerts**: Push real-time alerts to a Discord channel when new gainers meet the criteria.

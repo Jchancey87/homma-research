@@ -310,7 +310,7 @@ def _get_profile(ticker: str) -> tuple[float | None, str | None, float | None, f
 
     Priority:
       1. FMP /profile  — primary source, covers most fields
-      2. yfinance      — float fallback ONLY if FMP returns None for floatShares
+      2. yfinance      — fallback for float, sector, market_cap, shares_outstanding, avg_volume
       3. None          — store null, display '—' in UI
     """
     from services.fmp_service import get_company_profile
@@ -323,11 +323,24 @@ def _get_profile(ticker: str) -> tuple[float | None, str | None, float | None, f
     shares_outstanding  = profile.get('shares_outstanding')
     avg_volume          = profile.get('avg_volume')
 
-    # Float fallback: yfinance if FMP returned nothing
-    if float_shares is None:
-        float_shares = _yf_float_fallback(ticker)
-        if float_shares:
-            log.debug(f"[{ticker}] FMP float=None → yfinance fallback: {float_shares:,.0f}")
+    # Fallback to yfinance if any key fields are missing from FMP/Schwab profile
+    if float_shares is None or sector is None or market_cap is None or shares_outstanding is None or avg_volume is None:
+        try:
+            import yfinance as yf
+            info = yf.Ticker(ticker).info or {}
+            if float_shares is None:
+                float_shares = info.get('floatShares')
+            if sector is None:
+                sector = info.get('sector') or info.get('industry')
+            if market_cap is None:
+                market_cap = info.get('marketCap')
+            if shares_outstanding is None:
+                shares_outstanding = info.get('sharesOutstanding')
+            if avg_volume is None:
+                avg_volume = info.get('averageVolume') or info.get('averageDailyVolume10Day')
+            log.debug(f"[{ticker}] yfinance fallback used for missing profile fields")
+        except Exception as e:
+            log.warning(f"[{ticker}] yfinance fallback enrichment failed: {e}")
 
     return float_shares, sector, market_cap, shares_outstanding, avg_volume
 
