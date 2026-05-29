@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, Fragment } from 'react'
 import {
   getLiveGainers,
   LiveGainerSnapshot,
@@ -323,7 +323,13 @@ function GainerTable({
   }
 
   const handleRowClick = (ticker: string) => {
-    setLockedTicker(prev => (prev === ticker ? null : ticker))
+    setLockedTicker(prev => {
+      if (prev === ticker) {
+        setHoveredTicker(null)
+        return null
+      }
+      return ticker
+    })
   }
 
   const handleSort = (key: typeof sortKey) => {
@@ -437,10 +443,10 @@ function GainerTable({
             ) : (
               sortedGainers.map((g) => {
                 const originalRank = fullList.findIndex(x => x.ticker === g.ticker) + 1
-                const isExpanded = hoveredTicker === g.ticker || (lockedTicker === g.ticker && !hoveredTicker)
+                const isExpanded = hoveredTicker === g.ticker || lockedTicker === g.ticker
 
                 return (
-                  <>
+                  <Fragment key={g.ticker}>
                     <tr
                       key={g.ticker}
                       className={`hover:bg-gray-850/40 transition-colors group cursor-pointer ${
@@ -703,7 +709,7 @@ function GainerTable({
                         </div>
                       </td>
                     </tr>
-                  </>
+                  </Fragment>
                 )
               })
             )}
