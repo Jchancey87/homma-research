@@ -370,3 +370,41 @@ CREATE TABLE IF NOT EXISTS pump_classifications (
 * **DB migration**: `ALTER TABLE` and `CREATE TABLE` confirmed applied. Both `daily_gainers.catalyst` column and `pump_classifications` table verified via `\d` inspection.
 * **TypeScript**: `catalyst?: string | null` added to `LiveGainerRow` interface in `lib/api.ts`.
 
+---
+
+## [2026-05-28] Milestone: Live Screener Hover & Click-Lock Fixes
+
+### Summary
+Diagnosed and resolved critical issues with the live screener tables' hover-to-expand and click-lock behavior. The hover-to-expand details rows were previously failing or behaving extremely erratically due to rendering reconciliations and conflicting state-management logic.
+
+### Git State
+* **Current Branch**: `master`
+* **Recent Commits**:
+  * `3e1e793` — fix: resolve screener hover expand and React fragment key bugs
+
+---
+
+### Struggles & Resolutions
+
+#### 1. Jittery Row Expansions due to Missing React Keys
+* **Problem**: Hovering over screener rows caused them to blink or fail to expand altogether, skipping CSS transitions.
+* **Cause**: In `GainerTable` (`LiveGainers.tsx`), the list mapping (`sortedGainers.map`) returned keyless React Fragments (`<>`). When the hover state `hoveredTicker` changed, React failed to reconcile the elements correctly and was unmounting and recreating the table row DOM nodes, destroying the browser's hover state and animations.
+* **Resolution**: Replaced the shorthand `<>` fragment with `<Fragment key={g.ticker}>` after importing `Fragment` from `'react'`. This allows React to correctly track and patch the rows across renders.
+
+#### 2. Pinned/Locked Rows Collapsing on Neighboring Hover
+* **Problem**: Pinned rows (opened via clicking) collapsed instantly whenever the user hovered over another row.
+* **Cause**: The expression `hoveredTicker === g.ticker || (lockedTicker === g.ticker && !hoveredTicker)` caused the locked row to collapse if `hoveredTicker` was set to a different ticker.
+* **Resolution**: Simplified the condition to `hoveredTicker === g.ticker || lockedTicker === g.ticker`, which allows pinned rows to stay expanded while other rows are being hovered.
+
+#### 3. Sticky Click-to-Collapse on Pinned Rows
+* **Problem**: Clicking a pinned row to unlock and collapse it did not close the row immediately.
+* **Cause**: The cursor was still positioned over the row after clicking, meaning `hoveredTicker` remained matching the ticker, keeping it expanded.
+* **Resolution**: Updated the `handleRowClick` handler to clear the `hoveredTicker` state (`setHoveredTicker(null)`) when the locked row is explicitly clicked to unlock/collapse, forcing an instant collapse.
+
+---
+
+### Verification & Deployment
+* **Next.js Compile**: Verified typescript compilation and Next.js optimization by running `npm run build` locally.
+* **Production Sync**: Discarded local identical working files in `/opt/trading-journal`, pulled the latest master commit, ran `/opt/trading-journal/deploy.sh`, and verified all PM2 services are online and running the updated bundle.
+
+
