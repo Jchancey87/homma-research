@@ -24,6 +24,18 @@ CREATE TABLE IF NOT EXISTS daily_gainers (
     rs_vs_spy           DOUBLE PRECISION,           -- gap_pct minus SPY day return
     shares_outstanding  DOUBLE PRECISION,           -- total shares outstanding (FMP)
     avg_volume          DOUBLE PRECISION,           -- 30-day avg volume (FMP volAvg)
+    premarket_high      DOUBLE PRECISION,
+    premarket_low       DOUBLE PRECISION,
+    premarket_volume    DOUBLE PRECISION,
+    pct_above_vwap      DOUBLE PRECISION,
+    atr_14              DOUBLE PRECISION,
+    sma_20              DOUBLE PRECISION,
+    sma_50              DOUBLE PRECISION,
+    cash                DOUBLE PRECISION,
+    net_income          DOUBLE PRECISION,
+    operating_cash_flow  DOUBLE PRECISION,
+    runway_months       DOUBLE PRECISION,
+    dilution_risk       TEXT,
     created_at          TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(date, ticker)
 );
@@ -38,6 +50,18 @@ ALTER TABLE daily_gainers ADD COLUMN IF NOT EXISTS close_location     DOUBLE PRE
 ALTER TABLE daily_gainers ADD COLUMN IF NOT EXISTS rs_vs_spy          DOUBLE PRECISION;
 ALTER TABLE daily_gainers ADD COLUMN IF NOT EXISTS shares_outstanding DOUBLE PRECISION;
 ALTER TABLE daily_gainers ADD COLUMN IF NOT EXISTS avg_volume         DOUBLE PRECISION;
+ALTER TABLE daily_gainers ADD COLUMN IF NOT EXISTS premarket_high      DOUBLE PRECISION;
+ALTER TABLE daily_gainers ADD COLUMN IF NOT EXISTS premarket_low       DOUBLE PRECISION;
+ALTER TABLE daily_gainers ADD COLUMN IF NOT EXISTS premarket_volume    DOUBLE PRECISION;
+ALTER TABLE daily_gainers ADD COLUMN IF NOT EXISTS pct_above_vwap      DOUBLE PRECISION;
+ALTER TABLE daily_gainers ADD COLUMN IF NOT EXISTS atr_14              DOUBLE PRECISION;
+ALTER TABLE daily_gainers ADD COLUMN IF NOT EXISTS sma_20              DOUBLE PRECISION;
+ALTER TABLE daily_gainers ADD COLUMN IF NOT EXISTS sma_50              DOUBLE PRECISION;
+ALTER TABLE daily_gainers ADD COLUMN IF NOT EXISTS cash                DOUBLE PRECISION;
+ALTER TABLE daily_gainers ADD COLUMN IF NOT EXISTS net_income          DOUBLE PRECISION;
+ALTER TABLE daily_gainers ADD COLUMN IF NOT EXISTS operating_cash_flow  DOUBLE PRECISION;
+ALTER TABLE daily_gainers ADD COLUMN IF NOT EXISTS runway_months       DOUBLE PRECISION;
+ALTER TABLE daily_gainers ADD COLUMN IF NOT EXISTS dilution_risk       TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_gainers_date   ON daily_gainers(date);
 CREATE INDEX IF NOT EXISTS idx_gainers_ticker ON daily_gainers(ticker);

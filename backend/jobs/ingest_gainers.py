@@ -275,6 +275,12 @@ def _enrich_ticker(snap: dict, grouped: dict[str, dict], target_date: str) -> di
     except Exception:
         catalyst = None
 
+    try:
+        metrics = _enrich_metrics(ticker, target_date)
+    except Exception as e:
+        log.warning(f"Failed to enrich metrics for {ticker}: {e}")
+        metrics = {}
+
     return {
         'ticker':               ticker,
         'gap_pct':              gap_pct,
@@ -297,6 +303,7 @@ def _enrich_ticker(snap: dict, grouped: dict[str, dict], target_date: str) -> di
         'rs_vs_spy':            rs_vs_spy,
         'shares_outstanding':   shares_out,
         'avg_volume':           avg_vol,
+        **metrics
     }
 
 
@@ -378,6 +385,164 @@ def _classify_news(headline: str | None) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Schwab & YFinance Enrichment Metrics
+# ---------------------------------------------------------------------------
+
+def _enrich_metrics(ticker: str, target_date: str) -> dict:
+    import datetime as dt_module
+    from datetime import datetime, timedelta
+    import pandas as pd
+    import yfinance as yf
+    from momentum_screener.schwab.http_client import (
+        get_price_history_every_minute,
+        get_price_history_every_day
+    )
+    
+    metrics = {
+        'premarket_high': None,
+        'premarket_low': None,
+        'premarket_volume': None,
+        'pct_above_vwap': None,
+        'atr_14': None,
+        'sma_20': None,
+        'sma_50': None,
+        'cash': None,
+        'net_income': None,
+        'operating_cash_flow': None,
+        'runway_months': None,
+        'dilution_risk': 'Low'
+    }
+    
+    # 1. Schwab 1-min history
+    try:
+        start_dt = datetime.strptime(target_date, '%Y-%m-%d')
+        end_dt = start_dt + timedelta(days=1)
+        min_candles = get_price_history_every_minute(ticker, start_datetime=start_dt, end_datetime=end_dt)
+        if min_candles:
+            df_min = pd.DataFrame(min_candles)
+            if not df_min.empty:
+                df_min['dt'] = df_min['datetime'].apply(lambda ts: datetime.fromtimestamp(ts / 1000.0, tz=dt_module.timezone.utc).astimezone(dt_module.timezone(dt_module.timedelta(hours=-4))))
+                
+                pre_df = df_min[df_min['dt'].dt.time < dt_module.time(9, 30)]
+                reg_df = df_min[(df_min['dt'].dt.time >= dt_module.time(9, 30)) & (df_min['dt'].dt.time <= dt_module.time(16, 0))]
+                
+                if not pre_df.empty:
+                    metrics['premarket_high'] = float(pre_df['high'].max())
+                    metrics['premarket_low'] = float(pre_df['low'].min())
+                    metrics['premarket_volume'] = float(pre_df['volume'].sum())
+                    
+                if not reg_df.empty:
+                    reg_df['typical_price'] = (reg_df['high'] + reg_df['low'] + reg_df['close']) / 3
+                    total_vp = (reg_df['typical_price'] * reg_df['volume']).sum()
+                    total_v = reg_df['volume'].sum()
+                    vwap_val = total_vp / total_v if total_v > 0 else None
+                    if vwap_val:
+                        above_vwap_count = (reg_df['close'] > vwap_val).sum()
+                        metrics['pct_above_vwap'] = float(above_vwap_count / len(reg_df))
+    except Exception as e:
+        log.warning(f"[{ticker}] failed to enrich 1-min metrics: {e}")
+        
+    # 2. Schwab Daily history (for ATR and SMA)
+    try:
+        daily_candles = get_price_history_every_day(ticker)
+        if daily_candles:
+            df_daily = pd.DataFrame(daily_candles)
+            if not df_daily.empty:
+                df_daily['prev_close'] = df_daily['close'].shift(1)
+                df_daily['h_l'] = df_daily['high'] - df_daily['low']
+                df_daily['h_pc'] = (df_daily['high'] - df_daily['prev_close']).abs()
+                df_daily['l_pc'] = (df_daily['low'] - df_daily['prev_close']).abs()
+                df_daily['tr'] = df_daily[['h_l', 'h_pc', 'l_pc']].max(axis=1)
+                
+                df_daily['atr_14'] = df_daily['tr'].rolling(window=14).mean()
+                df_daily['sma_20'] = df_daily['close'].rolling(window=20).mean()
+                df_daily['sma_50'] = df_daily['close'].rolling(window=50).mean()
+                
+                latest = df_daily.iloc[-1]
+                metrics['atr_14'] = float(latest['atr_14']) if not pd.isna(latest['atr_14']) else None
+                metrics['sma_20'] = float(latest['sma_20']) if not pd.isna(latest['sma_20']) else None
+                metrics['sma_50'] = float(latest['sma_50']) if not pd.isna(latest['sma_50']) else None
+    except Exception as e:
+        log.warning(f"[{ticker}] failed to enrich daily indicators: {e}")
+        
+    # 3. YFinance Fundamentals
+    try:
+        t = yf.Ticker(ticker)
+        bs = t.quarterly_balance_sheet
+        fin = t.quarterly_financials
+        cf = t.quarterly_cashflow
+        
+        cash_val = None
+        if bs is not None and not bs.empty:
+            for k in ['Cash Cash Equivalents And Short Term Investments', 'Cash And Cash Equivalents', 'Cash Financial', 'Cash']:
+                if k in bs.index:
+                    val = bs.loc[k].dropna()
+                    if not val.empty:
+                        cash_val = float(val.iloc[0])
+                        break
+        metrics['cash'] = cash_val
+        
+        net_income_val = None
+        if fin is not None and not fin.empty:
+            for k in ['Net Income', 'Net Income Common Stockholders']:
+                if k in fin.index:
+                    val = fin.loc[k].dropna()
+                    if not val.empty:
+                        net_income_val = float(val.iloc[0])
+                        break
+        metrics['net_income'] = net_income_val
+
+        ocf_val = None
+        if cf is not None and not cf.empty:
+            for k in ['Operating Cash Flow', 'Cash Flow From Operating Activities']:
+                if k in cf.index:
+                    val = cf.loc[k].dropna()
+                    if not val.empty:
+                        ocf_val = float(val.iloc[0])
+                        break
+        metrics['operating_cash_flow'] = ocf_val
+
+        # Runway
+        burn = None
+        if ocf_val and ocf_val < 0:
+            burn = abs(ocf_val)
+        elif net_income_val and net_income_val < 0:
+            burn = abs(net_income_val)
+            
+        runway_months = None
+        if cash_val is not None and burn:
+            runway_months = float((cash_val / burn) * 3)
+            metrics['runway_months'] = runway_months
+            
+        # Dilution Risk Level
+        shares_history = {}
+        if bs is not None and not bs.empty:
+            for k in ['Ordinary Shares Number', 'Share Issued']:
+                if k in bs.index:
+                    row = bs.loc[k].dropna()
+                    for d_idx, val in row.items():
+                        shares_history[str(d_idx).split()[0]] = float(val)
+                    break
+                    
+        dilution = 'Low'
+        if runway_months and runway_months < 6:
+            dilution = '🔴 HIGH'
+        elif len(shares_history) > 1:
+            dates_sorted = sorted(list(shares_history.keys()))
+            first_shares = shares_history[dates_sorted[0]]
+            last_shares = shares_history[dates_sorted[-1]]
+            if last_shares > first_shares * 1.10:
+                dilution = '🔴 HIGH'
+            elif last_shares > first_shares * 1.02:
+                dilution = '🟡 MODERATE'
+        metrics['dilution_risk'] = dilution
+    except Exception as e:
+        log.warning(f"[{ticker}] failed to enrich yfinance metrics: {e}")
+        
+    return metrics
+
+
+# ---------------------------------------------------------------------------
 # Database write
 # ---------------------------------------------------------------------------
 
@@ -397,8 +562,45 @@ def write_gainers(gainers: list[dict], target_date: str) -> tuple[int, int]:
                         close_price, open_price,
                         high_price, low_price, prev_close, vwap,
                         dollar_volume, close_location, rs_vs_spy,
-                        shares_outstanding, avg_volume)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                        shares_outstanding, avg_volume,
+                        premarket_high, premarket_low, premarket_volume,
+                        pct_above_vwap, atr_14, sma_20, sma_50,
+                        cash, net_income, operating_cash_flow,
+                        runway_months, dilution_risk)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                       ON CONFLICT (date, ticker) DO UPDATE SET
+                        gap_pct = EXCLUDED.gap_pct,
+                        float_shares = EXCLUDED.float_shares,
+                        rvol_15m = EXCLUDED.rvol_15m,
+                        sector = EXCLUDED.sector,
+                        market_cap = EXCLUDED.market_cap,
+                        news_headline = EXCLUDED.news_headline,
+                        news_fresh = EXCLUDED.news_fresh,
+                        catalyst = EXCLUDED.catalyst,
+                        close_price = EXCLUDED.close_price,
+                        open_price = EXCLUDED.open_price,
+                        high_price = EXCLUDED.high_price,
+                        low_price = EXCLUDED.low_price,
+                        prev_close = EXCLUDED.prev_close,
+                        vwap = EXCLUDED.vwap,
+                        dollar_volume = EXCLUDED.dollar_volume,
+                        close_location = EXCLUDED.close_location,
+                        rs_vs_spy = EXCLUDED.rs_vs_spy,
+                        shares_outstanding = EXCLUDED.shares_outstanding,
+                        avg_volume = EXCLUDED.avg_volume,
+                        premarket_high = EXCLUDED.premarket_high,
+                        premarket_low = EXCLUDED.premarket_low,
+                        premarket_volume = EXCLUDED.premarket_volume,
+                        pct_above_vwap = EXCLUDED.pct_above_vwap,
+                        atr_14 = EXCLUDED.atr_14,
+                        sma_20 = EXCLUDED.sma_20,
+                        sma_50 = EXCLUDED.sma_50,
+                        cash = EXCLUDED.cash,
+                        net_income = EXCLUDED.net_income,
+                        operating_cash_flow = EXCLUDED.operating_cash_flow,
+                        runway_months = EXCLUDED.runway_months,
+                        dilution_risk = EXCLUDED.dilution_risk,
+                        created_at = NOW()""",
                     (
                         target_date,
                         g['ticker'],
@@ -421,6 +623,18 @@ def write_gainers(gainers: list[dict], target_date: str) -> tuple[int, int]:
                         g.get('rs_vs_spy'),
                         g.get('shares_outstanding'),
                         g.get('avg_volume'),
+                        g.get('premarket_high'),
+                        g.get('premarket_low'),
+                        g.get('premarket_volume'),
+                        g.get('pct_above_vwap'),
+                        g.get('atr_14'),
+                        g.get('sma_20'),
+                        g.get('sma_50'),
+                        g.get('cash'),
+                        g.get('net_income'),
+                        g.get('operating_cash_flow'),
+                        g.get('runway_months'),
+                        g.get('dilution_risk'),
                     ),
                 )
                 inserted += 1
@@ -429,10 +643,7 @@ def write_gainers(gainers: list[dict], target_date: str) -> tuple[int, int]:
                 _persist_pump_classification(conn, g, target_date)
 
             except Exception as e:
-                if 'unique' in str(e).lower():
-                    skipped += 1
-                else:
-                    log.error(f"DB error for {g['ticker']}: {e}")
+                log.error(f"DB error for {g['ticker']}: {e}")
 
     return inserted, skipped
 

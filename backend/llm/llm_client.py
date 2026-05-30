@@ -14,6 +14,10 @@ def _get_client() -> OpenAI:
     return OpenAI(
         api_key=Config.LLM_API_KEY,
         base_url=Config.LLM_BASE_URL,
+        default_headers={
+            "HTTP-Referer": "https://github.com/jchancey87/Analysis-App",
+            "X-Title": "Trading Journal Analysis App",
+        }
     )
 
 def _get_deep_client() -> OpenAI:

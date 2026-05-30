@@ -48,7 +48,11 @@ log = logging.getLogger(__name__)
 
 def main():
     parser = argparse.ArgumentParser(description='Generate and email deep daily analysis report')
-    parser.add_argument('--date', default=str(date_cls.today()), help='YYYY-MM-DD')
+    import pytz
+    from datetime import datetime
+    eastern = pytz.timezone('US/Eastern')
+    default_date = datetime.now(eastern).strftime('%Y-%m-%d')
+    parser.add_argument('--date', default=default_date, help='YYYY-MM-DD')
     parser.add_argument('--dry-run', action='store_true', help='Print report instead of emailing')
     args = parser.parse_args()
 
