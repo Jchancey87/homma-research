@@ -516,13 +516,13 @@ async def follow_through(db: asyncpg.Connection = Depends(get_db)):
         else:
             # Fall back to database lookup for subsequent days
             next_day = await db.fetchrow(
-                "SELECT open_price, close_price, volume FROM daily_gainers WHERE ticker=$1 AND date > $2 ORDER BY date ASC LIMIT 1",
+                "SELECT open_price, close_price FROM daily_gainers WHERE ticker=$1 AND date > $2 ORDER BY date ASC LIMIT 1",
                 ticker, recent_date
             )
             if next_day:
                 today_open = next_day['open_price']
                 today_last = next_day['close_price']
-                today_volume = next_day['volume']
+                today_volume = None
             else:
                 today_open = None
                 today_last = None
