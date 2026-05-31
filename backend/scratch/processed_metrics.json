@@ -1,0 +1,631 @@
+{
+  "SPRC": {
+    "description": "SCISPARC LTD",
+    "exchange": "NASDAQ",
+    "float": 532277.67944,
+    "shares_outstanding": 573243.0,
+    "market_cap": 2516536.0,
+    "short_int_float": 0.0,
+    "short_days_cover": 0.0,
+    "avg_10d_vol": 16348,
+    "avg_3m_vol": 294409,
+    "premarket_high": 10.08,
+    "premarket_low": 8.99,
+    "premarket_volume": 118032,
+    "open": 10.0,
+    "high": 10.11,
+    "low": 8.24,
+    "close": 9.86,
+    "volume": 393461,
+    "dollar_volume": 3570026.1146,
+    "vwap": 9.083869242694954,
+    "pct_above_vwap": 0.43243243243243246,
+    "range_location": 0.8663101604278074,
+    "total_volume": 520980,
+    "total_dollar_volume": 4765116.2108,
+    "atr_14": 1.3091071428571432,
+    "sma_20": 5.922055,
+    "sma_50": 5.251674,
+    "prev_close": 10.55,
+    "cash": 4591000.0,
+    "net_income": null,
+    "operating_cash_flow": null,
+    "shares_history": {
+      "2025-12-31": 365443.0,
+      "2025-06-30": 59400.0,
+      "2024-12-31": 57292.0
+    },
+    "calendar": "{'Earnings Date': [], 'Earnings High': None, 'Earnings Low': None, 'Earnings Average': None, 'Revenue High': None, 'Revenue Low': None, 'Revenue Average': None}",
+    "news": [
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      }
+    ]
+  },
+  "NCT": {
+    "description": "INTERCONT CAYMAN LTD A",
+    "exchange": "NASDAQ",
+    "float": 95130.97587,
+    "shares_outstanding": 1012774.0,
+    "market_cap": 2987461.0,
+    "short_int_float": 0.0,
+    "short_days_cover": 0.0,
+    "avg_10d_vol": 45221,
+    "avg_3m_vol": 150988,
+    "premarket_high": 3.59,
+    "premarket_low": 3.2,
+    "premarket_volume": 59763,
+    "open": 3.21,
+    "high": 3.29,
+    "low": 2.5,
+    "close": 2.79,
+    "volume": 391309,
+    "dollar_volume": 1109034.0584,
+    "vwap": 2.83661382564674,
+    "pct_above_vwap": 0.18699186991869918,
+    "range_location": 0.3670886075949367,
+    "total_volume": 462152,
+    "total_dollar_volume": 1340094.2482,
+    "atr_14": 0.5534571428571428,
+    "sma_20": 2.684495,
+    "sma_50": 2.409998,
+    "prev_close": 3.88,
+    "cash": 4042661.0,
+    "net_income": null,
+    "operating_cash_flow": null,
+    "shares_history": {
+      "2025-12-31": 1012774.0,
+      "2025-06-30": 1067000.0,
+      "2024-12-31": 1075000.0
+    },
+    "calendar": "{'Earnings Date': [datetime.date(2026, 6, 1)], 'Earnings High': None, 'Earnings Low': None, 'Earnings Average': None, 'Revenue High': None, 'Revenue Low': None, 'Revenue Average': None}",
+    "news": [
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      }
+    ]
+  },
+  "ATPC": {
+    "description": "AGAPE ATP CORP",
+    "exchange": "NASDAQ",
+    "float": 433299.97609,
+    "shares_outstanding": 1000626.0,
+    "market_cap": 2851784.0,
+    "short_int_float": 0.0,
+    "short_days_cover": 0.0,
+    "avg_10d_vol": 6259500,
+    "avg_3m_vol": 2098403,
+    "premarket_high": 5.91,
+    "premarket_low": 5.46,
+    "premarket_volume": 125026,
+    "open": 5.63,
+    "high": 6.03,
+    "low": 4.62,
+    "close": 4.87,
+    "volume": 641830,
+    "dollar_volume": 3429883.6819639998,
+    "vwap": 5.342643213560704,
+    "pct_above_vwap": 0.24528301886792453,
+    "range_location": 0.17730496453900707,
+    "total_volume": 786552,
+    "total_dollar_volume": 4227387.309764,
+    "atr_14": 0.9321142857142857,
+    "sma_20": 2.806,
+    "sma_50": 2.6537400000000004,
+    "prev_close": 6.07,
+    "cash": 220779.0,
+    "net_income": -327619.0,
+    "operating_cash_flow": -394770.0,
+    "shares_history": {
+      "2026-03-31": 1000626.0,
+      "2025-12-31": 1000626.0,
+      "2025-09-30": 1000107.0,
+      "2025-06-30": 1000107.0,
+      "2025-03-31": 1000107.0
+    },
+    "calendar": "{'Earnings Date': [], 'Earnings High': None, 'Earnings Low': None, 'Earnings Average': None, 'Revenue High': None, 'Revenue Low': None, 'Revenue Average': None}",
+    "news": [
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      }
+    ]
+  },
+  "SNOU": {
+    "description": "T-Rex 2X Long SNOW Daily Target ETF",
+    "exchange": "Cboe BZX",
+    "float": 0.0,
+    "shares_outstanding": 850000.0,
+    "market_cap": 18547000.0,
+    "short_int_float": 0.0,
+    "short_days_cover": 0.0,
+    "avg_10d_vol": 372850,
+    "avg_3m_vol": 142183,
+    "premarket_high": 39.16,
+    "premarket_low": 37.5,
+    "premarket_volume": 21148,
+    "open": 38.02,
+    "high": 43.16,
+    "low": 38.0,
+    "close": 43.07,
+    "volume": 465853,
+    "dollar_volume": 19139162.7301,
+    "vwap": 41.089090552241444,
+    "pct_above_vwap": 0.5357142857142857,
+    "range_location": 0.9825581395348845,
+    "total_volume": 494763,
+    "total_dollar_volume": 20284459.7473,
+    "atr_14": 3.11657857142857,
+    "sma_20": 20.131,
+    "sma_50": 18.273191999999998,
+    "prev_close": 37.86,
+    "cash": null,
+    "net_income": null,
+    "operating_cash_flow": null,
+    "shares_history": {},
+    "calendar": null,
+    "news": []
+  },
+  "ASTC": {
+    "description": "ASTROTECH CORP",
+    "exchange": "NASDAQ",
+    "float": 1306063.00647,
+    "shares_outstanding": 1676453.0,
+    "market_cap": 23151815.0,
+    "short_int_float": 0.0,
+    "short_days_cover": 0.0,
+    "avg_10d_vol": 14661212,
+    "avg_3m_vol": 3039463,
+    "premarket_high": 38.52,
+    "premarket_low": 32.1,
+    "premarket_volume": 700760,
+    "open": 37.7,
+    "high": 68.85,
+    "low": 33.95,
+    "close": 48.35,
+    "volume": 18761783,
+    "dollar_volume": 974663469.0715361,
+    "vwap": 51.85540354581019,
+    "pct_above_vwap": 0.5480225988700564,
+    "range_location": 0.4126074498567336,
+    "total_volume": 20212079,
+    "total_dollar_volume": 1034689632.815436,
+    "atr_14": 5.761664285714285,
+    "sma_20": 6.885,
+    "sma_50": 4.73815,
+    "prev_close": 29.43,
+    "cash": 6582000.0,
+    "net_income": -3768000.0,
+    "operating_cash_flow": -3686000.0,
+    "shares_history": {
+      "2026-03-31": 1758953.0,
+      "2025-12-31": 1758953.0,
+      "2025-09-30": 1758953.0,
+      "2025-06-30": 1758953.0,
+      "2025-03-31": 1693953.0
+    },
+    "calendar": "{'Dividend Date': datetime.date(2017, 10, 15), 'Earnings Date': [], 'Earnings High': None, 'Earnings Low': None, 'Earnings Average': None, 'Revenue High': None, 'Revenue Low': None, 'Revenue Average': None}",
+    "news": [
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      }
+    ]
+  },
+  "IOTR": {
+    "description": "IOTHREE LTD",
+    "exchange": "NASDAQ",
+    "float": 184128.66761,
+    "shares_outstanding": 733325.0,
+    "market_cap": 5566047.0,
+    "short_int_float": 0.0,
+    "short_days_cover": 0.0,
+    "avg_10d_vol": 13718,
+    "avg_3m_vol": 783291,
+    "premarket_high": 4.9999,
+    "premarket_low": 3.42,
+    "premarket_volume": 2514031,
+    "open": 4.55,
+    "high": 6.08,
+    "low": 3.4001,
+    "close": 3.91,
+    "volume": 12778207,
+    "dollar_volume": 63494255.26849999,
+    "vwap": 4.976582636136405,
+    "pct_above_vwap": 0.10539845758354756,
+    "range_location": 0.19026829359304454,
+    "total_volume": 15488908,
+    "total_dollar_volume": 75274923.1844,
+    "atr_14": 0.5269357142857143,
+    "sma_20": 2.29051,
+    "sma_50": 2.387464,
+    "prev_close": 2.8,
+    "cash": 842393.0,
+    "net_income": null,
+    "operating_cash_flow": null,
+    "shares_history": {
+      "2025-09-30": 2565000.0,
+      "2025-03-31": 2565000.0,
+      "2024-09-30": 2565000.0
+    },
+    "calendar": "{'Earnings Date': [], 'Earnings High': None, 'Earnings Low': None, 'Earnings Average': None, 'Revenue High': None, 'Revenue Low': None, 'Revenue Average': None}",
+    "news": [
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      }
+    ]
+  },
+  "MASK": {
+    "description": "3 E NETWORK TECHNOLO A",
+    "exchange": "NASDAQ",
+    "float": 691415.00417,
+    "shares_outstanding": 1091415.0,
+    "market_cap": 1506152.0,
+    "short_int_float": 0.0,
+    "short_days_cover": 0.0,
+    "avg_10d_vol": 254350,
+    "avg_3m_vol": 2822930,
+    "premarket_high": 5.5,
+    "premarket_low": 4.56,
+    "premarket_volume": 3074356,
+    "open": 4.9,
+    "high": 5.48,
+    "low": 3.53,
+    "close": 3.6,
+    "volume": 10011881,
+    "dollar_volume": 47435817.617045,
+    "vwap": 4.747102880331112,
+    "pct_above_vwap": 0.309462915601023,
+    "range_location": 0.035897435897436034,
+    "total_volume": 13345395,
+    "total_dollar_volume": 63825369.759245,
+    "atr_14": 0.8118214285714288,
+    "sma_20": 2.11,
+    "sma_50": 1.9184,
+    "prev_close": 4.13,
+    "cash": 2555412.0,
+    "net_income": null,
+    "operating_cash_flow": null,
+    "shares_history": {
+      "2025-12-31": 904861.0,
+      "2025-06-30": 499944.0,
+      "2024-12-31": 450000.0
+    },
+    "calendar": "{'Earnings Date': [], 'Earnings High': None, 'Earnings Low': None, 'Earnings Average': None, 'Revenue High': None, 'Revenue Low': None, 'Revenue Average': None}",
+    "news": [
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      }
+    ]
+  },
+  "UMAC": {
+    "description": "UNUSUAL MACHS INC NE Equity",
+    "exchange": "NYSE American",
+    "float": 44463297.32662,
+    "shares_outstanding": 47784548.0,
+    "market_cap": 899783038.0,
+    "short_int_float": 0.0,
+    "short_days_cover": 0.0,
+    "avg_10d_vol": 5300532,
+    "avg_3m_vol": 4209095,
+    "premarket_high": 30.4788,
+    "premarket_low": 29.14,
+    "premarket_volume": 825258,
+    "open": 29.305,
+    "high": 32.36,
+    "low": 24.28,
+    "close": 31.78,
+    "volume": 21000107,
+    "dollar_volume": 590199963.349682,
+    "vwap": 28.116453166333578,
+    "pct_above_vwap": 0.6342710997442456,
+    "range_location": 0.9282178217821784,
+    "total_volume": 22263090,
+    "total_dollar_volume": 628642981.4639819,
+    "atr_14": 3.1239285714285714,
+    "sma_20": 16.594,
+    "sma_50": 15.2172,
+    "prev_close": 29.6,
+    "cash": 283596657.0,
+    "net_income": 10282994.0,
+    "operating_cash_flow": -17412987.0,
+    "shares_history": {
+      "2026-03-31": 47793923.0,
+      "2025-12-31": 37759911.0,
+      "2025-09-30": 31568949.0,
+      "2025-06-30": 25287786.0,
+      "2025-03-31": 16830170.0
+    },
+    "calendar": "{'Earnings Date': [datetime.date(2026, 8, 10)], 'Earnings High': -0.1, 'Earnings Low': -0.1, 'Earnings Average': -0.1, 'Revenue High': 10000000, 'Revenue Low': 8300000, 'Revenue Average': 8920890}",
+    "news": [
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      },
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      }
+    ]
+  },
+  "RCAX": {
+    "description": "DEFIANCE DAILY TARGET 2X LONG RCAT ETF",
+    "exchange": "NASDAQ",
+    "float": 0.0,
+    "shares_outstanding": 1430000.0,
+    "market_cap": 10796500.0,
+    "short_int_float": 0.0,
+    "short_days_cover": 0.0,
+    "avg_10d_vol": 415774,
+    "avg_3m_vol": 229930,
+    "premarket_high": 12.5908,
+    "premarket_low": 11.26,
+    "premarket_volume": 90768,
+    "open": 11.33,
+    "high": 13.35,
+    "low": 9.3,
+    "close": 13.01,
+    "volume": 1420311,
+    "dollar_volume": 15915963.26228,
+    "vwap": 11.216828239111951,
+    "pct_above_vwap": 0.6657458563535912,
+    "range_location": 0.9160493827160494,
+    "total_volume": 1538834,
+    "total_dollar_volume": 17366175.91878,
+    "atr_14": 1.7294928571428572,
+    "sma_20": 7.6302,
+    "sma_50": 11.081312,
+    "prev_close": 12.48,
+    "cash": null,
+    "net_income": null,
+    "operating_cash_flow": null,
+    "shares_history": {},
+    "calendar": null,
+    "news": []
+  },
+  "QTEX": {
+    "description": "QTREX QUANTUM LTD",
+    "exchange": "NASDAQ",
+    "float": 32167612.4081,
+    "shares_outstanding": 43579260.0,
+    "market_cap": 91516446.0,
+    "short_int_float": 0.0,
+    "short_days_cover": 0.0,
+    "avg_10d_vol": 111481429,
+    "avg_3m_vol": 12903634,
+    "premarket_high": 4.2,
+    "premarket_low": 3.08,
+    "premarket_volume": 18885234,
+    "open": 3.44,
+    "high": 3.7,
+    "low": 2.08,
+    "close": 3.0484,
+    "volume": 66085237,
+    "dollar_volume": 198614085.53454,
+    "vwap": 3.008953607026181,
+    "pct_above_vwap": 0.8351351351351352,
+    "range_location": 0.5977777777777777,
+    "total_volume": 87621087,
+    "total_dollar_volume": 274406795.82024,
+    "atr_14": null,
+    "sma_20": null,
+    "sma_50": null,
+    "prev_close": 3.0,
+    "cash": 3159000.0,
+    "net_income": null,
+    "operating_cash_flow": null,
+    "shares_history": {
+      "2025-12-31": 35949247.0,
+      "2024-12-31": 24252096.0
+    },
+    "calendar": "{'Earnings Date': [], 'Earnings High': None, 'Earnings Low': None, 'Earnings Average': None, 'Revenue High': None, 'Revenue Low': None, 'Revenue Average': None}",
+    "news": [
+      {
+        "title": null,
+        "publisher": null,
+        "link": null,
+        "providerPublishTime": null
+      }
+    ]
+  }
+}
