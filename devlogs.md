@@ -435,5 +435,6 @@ Diagnosed and resolved critical issues with the live screener tables' hover-to-e
 * Fixed HTTPS Mixed Content / CORS errors by updating `NEXT_PUBLIC_API_URL` to `https://homma-research.homma.casa/api` in:
   - [ecosystem.config.js](file:///home/jackc/projects/homma-research/ecosystem.config.js#L42) (for runtime environments)
   - [deploy.sh](file:///home/jackc/projects/homma-research/deploy.sh#L26) (exported at build-time to override `.env.local` settings)
+* Resolved Next.js SSR Auth gateway redirects (which caused HTML responses to crash components calling `.filter`) by updating [api.ts](file:///home/jackc/projects/homma-research/frontend/lib/api.ts#L3-L6) to dynamically route server-side requests directly to local backend port (`http://127.0.0.1:5000`) while preserving HTTPS public endpoints for client-side browsers.
 
 
