@@ -407,4 +407,27 @@ Diagnosed and resolved critical issues with the live screener tables' hover-to-e
 * **Next.js Compile**: Verified typescript compilation and Next.js optimization by running `npm run build` locally.
 * **Production Sync**: Discarded local identical working files in `/opt/trading-journal`, pulled the latest master commit, ran `/opt/trading-journal/deploy.sh`, and verified all PM2 services are online and running the updated bundle.
 
+---
+
+## [2026-05-31] Milestone: Hover Delay, Float Badge Styling, Technical Status Dashboard & Tooltips
+
+### Summary
+1. Increased the hover-to-expand delay for the live screener tables from 150ms to 1000ms (1 second) to prevent accidental expansions.
+2. Resolved inconsistent table row heights caused by text wrapping in Float badges.
+3. Created an actionable **Technical Status Dashboard** at the top of the ticker detailed view to visualize key live trading states (In-Play, HOD distance, VWAP zone, Consolidation).
+4. Implemented interactive CSS-only tooltips for complex metrics (`RVOL`, `Spread %`, `ATR Spread`, `ATR VWAP`, `ZenV`).
+
+### Details
+* Adjusted the `hoverTimeoutRef` inside [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx#L304-L308) from 150ms to 1000ms.
+* Prevented text wrapping inside the Float badges by adding the `whitespace-nowrap` class to the badge elements in both the table rows and modal view of [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx#L552-L556).
+* Adjusted table column widths inside [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx#L430-L432) to allot slightly more width to the Float column.
+* Built dynamic badge calculators for:
+  - **In-Play / Urgency Status** (e.g. `🔥 Active In-Play`, `⚡ Actionable`, `❄️ Fading`, `💤 Drifting / Cold`) based on `rvol_15m` and `mom_2m`.
+  - **Consolidation / Breakout Status** (e.g. `⏳ Consolidating`, `🚀 Breaking Out`, `📉 Breaking Down`, `📊 Trending`) based on `zen_v` slope and `mom_2m`.
+  - **VWAP Location Status** (e.g. `⚡ Nearing VWAP Cross`, `📈 Above VWAP`, `📉 Below VWAP`) based on `atr_vwap` distance.
+  - **HOD Location Status** (e.g. `🎯 At HOD`, `🎯 Near HOD`, `📈 Pullback`, `⚠️ Off HOD`) based on relative calculation between `last_price` and `high_price`.
+* Rendered these badges in a dedicated status bar at the top of the detailed dropdown row in [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx#L646-L666).
+* Added a `MetricLabelWithTooltip` helper component in [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx#L45-L57) and integrated it for advanced technical metrics in the dropdown grid.
+* Verified that ESLint checks pass successfully.
+
 

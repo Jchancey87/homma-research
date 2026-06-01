@@ -26,7 +26,8 @@ import {
   ExternalLink,
   X,
   Sparkles,
-  Pin
+  Pin,
+  Info
 } from 'lucide-react'
 import MiniSessionChart from '@/components/MiniSessionChart'
 
@@ -39,6 +40,19 @@ function fmtVol(n: number | null) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000)     return `${(n / 1_000).toFixed(0)}K`
   return n.toLocaleString()
+}
+
+function MetricLabelWithTooltip({ label, tooltip }: { label: string; tooltip: string }) {
+  return (
+    <div className="flex items-center gap-1.5 text-gray-500 group/tooltip relative select-none">
+      <span>{label}</span>
+      <Info size={11} className="text-gray-650 hover:text-gray-400 cursor-help shrink-0" />
+      <div className="pointer-events-none absolute bottom-full left-0 mb-2 hidden group-hover/tooltip:block bg-gray-950 border border-gray-800 text-white text-[10px] font-medium py-1.5 px-2.5 rounded-lg shadow-2xl w-60 leading-relaxed z-50 normal-case font-sans">
+        {tooltip}
+        <span className="absolute top-full left-3 border-4 border-transparent border-t-gray-950" />
+      </div>
+    </div>
+  )
 }
 
 function fmtAge(isoUtc: string | null): string {
@@ -304,7 +318,7 @@ function GainerTable({
 
     hoverTimeoutRef.current = setTimeout(() => {
       setHoveredTicker(ticker)
-    }, 150)
+    }, 1000)
   }
 
   const handleRowMouseLeave = () => {
@@ -427,8 +441,8 @@ function GainerTable({
               <Th col="price" label="Price" align="right" width={showRank ? "w-[14%]" : "w-[16%]"} />
               <Th col="change" label="Change(%)" align="right" width={showRank ? "w-[14%]" : "w-[16%]"} />
               <Th col="mom_2m" label="Mom %" align="right" width={showRank ? "w-[14%]" : "w-[16%]"} />
-              <Th col="atr_hod" label="AtrHoD" align="right" width={showRank ? "w-[16%]" : "w-[18%]"} />
-              <Th col="float" label="Float" align="right" width={showRank ? "w-[16%]" : "w-[18%]"} />
+              <Th col="atr_hod" label="AtrHoD" align="right" width={showRank ? "w-[14%]" : "w-[16%]"} />
+              <Th col="float" label="Float" align="right" width={showRank ? "w-[18%]" : "w-[20%]"} />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800/40">
@@ -444,6 +458,65 @@ function GainerTable({
               sortedGainers.map((g) => {
                 const originalRank = fullList.findIndex(x => x.ticker === g.ticker) + 1
                 const isExpanded = hoveredTicker === g.ticker || lockedTicker === g.ticker
+
+                // Actionability Status Badge Calculations
+                let playStatus = null
+                const rvol = g.rvol_15m
+                const mom = g.mom_2m
+                if (rvol != null && mom != null) {
+                  if (rvol >= 2.0 && mom >= 1.0) {
+                    playStatus = { label: '🔥 Active In-Play', className: 'bg-orange-500/20 text-orange-400 border border-orange-500/35 animate-pulse' }
+                  } else if (rvol >= 1.5 || mom >= 0.5) {
+                    playStatus = { label: '⚡ Actionable', className: 'bg-amber-500/15 text-amber-300 border border-amber-500/25' }
+                  } else if (mom < -1.5) {
+                    playStatus = { label: '❄️ Fading', className: 'bg-rose-500/15 text-rose-355 border border-rose-500/25' }
+                  } else {
+                    playStatus = { label: '💤 Drifting / Cold', className: 'bg-gray-800/40 text-gray-400 border border-gray-800/60' }
+                  }
+                }
+
+                let hodStatus = null
+                const last = g.last_price
+                const high = g.high_price
+                if (last != null && high != null && high > 0) {
+                  const pctOff = ((high - last) / high) * 100
+                  if (pctOff <= 0.2) {
+                    hodStatus = { label: '🎯 At HOD', className: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/35' }
+                  } else if (pctOff <= 1.5) {
+                    hodStatus = { label: `🎯 Near HOD (${pctOff.toFixed(1)}% off)`, className: 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20' }
+                  } else if (pctOff <= 5.0) {
+                    hodStatus = { label: `📈 Pullback (${pctOff.toFixed(1)}% off)`, className: 'bg-amber-500/10 text-amber-300 border border-amber-500/20' }
+                  } else {
+                    hodStatus = { label: `⚠️ Off HOD (${pctOff.toFixed(1)}% off)`, className: 'bg-rose-500/15 text-rose-300 border border-rose-500/25' }
+                  }
+                }
+
+                let vwapStatus = null
+                const atrVwap = g.atr_vwap
+                if (atrVwap != null) {
+                  const absAtr = Math.abs(atrVwap)
+                  if (absAtr <= 0.4) {
+                    vwapStatus = { label: '⚡ Nearing VWAP Cross', className: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/35 animate-pulse' }
+                  } else if (atrVwap > 0) {
+                    vwapStatus = { label: `📈 Above VWAP (+${atrVwap.toFixed(1)} ATR)`, className: 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20' }
+                  } else {
+                    vwapStatus = { label: `📉 Below VWAP (${atrVwap.toFixed(1)} ATR)`, className: 'bg-rose-500/10 text-rose-300 border border-rose-500/20' }
+                  }
+                }
+
+                let consolStatus = null
+                const zen = g.zen_v
+                if (zen != null && mom != null) {
+                  if (Math.abs(zen) <= 0.25 && Math.abs(mom) <= 0.5) {
+                    consolStatus = { label: '⏳ Consolidating', className: 'bg-blue-500/20 text-blue-300 border border-blue-500/35' }
+                  } else if (zen > 0.25 && mom > 0.5) {
+                    consolStatus = { label: '🚀 Breaking Out', className: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/35' }
+                  } else if (zen < -0.25 && mom < -0.5) {
+                    consolStatus = { label: '📉 Breaking Down', className: 'bg-rose-500/20 text-rose-300 border border-rose-500/35' }
+                  } else {
+                    consolStatus = { label: '📊 Trending', className: 'bg-gray-800/40 text-gray-300 border border-gray-800/60' }
+                  }
+                }
 
                 return (
                   <Fragment key={g.ticker}>
@@ -550,7 +623,7 @@ function GainerTable({
 
                       {/* 7. Float */}
                       <td className="py-2.5 pr-4 text-right animate-in fade-in duration-200">
-                        <span className={`inline-flex px-2 py-0.5 rounded text-[11px] font-mono font-bold ${getFloatBadgeStyle(g.float_shares).className}`}>
+                        <span className={`inline-flex whitespace-nowrap px-2 py-0.5 rounded text-[11px] font-mono font-bold ${getFloatBadgeStyle(g.float_shares).className}`}>
                           {getFloatBadgeStyle(g.float_shares).label}
                         </span>
                       </td>
@@ -570,79 +643,118 @@ function GainerTable({
                           }`}
                         >
                           <div className="overflow-hidden">
-                            <div className="py-4 px-6 border-t border-gray-800/40 bg-gray-950/20">
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm text-gray-300">
-                                {/* Left Column: Detailed Metrics */}
-                                <div className="space-y-3">
-                                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider select-none">Secondary Metrics</h4>
-                                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-xs">
-                                    <span className="text-gray-500">Volume:</span>
-                                    <span className="text-white font-semibold">{fmtVol(g.volume)}</span>
+                             <div className="py-4 px-6 border-t border-gray-800/40 bg-gray-950/20 space-y-4">
+                               {/* ⚡ Actionability & Technical Status Dashboard */}
+                               <div className="flex flex-wrap gap-2 select-none border-b border-gray-800/35 pb-3">
+                                 {playStatus && (
+                                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] font-bold border ${playStatus.className}`}>
+                                     {playStatus.label}
+                                   </span>
+                                 )}
+                                 {consolStatus && (
+                                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] font-bold border ${consolStatus.className}`}>
+                                     {consolStatus.label}
+                                   </span>
+                                 )}
+                                 {vwapStatus && (
+                                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] font-bold border ${vwapStatus.className}`}>
+                                     {vwapStatus.label}
+                                   </span>
+                                 )}
+                                 {hodStatus && (
+                                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[11px] font-bold border ${hodStatus.className}`}>
+                                     {hodStatus.label}
+                                   </span>
+                                 )}
+                               </div>
 
-                                    <span className="text-gray-500">RVOL (15m):</span>
-                                    <div>
-                                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] ${getRvolBadgeStyle(g.rvol_15m).className}`}>
-                                        {getRvolBadgeStyle(g.rvol_15m).label}
-                                      </span>
-                                    </div>
+                               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm text-gray-300">
+                                 {/* Left Column: Detailed Metrics */}
+                                 <div className="space-y-3">
+                                   <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider select-none">Secondary Metrics</h4>
+                                   <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 font-mono text-xs">
+                                     <span className="text-gray-500">Volume:</span>
+                                     <span className="text-white font-semibold">{fmtVol(g.volume)}</span>
 
-                                    <span className="text-gray-500">Spread %:</span>
-                                    <div>
-                                      <span className={getSpreadBadgeStyle(g.spread_pct).className}>
-                                        {getSpreadBadgeStyle(g.spread_pct).label}
-                                      </span>
-                                    </div>
+                                     <MetricLabelWithTooltip
+                                       label="RVOL (15m):"
+                                       tooltip="Relative Volume over the last 15 minutes compared to historical average. Higher values indicate unusual/strong activity."
+                                     />
+                                     <div>
+                                       <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] ${getRvolBadgeStyle(g.rvol_15m).className}`}>
+                                         {getRvolBadgeStyle(g.rvol_15m).label}
+                                       </span>
+                                     </div>
 
-                                    <span className="text-gray-500">Trade Time:</span>
-                                    <div className="flex flex-col gap-0.5 text-gray-400">
-                                      <span>
-                                        {g.trade_time
-                                          ? new Date(g.trade_time).toLocaleTimeString('en-US', {
-                                              timeZone: 'America/New_York',
-                                              hour12: false,
-                                            })
-                                          : '—'} EST
-                                      </span>
-                                      {g.trade_time && (
-                                        <div>
-                                          <span className={`inline-flex px-1 py-0.25 rounded text-[9px] ${getTimeAgoBadge(g.trade_time)?.className}`}>
-                                            {getTimeAgoBadge(g.trade_time)?.label}
-                                          </span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
+                                     <MetricLabelWithTooltip
+                                       label="Spread %:"
+                                       tooltip="The bid-ask spread as a percentage of the last price. Lower spread (<1%) implies better liquidity."
+                                     />
+                                     <div>
+                                       <span className={getSpreadBadgeStyle(g.spread_pct).className}>
+                                         {getSpreadBadgeStyle(g.spread_pct).label}
+                                       </span>
+                                     </div>
 
-                                {/* Middle Column: Volatility & Relative Level */}
-                                <div className="space-y-3">
-                                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider select-none">Volatility & Relative Level</h4>
-                                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-xs">
-                                    <span className="text-gray-500">ATR Spread:</span>
-                                    <div>
-                                      <span className={getAtrSpreadStyle(g.atr_sprd).className}>
-                                        {getAtrSpreadStyle(g.atr_sprd).text}
-                                      </span>
-                                    </div>
+                                     <span className="text-gray-500">Trade Time:</span>
+                                     <div className="flex flex-col gap-0.5 text-gray-400">
+                                       <span>
+                                         {g.trade_time
+                                           ? new Date(g.trade_time).toLocaleTimeString('en-US', {
+                                               timeZone: 'America/New_York',
+                                               hour12: false,
+                                             })
+                                           : '—'} EST
+                                       </span>
+                                       {g.trade_time && (
+                                         <div>
+                                           <span className={`inline-flex px-1 py-0.25 rounded text-[9px] ${getTimeAgoBadge(g.trade_time)?.className}`}>
+                                             {getTimeAgoBadge(g.trade_time)?.label}
+                                           </span>
+                                         </div>
+                                       )}
+                                     </div>
+                                   </div>
+                                 </div>
 
-                                    <span className="text-gray-500">ATR VWAP:</span>
-                                    <div>
-                                      <span className={getAtrVwapStyle(g.atr_vwap).className}>
-                                        {getAtrVwapStyle(g.atr_vwap).text}
-                                      </span>
-                                    </div>
+                                 {/* Middle Column: Volatility & Relative Level */}
+                                 <div className="space-y-3">
+                                   <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider select-none">Volatility & Relative Level</h4>
+                                   <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 font-mono text-xs">
+                                     <MetricLabelWithTooltip
+                                       label="ATR Spread:"
+                                       tooltip="The current bid-ask spread divided by the 14-period Average True Range. Measures relative cost to cross the spread."
+                                     />
+                                     <div>
+                                       <span className={getAtrSpreadStyle(g.atr_sprd).className}>
+                                         {getAtrSpreadStyle(g.atr_sprd).text}
+                                       </span>
+                                     </div>
 
-                                    <span className="text-gray-500">ZenV (Slope):</span>
-                                    <div>
-                                      <span className={getZenVStyle(g.zen_v).className}>
-                                        {getZenVStyle(g.zen_v).text}
-                                      </span>
-                                    </div>
+                                     <MetricLabelWithTooltip
+                                       label="ATR VWAP:"
+                                       tooltip="Distance from the Volume Weighted Average Price in ATR units. Near 0 indicates a reversion/consolidation test."
+                                     />
+                                     <div>
+                                       <span className={getAtrVwapStyle(g.atr_vwap).className}>
+                                         {getAtrVwapStyle(g.atr_vwap).text}
+                                       </span>
+                                     </div>
 
-                                    <span className="text-gray-500">Sector:</span>
-                                    <span className="text-white font-semibold font-sans">{g.sector ?? '—'}</span>
-                                  </div>
-                                </div>
+                                     <MetricLabelWithTooltip
+                                       label="ZenV (Slope):"
+                                       tooltip="The 2-minute slope of volume acceleration. Positive (▲) values indicate escalating buyer urgency."
+                                     />
+                                     <div>
+                                       <span className={getZenVStyle(g.zen_v).className}>
+                                         {getZenVStyle(g.zen_v).text}
+                                       </span>
+                                     </div>
+
+                                     <span className="text-gray-500">Sector:</span>
+                                     <span className="text-white font-semibold font-sans">{g.sector ?? '—'}</span>
+                                   </div>
+                                 </div>
 
                                 {/* Right Column: Trend Sparkline & Actions */}
                                 <div className="flex flex-col justify-between gap-4">
@@ -1058,7 +1170,7 @@ export default function LiveGainers() {
                 <div className="p-3 bg-gray-900/15 border border-gray-850 rounded-xl space-y-1">
                   <span className="text-gray-500 block text-[10px] uppercase tracking-wider font-sans font-semibold">Float Shares</span>
                   <div>
-                    <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold ${getFloatBadgeStyle(modalGainer.float_shares).className}`}>
+                    <span className={`inline-flex whitespace-nowrap px-1.5 py-0.5 rounded text-[10px] font-bold ${getFloatBadgeStyle(modalGainer.float_shares).className}`}>
                       {getFloatBadgeStyle(modalGainer.float_shares).label}
                     </span>
                   </div>
