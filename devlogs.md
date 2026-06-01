@@ -438,19 +438,42 @@ Diagnosed and resolved critical issues with the live screener tables' hover-to-e
 * Resolved Next.js SSR Auth gateway redirects (which caused HTML responses to crash components calling `.filter`) by updating [api.ts](file:///home/jackc/projects/homma-research/frontend/lib/api.ts#L3-L6) to dynamically route server-side requests directly to local backend port (`http://127.0.0.1:5000`) while preserving HTTPS public endpoints for client-side browsers.
 
 
-## [2026-06-01] Hotfix: Next.js Frontend Rewrite Proxying for Client-Side /api and /storage Requests, and Double-API Fix
+## [2026-06-01] Post-Mortem & Hotfix: Proxy Routing, Static File Mounting, and URL Resolution Fixes
 
 ### Summary
-1. Corrected `NEXT_PUBLIC_API_URL` values from `https://homma-research.homma.casa/api` to `https://homma-research.homma.casa` in [deploy.sh](file:///home/jackc/projects/homma-research/deploy.sh), [ecosystem.config.js](file:///home/jackc/projects/homma-research/ecosystem.config.js), [docs/DEVOPS_GUIDE.md](file:///home/jackc/projects/homma-research/docs/DEVOPS_GUIDE.md), and [README.md](file:///home/jackc/projects/homma-research/README.md). This stops Axios from doubling up path requests to `/api/api/...` which was throwing 404 errors.
-2. Mounted the static files directory `/opt/trading-journal/storage` in [backend/fastapi_app/main.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/main.py) at `/storage` using FastAPI's `StaticFiles`.
-3. Configured Next.js internal reverse proxy (rewrites) in [next.config.mjs](file:///home/jackc/projects/homma-research/frontend/next.config.mjs) to proxy both `/api/:path*` and `/storage/:path*` to the local backend port `http://127.0.0.1:5000`.
+1. Configured Next.js internal reverse proxy (rewrites) in [next.config.mjs](file:///home/jackc/projects/homma-research/frontend/next.config.mjs) to handle both `/api/:path*` and `/storage/:path*` traffic, proxying it internally to the local FastAPI server (`http://127.0.0.1:5000`).
+2. Corrected `NEXT_PUBLIC_API_URL` to point to the base domain `https://homma-research.homma.casa` (excluding trailing `/api`) across all deployment and configuration scripts. This stops Axios from creating duplicate `/api/api/...` requests.
+3. Mounted the static directory `/opt/trading-journal/storage` in [backend/fastapi_app/main.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/main.py) using FastAPI's `StaticFiles` with robust path resolution and defensive existence checks.
 
-### Details
-* Edited [next.config.mjs](file:///home/jackc/projects/homma-research/frontend/next.config.mjs) to add the `/storage/:path*` proxy rule.
-* Added static directory mounting to [backend/fastapi_app/main.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/main.py).
-* Removed `/api` prefix from `NEXT_PUBLIC_API_URL` config values across all files.
-* Fixed path resolution in [backend/fastapi_app/config.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/config.py) to resolve `/storage` relative to the backend directory, correcting a startup RuntimeError, and added defensive path checks to [backend/fastapi_app/main.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/main.py).
-* Committed and pushed changes to the master branch.
+---
+
+### Struggles & Resolutions
+
+#### 1. Next.js SSR Auth Gateway Interception (`TypeError: e.filter`)
+* **Problem**: Page loads returned a 404/502 and crashed with `TypeError: e.filter is not a function`.
+* **Cause**: During Next.js Server-Side Rendering (SSR), the server components fetch data from the API. Because `NEXT_PUBLIC_API_URL` pointed to the public HTTPS URL, the local server routed requests through the external Authelia/Pangolin gateway. Lacking client-side browser cookies, the gateway redirected the backend requests to an HTML login page. Next.js received raw HTML text instead of JSON and crashed when calling `.filter` on it.
+* **Resolution**: Updated [frontend/lib/api.ts](file:///home/jackc/projects/homma-research/frontend/lib/api.ts) to dynamically choose the API base URL: server-side fetches (where `typeof window === 'undefined'`) route directly to `http://127.0.0.1:5000` internally, bypassing the external gateway and cookies checks, while client-side fetches continue to route through the public HTTPS URL.
+
+#### 2. Mixed Content & CORS Blocks on Hardcoded IPs
+* **Problem**: Request failures on client-side requests.
+* **Cause**: When calling `http://192.168.0.202:5000` directly from the client's browser, the browser blocked the requests due to Mixed Content policies (since the main page loaded over HTTPS) and local address space restrictions.
+* **Resolution**: Replaced the hardcoded local IP in client-side settings with the secure public endpoint `https://homma-research.homma.casa`.
+
+#### 3. Pangolin Tunnel Single-Port Routing & API 404s
+* **Problem**: After switching client-side requests to `https://homma-research.homma.casa/api/...`, all requests returned `404 Not Found` (Next.js default style).
+* **Cause**: The Pangolin tunnel routes all domain requests directly to port `3000` (Next.js frontend). Because Next.js doesn't have an `/api` folder, the requests failed with a frontend 404 error.
+* **Resolution**: Configured Next.js internal rewrites in [frontend/next.config.mjs](file:///home/jackc/projects/homma-research/frontend/next.config.mjs) to act as a local reverse proxy, forwarding `/api/:path*` requests directly to `http://127.0.0.1:5000/api/:path*`.
+
+#### 4. Axios Double `/api/api` Prefix Concatenation
+* **Problem**: Frontend requests still returned 404 errors even with the rewrite rules active.
+* **Cause**: Axios combines `baseURL` and the request path by stripping leading/trailing slashes and concatenating them. Since `NEXT_PUBLIC_API_URL` was configured as `https://homma-research.homma.casa/api` and the frontend API calls specified paths like `/api/gainers/live`, the resulting resolved URL was `/api/api/gainers/live`, which does not exist.
+* **Resolution**: Corrected `NEXT_PUBLIC_API_URL` in [deploy.sh](file:///home/jackc/projects/homma-research/deploy.sh), [ecosystem.config.js](file:///home/jackc/projects/homma-research/ecosystem.config.js), [docs/DEVOPS_GUIDE.md](file:///home/jackc/projects/homma-research/docs/DEVOPS_GUIDE.md), and [README.md](file:///home/jackc/projects/homma-research/README.md) to remove the trailing `/api` prefix, leaving it as `https://homma-research.homma.casa`.
+
+#### 5. FastAPI Static File Mount Path Crash
+* **Problem**: The backend crashed at startup with a `RuntimeError: Directory does not exist` trace in `/var/log/trading-journal/fastapi-err.log`.
+* **Cause**: Mounting `/storage` in [backend/fastapi_app/main.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/main.py) resolved `settings.storage_path` relative to `fastapi_app/` instead of `backend/` root, looking for `/opt/trading-journal/backend/storage` instead of `/opt/trading-journal/storage`. The missing folder path caused Starlette to throw a startup exception.
+* **Resolution**: Fixed path resolution in [backend/fastapi_app/config.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/config.py) to resolve relative to the `backend` parent directory. Also added a defensive check (`if os.path.exists`) around `app.mount()` in [backend/fastapi_app/main.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/main.py) to print warnings rather than crash if the directory is missing.
+
 
 
 
