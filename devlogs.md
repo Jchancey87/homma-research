@@ -438,3 +438,15 @@ Diagnosed and resolved critical issues with the live screener tables' hover-to-e
 * Resolved Next.js SSR Auth gateway redirects (which caused HTML responses to crash components calling `.filter`) by updating [api.ts](file:///home/jackc/projects/homma-research/frontend/lib/api.ts#L3-L6) to dynamically route server-side requests directly to local backend port (`http://127.0.0.1:5000`) while preserving HTTPS public endpoints for client-side browsers.
 
 
+## [2026-06-01] Hotfix: Next.js Frontend Rewrite Proxying for Client-Side /api Requests
+
+### Summary
+1. Configured Next.js internal reverse proxy (rewrites) in [next.config.mjs](file:///home/jackc/projects/homma-research/frontend/next.config.mjs) to proxy all `/api/*` routes to the local backend port `http://127.0.0.1:5000/api/*`.
+2. This resolves the `404` AxiosError when client browsers request `https://homma-research.homma.casa/api/...` through the Pangolin tunnel, which forwards all traffic directly to port `3000`.
+
+### Details
+* Edited [next.config.mjs](file:///home/jackc/projects/homma-research/frontend/next.config.mjs) to add an async `rewrites()` config.
+* Committed and pushed the changes to the master branch.
+
+
+
