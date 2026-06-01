@@ -127,3 +127,8 @@ from .routers import analysis, alerts
 app.include_router(analysis.router, prefix="/api")
 app.include_router(alerts.router, prefix="/api")
 
+# Serve static storage files (charts, screenshots)
+from fastapi.staticfiles import StaticFiles
+storage_dir = os.path.dirname(settings.storage_path)
+app.mount("/storage", StaticFiles(directory=storage_dir), name="storage")
+

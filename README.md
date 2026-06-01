@@ -106,7 +106,7 @@ uvicorn fastapi_app.main:app --port 5000 --host 0.0.0.0
 ```bash
 cd /opt/trading-journal/frontend
 npx pnpm@9 install
-export NEXT_PUBLIC_API_URL=https://homma-research.homma.casa/api
+export NEXT_PUBLIC_API_URL=https://homma-research.homma.casa
 npx pnpm@9 run dev -- -H 0.0.0.0
 ```
 

@@ -438,15 +438,18 @@ Diagnosed and resolved critical issues with the live screener tables' hover-to-e
 * Resolved Next.js SSR Auth gateway redirects (which caused HTML responses to crash components calling `.filter`) by updating [api.ts](file:///home/jackc/projects/homma-research/frontend/lib/api.ts#L3-L6) to dynamically route server-side requests directly to local backend port (`http://127.0.0.1:5000`) while preserving HTTPS public endpoints for client-side browsers.
 
 
-## [2026-06-01] Hotfix: Next.js Frontend Rewrite Proxying for Client-Side /api Requests
+## [2026-06-01] Hotfix: Next.js Frontend Rewrite Proxying for Client-Side /api and /storage Requests, and Double-API Fix
 
 ### Summary
-1. Configured Next.js internal reverse proxy (rewrites) in [next.config.mjs](file:///home/jackc/projects/homma-research/frontend/next.config.mjs) to proxy all `/api/*` routes to the local backend port `http://127.0.0.1:5000/api/*`.
-2. This resolves the `404` AxiosError when client browsers request `https://homma-research.homma.casa/api/...` through the Pangolin tunnel, which forwards all traffic directly to port `3000`.
+1. Corrected `NEXT_PUBLIC_API_URL` values from `https://homma-research.homma.casa/api` to `https://homma-research.homma.casa` in [deploy.sh](file:///home/jackc/projects/homma-research/deploy.sh), [ecosystem.config.js](file:///home/jackc/projects/homma-research/ecosystem.config.js), [docs/DEVOPS_GUIDE.md](file:///home/jackc/projects/homma-research/docs/DEVOPS_GUIDE.md), and [README.md](file:///home/jackc/projects/homma-research/README.md). This stops Axios from doubling up path requests to `/api/api/...` which was throwing 404 errors.
+2. Mounted the static files directory `/opt/trading-journal/storage` in [backend/fastapi_app/main.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/main.py) at `/storage` using FastAPI's `StaticFiles`.
+3. Configured Next.js internal reverse proxy (rewrites) in [next.config.mjs](file:///home/jackc/projects/homma-research/frontend/next.config.mjs) to proxy both `/api/:path*` and `/storage/:path*` to the local backend port `http://127.0.0.1:5000`.
 
 ### Details
-* Edited [next.config.mjs](file:///home/jackc/projects/homma-research/frontend/next.config.mjs) to add an async `rewrites()` config.
-* Committed and pushed the changes to the master branch.
+* Edited [next.config.mjs](file:///home/jackc/projects/homma-research/frontend/next.config.mjs) to add the `/storage/:path*` proxy rule.
+* Added static directory mounting to [backend/fastapi_app/main.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/main.py).
+* Removed `/api` prefix from `NEXT_PUBLIC_API_URL` config values across all files.
+* Committed and pushed changes to the master branch.
 
 
 

@@ -39,7 +39,7 @@ module.exports = {
         PORT: 3000,
         NODE_ENV: 'production',
         HOSTNAME: '0.0.0.0',           // bind to all interfaces; NPM proxies externally
-        NEXT_PUBLIC_API_URL: 'https://homma-research.homma.casa/api',
+        NEXT_PUBLIC_API_URL: 'https://homma-research.homma.casa',
       },
       error_file: '/var/log/trading-journal/nextjs-err.log',
       out_file:   '/var/log/trading-journal/nextjs-out.log',

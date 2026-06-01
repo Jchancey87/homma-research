@@ -22,10 +22,10 @@ deactivate
 # 3. Build Frontend
 echo "🏗️  Building frontend..."
 cd $FRONTEND_DIR
-echo "NEXT_PUBLIC_API_URL=https://homma-research.homma.casa/api" > .env.local
+echo "NEXT_PUBLIC_API_URL=https://homma-research.homma.casa" > .env.local
 npx pnpm@9 install --frozen-lockfile  # Ensures exact pinned packages are installed
 export NEXT_IGNORE_INCORRECT_LOCKFILE=1
-export NEXT_PUBLIC_API_URL="https://homma-research.homma.casa/api"
+export NEXT_PUBLIC_API_URL="https://homma-research.homma.casa"
 npx pnpm@9 run build
 
 # 4. Restart Services
