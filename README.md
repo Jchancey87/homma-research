@@ -105,9 +105,9 @@ uvicorn fastapi_app.main:app --port 5000 --host 0.0.0.0
 ### 6. Frontend Setup
 ```bash
 cd /opt/trading-journal/frontend
-npm install
-export NEXT_PUBLIC_API_URL=http://192.168.0.202:5000
-npm run dev -- -H 0.0.0.0
+npx pnpm@9 install
+export NEXT_PUBLIC_API_URL=https://homma-research.homma.casa/api
+npx pnpm@9 run dev -- -H 0.0.0.0
 ```
 
 ### 7. Start Everything with Tmux (Recommended for Dev)

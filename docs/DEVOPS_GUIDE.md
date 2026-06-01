@@ -98,8 +98,10 @@ deactivate
 
 # 3. Installs frontend packages and builds the Next.js production bundle
 cd frontend
-npm install
-npm run build
+npx pnpm@9 install --frozen-lockfile
+export NEXT_IGNORE_INCORRECT_LOCKFILE=1
+export NEXT_PUBLIC_API_URL="https://homma-research.homma.casa/api"
+npx pnpm@9 run build
 
 # 4. Restarts PM2 to apply code updates and clear cached processes
 cd /opt/trading-journal
