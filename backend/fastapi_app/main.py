@@ -130,5 +130,8 @@ app.include_router(alerts.router, prefix="/api")
 # Serve static storage files (charts, screenshots)
 from fastapi.staticfiles import StaticFiles
 storage_dir = os.path.dirname(settings.storage_path)
-app.mount("/storage", StaticFiles(directory=storage_dir), name="storage")
+if os.path.exists(storage_dir):
+    app.mount("/storage", StaticFiles(directory=storage_dir), name="storage")
+else:
+    log.warning(f"Static storage directory '{storage_dir}' does not exist. Serving disabled.")
 

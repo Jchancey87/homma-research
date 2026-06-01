@@ -31,11 +31,13 @@ class Settings:
     app_version: str = "2.0.0"
     cors_origins: list[str] = ["*"]  # tighten in production
 
-    # ── File uploads (charts) ────────────────────────────────────────────────
     _raw_storage: str = os.getenv("STORAGE_PATH", "../storage/charts")
     storage_path: str = (
         os.path.normpath(
-            os.path.join(os.path.dirname(os.path.abspath(__file__)), _raw_storage)
+            os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                _raw_storage
+            )
         )
         if not os.path.isabs(_raw_storage)
         else _raw_storage
