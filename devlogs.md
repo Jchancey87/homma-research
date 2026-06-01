@@ -432,5 +432,8 @@ Diagnosed and resolved critical issues with the live screener tables' hover-to-e
 * Introduced `priceFilterEnabled` state and a `filteredGainers` `useMemo` filter inside [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx#L852-L858) to filter tickers between $2.00 and $25.00.
 * Placed a premium toggle button next to the "Refresh" button in the Live Gainers header to toggle the price filter.
 * Verified that ESLint checks pass successfully.
+* Fixed HTTPS Mixed Content / CORS errors by updating `NEXT_PUBLIC_API_URL` to `https://homma-research.homma.casa/api` in:
+  - [ecosystem.config.js](file:///home/jackc/projects/homma-research/ecosystem.config.js#L42) (for runtime environments)
+  - [deploy.sh](file:///home/jackc/projects/homma-research/deploy.sh#L26) (exported at build-time to override `.env.local` settings)
 
 

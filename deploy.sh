@@ -24,6 +24,7 @@ echo "🏗️  Building frontend..."
 cd $FRONTEND_DIR
 npx pnpm@9 install --frozen-lockfile  # Ensures exact pinned packages are installed
 export NEXT_IGNORE_INCORRECT_LOCKFILE=1
+export NEXT_PUBLIC_API_URL="https://homma-research.homma.casa/api"
 npx pnpm@9 run build
 
 # 4. Restart Services
