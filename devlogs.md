@@ -409,13 +409,14 @@ Diagnosed and resolved critical issues with the live screener tables' hover-to-e
 
 ---
 
-## [2026-05-31] Milestone: Hover Delay, Float Badge Styling, Technical Status Dashboard & Tooltips
+## [2026-05-31] Milestone: Hover Delay, Float Badges, Technical Status Dashboard & $2-$25 Price Filter
 
 ### Summary
 1. Increased the hover-to-expand delay for the live screener tables from 150ms to 1000ms (1 second) to prevent accidental expansions.
 2. Resolved inconsistent table row heights caused by text wrapping in Float badges.
 3. Created an actionable **Technical Status Dashboard** at the top of the ticker detailed view to visualize key live trading states (In-Play, HOD distance, VWAP zone, Consolidation).
 4. Implemented interactive CSS-only tooltips for complex metrics (`RVOL`, `Spread %`, `ATR Spread`, `ATR VWAP`, `ZenV`).
+5. Added a **$2-$25 Price Filter** UI Toggle to filter out penny stocks and expensive listings, enabled by default with a green active indicator dot.
 
 ### Details
 * Adjusted the `hoverTimeoutRef` inside [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx#L304-L308) from 150ms to 1000ms.
@@ -428,6 +429,8 @@ Diagnosed and resolved critical issues with the live screener tables' hover-to-e
   - **HOD Location Status** (e.g. `🎯 At HOD`, `🎯 Near HOD`, `📈 Pullback`, `⚠️ Off HOD`) based on relative calculation between `last_price` and `high_price`.
 * Rendered these badges in a dedicated status bar at the top of the detailed dropdown row in [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx#L646-L666).
 * Added a `MetricLabelWithTooltip` helper component in [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx#L45-L57) and integrated it for advanced technical metrics in the dropdown grid.
+* Introduced `priceFilterEnabled` state and a `filteredGainers` `useMemo` filter inside [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx#L852-L858) to filter tickers between $2.00 and $25.00.
+* Placed a premium toggle button next to the "Refresh" button in the Live Gainers header to toggle the price filter.
 * Verified that ESLint checks pass successfully.
 
 

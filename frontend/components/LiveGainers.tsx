@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef, Fragment } from 'react'
+import { useEffect, useState, useCallback, useRef, Fragment, useMemo } from 'react'
 import {
   getLiveGainers,
   LiveGainerSnapshot,
@@ -849,6 +849,7 @@ export default function LiveGainers() {
   const [notesText, setNotesText]           = useState('')
   const [savingNotes, setSavingNotes]       = useState(false)
   const [watchlistLoading, setWatchlistLoading] = useState(false)
+  const [priceFilterEnabled, setPriceFilterEnabled] = useState(true)
 
   const fetchData = useCallback(async (force = false) => {
     try {
@@ -951,7 +952,15 @@ export default function LiveGainers() {
 
   const session    = snap?.session ?? 'closed'
   const isActive   = session !== 'closed'
-  const gainers    = snap?.gainers ?? []
+
+  const filteredGainers = useMemo(() => {
+    const list = snap?.gainers ?? []
+    if (!priceFilterEnabled) return list
+    return list.filter(g => {
+      const p = g.last_price
+      return p != null && p >= 2.0 && p <= 25.0
+    })
+  }, [snap, priceFilterEnabled])
 
   return (
     <div className="space-y-4">
@@ -981,15 +990,33 @@ export default function LiveGainers() {
           )}
         </div>
 
-        <button
-          id="live-gainers-refresh"
-          onClick={() => fetchData(true)}
-          disabled={refreshing}
-          className="flex items-center gap-1 text-xs text-gray-500 hover:text-emerald-400 transition-colors disabled:opacity-40"
-        >
-          <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-3 select-none">
+          <button
+            onClick={() => setPriceFilterEnabled(prev => !prev)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+              priceFilterEnabled
+                ? 'bg-emerald-600/15 border-emerald-500/35 text-emerald-400 hover:bg-emerald-600/25'
+                : 'bg-gray-900/40 border-gray-800/60 text-gray-450 hover:text-gray-300 hover:bg-gray-900/60'
+            }`}
+          >
+            <span>$2-$25 Filter</span>
+            {priceFilterEnabled ? (
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            ) : (
+              <span className="w-1.5 h-1.5 rounded-full bg-gray-600" />
+            )}
+          </button>
+
+          <button
+            id="live-gainers-refresh"
+            onClick={() => fetchData(true)}
+            disabled={refreshing}
+            className="flex items-center gap-1 text-xs text-gray-500 hover:text-emerald-400 transition-colors disabled:opacity-40"
+          >
+            <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* EOD persist notice */}
@@ -1003,8 +1030,8 @@ export default function LiveGainers() {
       {/* Side-by-Side Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <GainerTable
-          gainers={loading ? [] : gainers}
-          fullList={loading ? [] : gainers}
+          gainers={loading ? [] : filteredGainers}
+          fullList={loading ? [] : filteredGainers}
           title="All Live Gainers"
           showRank={true}
           emptyMessage={
@@ -1017,8 +1044,8 @@ export default function LiveGainers() {
           loading={loading}
         />
         <GainerTable
-          gainers={loading ? [] : gainers.filter(g => g.atr_hod != null && g.atr_hod < 1.0)}
-          fullList={loading ? [] : gainers}
+          gainers={loading ? [] : filteredGainers.filter(g => g.atr_hod != null && g.atr_hod < 1.0)}
+          fullList={loading ? [] : filteredGainers}
           title="Near HOD Radar"
           showRank={false}
           emptyMessage="No Near HOD breakout setups coiling right now (AtrHoD < 1.0)."
