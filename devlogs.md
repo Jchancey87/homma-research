@@ -449,6 +449,7 @@ Diagnosed and resolved critical issues with the live screener tables' hover-to-e
 * Edited [next.config.mjs](file:///home/jackc/projects/homma-research/frontend/next.config.mjs) to add the `/storage/:path*` proxy rule.
 * Added static directory mounting to [backend/fastapi_app/main.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/main.py).
 * Removed `/api` prefix from `NEXT_PUBLIC_API_URL` config values across all files.
+* Fixed path resolution in [backend/fastapi_app/config.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/config.py) to resolve `/storage` relative to the backend directory, correcting a startup RuntimeError, and added defensive path checks to [backend/fastapi_app/main.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/main.py).
 * Committed and pushed changes to the master branch.
 
 
