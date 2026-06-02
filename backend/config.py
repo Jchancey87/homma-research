@@ -24,7 +24,7 @@ class Config:
 
     # Secondary LLM (OpenRouter / Deep Research)
     DEEP_LLM_BASE_URL = os.getenv('DEEP_LLM_BASE_URL', 'https://openrouter.ai/api/v1')
-    DEEP_LLM_API_KEY  = os.getenv('DEEP_LLM_API_KEY', '')
+    DEEP_LLM_API_KEY  = os.getenv('DEEP_LLM_API_KEY', os.getenv('DEEP_LLM_KEY', ''))
     DEEP_LLM_MODEL    = os.getenv('DEEP_LLM_MODEL', 'meta-llama/llama-3.3-70b-instruct')
 
     # External APIs
