@@ -53,3 +53,39 @@ async def test_calendar_event_fields(client):
         assert "event" in event
         assert "impact" in event
         assert event["impact"] in ("high", "medium")
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_momentum_breadth_returns_200(client):
+    resp = await client.get("/api/market/momentum-breadth")
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_momentum_breadth_shape(client):
+    resp = await client.get("/api/market/momentum-breadth")
+    body = resp.json()
+    assert "small_cap_ad" in body
+    assert "top5_avg_rvol" in body
+    assert "dominant_float_theme" in body
+    assert "active_halts" in body
+    
+    ad = body["small_cap_ad"]
+    assert "advancing" in ad
+    assert "declining" in ad
+    assert "ratio_str" in ad
+    assert "is_bullish" in ad
+
+    rvol = body["top5_avg_rvol"]
+    assert "avg_rvol" in rvol
+    assert "status" in rvol
+    assert "is_high" in rvol
+
+    theme = body["dominant_float_theme"]
+    assert "theme" in theme
+    assert "counts" in theme
+
+    halts = body["active_halts"]
+    assert "count" in halts
+    assert "tickers" in halts
+

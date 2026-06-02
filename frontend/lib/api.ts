@@ -684,3 +684,33 @@ export const getSignals = (params?: {
 export const createSignal = (data: Omit<Signal, 'id' | 'ts' | 'strategy_name'> & { ts?: string }) =>
   api.post<{ id: number }>('/api/signals', data).then(r => r.data)
 
+// ── Momentum Breadth & Market Health ──────────────────────────────────────────
+
+export interface MomentumBreadthData {
+  small_cap_ad: {
+    advancing: number
+    declining: number
+    ratio_str: string
+    is_bullish: boolean
+  }
+  top5_avg_rvol: {
+    avg_rvol: number
+    status: string
+    is_high: boolean
+  }
+  dominant_float_theme: {
+    theme: string
+    counts: Record<string, number>
+  }
+  active_halts: {
+    count: number
+    tickers: string[]
+  }
+}
+
+export const getMomentumBreadth = (priceFilter = true) =>
+  api.get<MomentumBreadthData>('/api/market/momentum-breadth', {
+    params: { price_filter: priceFilter }
+  }).then(r => r.data)
+
+

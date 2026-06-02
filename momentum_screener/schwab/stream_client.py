@@ -45,6 +45,8 @@ class SchwabStreamer:
         self.vwap_state = {}          # symbol -> {'cum_vp': float, 'cum_vol': int, 'last_price': float, 'last_total_vol': int}
         self.price_history_1m = {}    # symbol -> list of float prices (rolling 1m window)
         self.cooldowns = {}           # symbol -> datetime of last alert
+        self.halted_tickers = {}      # symbol -> timestamp of last halt alert
+
         
     async def init_db(self):
         dsn = os.getenv('DATABASE_URL', Config.DATABASE_URL)
@@ -265,6 +267,27 @@ class SchwabStreamer:
         except Exception as e:
             logger.error(f"Failed to save alert for {symbol} to database: {e}")
 
+    async def save_halt_to_db(self, symbol):
+        try:
+            async with self.db_pool.acquire() as conn:
+                await conn.execute("""
+                    INSERT INTO volatility_halts (ticker, halt_time, status)
+                    VALUES ($1, NOW(), 'halted')
+                """, symbol)
+        except Exception as e:
+            logger.error(f"Failed to save halt for {symbol} to database: {e}")
+
+    async def save_resume_to_db(self, symbol):
+        try:
+            async with self.db_pool.acquire() as conn:
+                await conn.execute("""
+                    UPDATE volatility_halts
+                    SET resume_time = NOW(), status = 'resumed'
+                    WHERE ticker = $1 AND status = 'halted' AND resume_time IS NULL
+                """, symbol)
+        except Exception as e:
+            logger.error(f"Failed to save resume for {symbol} to database: {e}")
+
     def on_level1_equity_message(self, message):
         """Callback for incoming quote updates from schwab-py StreamClient."""
         try:
@@ -274,6 +297,25 @@ class SchwabStreamer:
                 if not symbol:
                     continue
                 
+                # Check for trading status / halts
+                trading_status = item.get('TRADING_STATUS')
+                if trading_status is not None:
+                    status_str = str(trading_status).strip().upper()
+                    if status_str == 'H':
+                        # Check cooldown / state to avoid duplicate insert spam
+                        now = time.time()
+                        last_halt = self.halted_tickers.get(symbol)
+                        if last_halt is None or (now - last_halt > 300):
+                            self.halted_tickers[symbol] = now
+                            asyncio.create_task(self.save_halt_to_db(symbol))
+                            logger.info(f"⏸️ VOLATILITY HALT DETECTED: {symbol}")
+                    elif status_str in ('T', 'Q', 'ACTIVE', 'NORMAL') or status_str == '':
+                        # If it was halted, mark it as resumed
+                        if symbol in self.halted_tickers:
+                            self.halted_tickers.pop(symbol, None)
+                            asyncio.create_task(self.save_resume_to_db(symbol))
+                            logger.info(f"▶️ VOLATILITY RESUME DETECTED: {symbol}")
+
                 # Fetch fields
                 last_price = item.get('LAST_PRICE')
                 total_volume = item.get('TOTAL_VOLUME')
@@ -293,6 +335,7 @@ class SchwabStreamer:
                 )
         except Exception as e:
             logger.error(f"Error handling quote update: {e}")
+
 
     async def run(self):
         # 1. Establish DB pool

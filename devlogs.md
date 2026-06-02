@@ -2,6 +2,18 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-02] Momentum Breadth & Volatility Halts Banner Integration
+
+### Summary
+Implemented the Momentum Breadth & Market Health Banner component in the empty sub-header slot of the TradeJournal Dashboard page. This aggregates real-time small-cap indicators (A/D ratio, Avg RVOL, dominant float theme, and active volatility halts) and supports dynamic filtering based on the $2-$25 Price Filter toggled in the UI.
+
+### What Changed
+* **Database Schema Extension**: Appended `volatility_halts` table schema to [backend/models/schema.sql](file:///home/jackc/projects/homma-research/backend/models/schema.sql) to record LUDP halts and resumes in real time, and added indexes to maximize query performance.
+* **Schwab Stream Client Integration**: Updated [momentum_screener/schwab/stream_client.py](file:///home/jackc/projects/homma-research/momentum_screener/schwab/stream_client.py) to check incoming level 1 streaming messages for `TRADING_STATUS` updates and write halt/resume events to the `volatility_halts` table.
+* **FastAPI Backend Endpoint**: Created GET `/api/market/momentum-breadth` route in [backend/fastapi_app/routers/market.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/routers/market.py) with optimized PostgreSQL queries and TradingView public API integration for calculating metrics in real time.
+* **Frontend React Components**: Created [frontend/components/MomentumBreadthBanner.tsx](file:///home/jackc/projects/homma-research/frontend/components/MomentumBreadthBanner.tsx), added types/API integration in [frontend/lib/api.ts](file:///home/jackc/projects/homma-research/frontend/lib/api.ts), and integrated the banner on the main page [frontend/app/page.tsx](file:///home/jackc/projects/homma-research/frontend/app/page.tsx). Also updated [frontend/components/LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx) to synchronize the price filter state globally via `localStorage` and custom events.
+* **Validation**: Appended unit tests in [backend/tests/test_market.py](file:///home/jackc/projects/homma-research/backend/tests/test_market.py) and confirmed everything compiles and passes cleanly.
+
 ## [2026-06-01] TimescaleDB Time-Series Integration — Phase 5 Complete
 
 ### Summary

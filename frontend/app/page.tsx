@@ -4,6 +4,7 @@ import LiveGainers from '@/components/LiveGainers'
 import WatchlistQuickAccess from '@/components/WatchlistQuickAccess'
 import RecentObservations from '@/components/RecentObservations'
 import MarketBreadthBar from '@/components/MarketBreadthBar'
+import MomentumBreadthBanner from '@/components/MomentumBreadthBanner'
 import RepeatRunnerAlert from '@/components/RepeatRunnerAlert'
 import FollowThrough from '@/components/FollowThrough'
 import FloatBucketSummary from '@/components/FloatBucketSummary'
@@ -157,6 +158,12 @@ export default async function DashboardPage() {
       <Suspense fallback={<div className="h-10 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800/80 rounded-2xl animate-pulse" />}>
         <MarketBreadthBar />
       </Suspense>
+
+      {/* ── Momentum Breadth & Market Health Banner ── */}
+      <Suspense fallback={<div className="h-24 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800/80 rounded-2xl animate-pulse" />}>
+        <MomentumBreadthBanner />
+      </Suspense>
+
 
       {/* ── Row 1: Live screener (full width) ── */}
       <Panel>

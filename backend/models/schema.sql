@@ -209,3 +209,17 @@ CREATE INDEX IF NOT EXISTS idx_rcache_ticker      ON research_cache(ticker);
 CREATE INDEX IF NOT EXISTS idx_rcache_report_type ON research_cache(report_type);
 CREATE INDEX IF NOT EXISTS idx_rcache_expires     ON research_cache(expires_at);
 CREATE INDEX IF NOT EXISTS idx_rcache_ticker_type ON research_cache(ticker, report_type, created_at DESC);
+
+-- Volatility Halts: tracks Limit Up/Limit Down trading halts
+CREATE TABLE IF NOT EXISTS volatility_halts (
+    id            SERIAL PRIMARY KEY,
+    ticker        TEXT NOT NULL,
+    halt_time     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    resume_time   TIMESTAMPTZ,
+    status        TEXT DEFAULT 'halted', -- 'halted' or 'resumed'
+    created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_volatility_halts_ticker ON volatility_halts(ticker);
+CREATE INDEX IF NOT EXISTS idx_volatility_halts_time   ON volatility_halts(halt_time DESC);
+

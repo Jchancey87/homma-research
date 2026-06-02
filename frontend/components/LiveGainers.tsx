@@ -851,6 +851,22 @@ export default function LiveGainers() {
   const [watchlistLoading, setWatchlistLoading] = useState(false)
   const [priceFilterEnabled, setPriceFilterEnabled] = useState(true)
 
+  useEffect(() => {
+    const val = localStorage.getItem('price-filter-enabled')
+    if (val !== null) {
+      setPriceFilterEnabled(val === 'true')
+    }
+    const handleSync = () => {
+      const syncedVal = localStorage.getItem('price-filter-enabled')
+      if (syncedVal !== null) {
+        setPriceFilterEnabled(syncedVal === 'true')
+      }
+    }
+    window.addEventListener('price-filter-changed', handleSync)
+    return () => window.removeEventListener('price-filter-changed', handleSync)
+  }, [])
+
+
   const fetchData = useCallback(async (force = false) => {
     try {
       if (force) setRefreshing(true)
@@ -992,7 +1008,12 @@ export default function LiveGainers() {
 
         <div className="flex items-center gap-3 select-none">
           <button
-            onClick={() => setPriceFilterEnabled(prev => !prev)}
+            onClick={() => {
+              const newValue = !priceFilterEnabled
+              setPriceFilterEnabled(newValue)
+              localStorage.setItem('price-filter-enabled', String(newValue))
+              window.dispatchEvent(new Event('price-filter-changed'))
+            }}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
               priceFilterEnabled
                 ? 'bg-emerald-600/15 border-emerald-500/35 text-emerald-400 hover:bg-emerald-600/25'
