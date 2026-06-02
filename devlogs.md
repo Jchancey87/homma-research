@@ -2,6 +2,19 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-02] Dashboard Endpoint Latency & Page Switch Optimizations
+
+### Summary
+Diagnosed and resolved API response latencies on key home page dashboard routes (improving page switch and initial load latency). Converted blocking demand-driven cache updates to background refreshing threads and replaced sequential single-symbol queries with Schwab batch endpoints.
+
+### What Changed
+* **Background Cache Refresh Loop**: Added a background thread `live-screener-refresh` to [backend/services/live_screener.py](file:///home/jackc/projects/homma-research/backend/services/live_screener.py) that automatically refreshes the live screener cache every 60 seconds during active market sessions.
+* **Instant Cache Hits**: Refactored `refresh_cache` in [backend/services/live_screener.py](file:///home/jackc/projects/homma-research/backend/services/live_screener.py) to return cached results instantly in <5ms without blocking the API response thread, unless the cache is completely empty. This reduced `/api/gainers/live` latency from **2828ms** to **3.7ms** and `/api/market/momentum-breadth` from **3434ms** to **227ms**.
+* **lifespan Initialization**: Wrote startup imports and initialized `start_auto_persist()` inside [backend/fastapi_app/main.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/main.py)'s FastAPI lifespan context manager to guarantee all screener daemon threads run properly on startup.
+* **Schwab Index Quotes & Parallel Fallbacks**: Updated `/api/market/breadth` in [backend/fastapi_app/routers/market.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/routers/market.py) to query indices in a single Schwab batch request first, falling back to parallelized Polygon requests (using `asyncio.gather`) instead of sequential loops. This reduced breadth latency from **1050ms** to **225ms**.
+* **Watchlist Batch Fetching**: Updated `/api/watchlist/prices` in [backend/fastapi_app/routers/watchlist.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/routers/watchlist.py) to use Schwab's single batch quotes client instead of looping sequential Polygon HTTP requests.
+* **Parallel A/D Scans**: Updated the TradingView scanner API queries in [backend/fastapi_app/routers/market.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/routers/market.py) to run concurrently via `asyncio.gather`.
+
 ## [2026-06-02] Chart Timezone Alignment, Caching, and Performance Optimizations
 
 ### Summary
