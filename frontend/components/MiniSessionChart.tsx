@@ -32,6 +32,16 @@ function dedupSort<T extends { time: UTCTimestamp }>(data: T[]): T[] {
   return Array.from(map.values()).sort((a, b) => (a.time as number) - (b.time as number))
 }
 
+function shiftMiniChartDataTime(data: ChartData, offsetSec: number): ChartData {
+  if (offsetSec === 0) return data
+  const shiftTime = (t: UTCTimestamp) => (typeof t === 'number' ? (t + offsetSec) as UTCTimestamp : t)
+  return {
+    ohlcv: data.ohlcv ? data.ohlcv.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
+    volume: data.volume ? data.volume.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
+    ema_21: data.ema_21 ? data.ema_21.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
+  }
+}
+
 interface Props {
   ticker:   string
   date:     string
@@ -69,7 +79,9 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       // Only extract what we need to keep memory low
-      setData({ ohlcv: json.ohlcv, volume: json.volume, ema_21: json.ema_21 })
+      const rawData = { ohlcv: json.ohlcv, volume: json.volume, ema_21: json.ema_21 }
+      const localOffset = -new Date().getTimezoneOffset() * 60
+      setData(shiftMiniChartDataTime(rawData, localOffset))
     } catch (e) {
       const err = e as Error
       setError(err.message ?? 'No data')

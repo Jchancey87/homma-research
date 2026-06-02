@@ -8,6 +8,7 @@ The Trading Pattern Journal is a self-hosted, distributed local application cons
 
 | Source | Used For | Auth |
 |---|---|---|
+| **Schwab Trader API** | Primary intraday OHLCV 1-minute historical candles, account/orders | Token.json Auth |
 | **FMP (Financial Modeling Prep)** | Fundamentals, earnings calendar, analyst estimates, enterprise value | API Key |
 | **Massive.com** (fka Polygon.io) | Real-time OHLCV, daily aggregates, gainers snapshot, news articles — via official `massive` Python SDK (`services/polygon_client.py`) | API Key |
 | **SEC EDGAR Submissions API** | Company filings (S-3, 8-K, 424B) | User-Agent header only |
@@ -81,7 +82,7 @@ Live Screener (every 60 seconds during market hours)
 User enters ticker → clicks ANALYZE
   │
   ├── [Thread 1] /api/research
-  │     FMP fundamentals + Massive.com intraday → mplfinance chart
+  │     FMP fundamentals + Schwab (primary) / Polygon / yfinance intraday → mplfinance chart
   │     → Gemini vision analysis → Groq DEEP_RESEARCH_SYSTEM → Full Report
   │
   ├── [Thread 2] /api/research/risk

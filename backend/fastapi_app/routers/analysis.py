@@ -351,17 +351,33 @@ async def get_chart_data(
             bars_df = pd.DataFrame(db_bars)
             bars_df.set_index('time', inplace=True)
         else:
-            bars_df = _fetch_intraday_polygon(ticker_val, date_str)
+            # 1. Try Schwab API first
+            bars_df = pd.DataFrame()
+            try:
+                from momentum_screener.schwab.http_client import get_price_history_every_minute
+                candles = get_price_history_every_minute(ticker_val, start_datetime=start_dt, end_datetime=end_dt)
+                if candles:
+                    bars_df = pd.DataFrame(candles)
+                    bars_df = bars_df.rename(columns={'datetime': 't'})
+                    bars_df['timestamp'] = pd.to_datetime(bars_df['t'], unit='ms', utc=True)
+                    bars_df = bars_df.set_index('timestamp')
+            except Exception as e:
+                log.error("Failed to fetch from Schwab in chart-data fallback: %s", e)
 
+            # 2. Try Polygon fallback
+            if bars_df.empty:
+                bars_df = _fetch_intraday_polygon(ticker_val, date_str)
+
+            # 3. Try yfinance fallback
             if bars_df.empty:
                 try:
                     import yfinance as yf
                     from datetime import timedelta, datetime as dt_class
-                    start_dt = dt_class.strptime(date_str, '%Y-%m-%d')
-                    end_dt   = start_dt + timedelta(days=1)
+                    start_dt_yf = dt_class.strptime(date_str, '%Y-%m-%d')
+                    end_dt_yf   = start_dt_yf + timedelta(days=1)
                     yf_df = yf.download(ticker_val,
-                                         start=start_dt.strftime('%Y-%m-%d'),
-                                         end=end_dt.strftime('%Y-%m-%d'),
+                                         start=start_dt_yf.strftime('%Y-%m-%d'),
+                                         end=end_dt_yf.strftime('%Y-%m-%d'),
                                          interval='1m', prepost=True, progress=False)
                     if not yf_df.empty:
                         if hasattr(yf_df.columns, 'levels'):
@@ -374,6 +390,7 @@ async def get_chart_data(
                 except Exception as e:
                     pass
 
+            # 4. Try previous day fallback (Polygon/yfinance)
             if bars_df.empty:
                 try:
                     from datetime import timedelta, datetime as dt_class
@@ -381,10 +398,10 @@ async def get_chart_data(
                     bars_df = _fetch_intraday_polygon(ticker_val, prev_date)
                     if bars_df.empty:
                         import yfinance as yf
-                        start_dt = dt_class.strptime(prev_date, '%Y-%m-%d')
-                        end_dt   = start_dt + timedelta(days=1)
-                        bars_df = yf.download(ticker_val, start=start_dt.strftime('%Y-%m-%d'),
-                                             end=end_dt.strftime('%Y-%m-%d'),
+                        start_dt_yf = dt_class.strptime(prev_date, '%Y-%m-%d')
+                        end_dt_yf   = start_dt_yf + timedelta(days=1)
+                        bars_df = yf.download(ticker_val, start=start_dt_yf.strftime('%Y-%m-%d'),
+                                             end=end_dt_yf.strftime('%Y-%m-%d'),
                                              interval='1m', prepost=True, progress=False)
                         if not bars_df.empty and hasattr(bars_df.columns, 'levels'):
                             bars_df.columns = bars_df.columns.get_level_values(0)
@@ -392,7 +409,27 @@ async def get_chart_data(
                 except: pass
 
         if bars_df.empty:
-            return None
+            return None, []
+
+        records_to_insert = []
+        if not db_bars and not bars_df.empty:
+            import pytz
+            utc = pytz.utc
+            for idx, row in bars_df.iterrows():
+                ts = idx.to_pydatetime()
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=utc)
+                else:
+                    ts = ts.astimezone(utc)
+                records_to_insert.append((
+                    ticker_val,
+                    ts,
+                    float(row['open']),
+                    float(row['high']),
+                    float(row['low']),
+                    float(row['close']),
+                    int(row['volume']) if pd.notna(row['volume']) else 0
+                ))
 
         df = bars_df[['open', 'high', 'low', 'close', 'volume']].copy()
 
@@ -460,9 +497,17 @@ async def get_chart_data(
             'plus_di':  line_series('plus_di'),
             'minus_di': line_series('minus_di'),
             'atr':      line_series('atr'),
-        }
+        }, records_to_insert
         
-    result = await asyncio.to_thread(_compute_chart_data, db_bars)
+    result, records_to_insert = await asyncio.to_thread(_compute_chart_data, db_bars)
     if result is None:
         raise HTTPException(status_code=404, detail=f"No intraday data available for {ticker} on {date_str}")
+        
+    if records_to_insert:
+        try:
+            from fastapi_app.db.ohlcv import insert_bars_1min
+            await insert_bars_1min(db, records_to_insert)
+        except Exception as exc:
+            log.error("Failed to cache fetched chart data in DB: %s", exc)
+            
     return result

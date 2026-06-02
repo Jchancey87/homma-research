@@ -35,6 +35,25 @@ function dedupSort<T extends { time: Time }>(data: T[]): T[] {
   })
 }
 
+function shiftChartDataTime(data: ChartData, offsetSec: number): ChartData {
+  if (offsetSec === 0) return data
+  const shiftTime = (t: Time) => (typeof t === 'number' ? (t + offsetSec) as Time : t)
+  return {
+    ohlcv: data.ohlcv ? data.ohlcv.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
+    volume: data.volume ? data.volume.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
+    rvol: data.rvol ? data.rvol.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
+    ema_8: data.ema_8 ? data.ema_8.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
+    ema_13: data.ema_13 ? data.ema_13.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
+    ema_21: data.ema_21 ? data.ema_21.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
+    ema_34: data.ema_34 ? data.ema_34.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
+    ema_55: data.ema_55 ? data.ema_55.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
+    adx: data.adx ? data.adx.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
+    plus_di: data.plus_di ? data.plus_di.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
+    minus_di: data.minus_di ? data.minus_di.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
+    atr: data.atr ? data.atr.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
+  }
+}
+
 export interface ChartData {
   ohlcv:   OhlcBar[]
   volume:  HistoPt[]
@@ -80,11 +99,11 @@ export default function InteractiveSessionChart({ ticker, date }: Props) {
   const rvolSeriesRef  = useRef<ISeriesApi<"Line"> | null>(null)
   const adxSeriesRefs  = useRef<ISeriesApi<"Line">[]>([])
   const atrSeriesRef   = useRef<ISeriesApi<"Line"> | null>(null)
-
   const [loading, setLoading]   = useState(true)
   const [error,   setError]     = useState<string | null>(null)
   const [data,    setData]      = useState<ChartData | null>(null)
   const [ohlcInfo, setOhlcInfo] = useState<{ o: number; h: number; l: number; c: number; v: number } | null>(null)
+  const [tzLabel, setTzLabel]   = useState('ET')
 
   // Indicator Visibility State
   const [showEma, setShowEma] = useState(true)
@@ -92,6 +111,13 @@ export default function InteractiveSessionChart({ ticker, date }: Props) {
   const [showAdx, setShowAdx] = useState(true)
   const [showAtr, setShowAtr] = useState(true)
   const [showSettings, setShowSettings] = useState(false)
+
+  useEffect(() => {
+    try {
+      const tz = new Date().toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ').pop()
+      if (tz) setTzLabel(tz)
+    } catch {}
+  }, [])
 
   // ── Fetch chart data from backend ────────────────────────────────────────
 
@@ -105,7 +131,8 @@ export default function InteractiveSessionChart({ ticker, date }: Props) {
         throw new Error(err.error ?? `HTTP ${res.status}`)
       }
       const json: ChartData = await res.json()
-      setData(json)
+      const localOffset = -new Date().getTimezoneOffset() * 60
+      setData(shiftChartDataTime(json, localOffset))
     } catch (e) {
       const err = e as Error
       setError(err.message ?? 'Failed to load chart data')
@@ -354,7 +381,7 @@ export default function InteractiveSessionChart({ ticker, date }: Props) {
           <TrendingUp size={15} className="text-sky-400" />
           <span className="text-xs font-bold text-gray-300 font-mono">{ticker}</span>
           <span className="text-[10px] text-gray-600">|</span>
-          <span className="text-[10px] text-gray-500 font-mono">{date} · 1m Bars · ET</span>
+          <span className="text-[10px] text-gray-500 font-mono">{date} · 1m Bars · {tzLabel}</span>
         </div>
         {ohlcInfo && (
           <div className="flex items-center gap-3 text-[10px] font-mono">

@@ -2,6 +2,17 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-02] Chart Timezone Alignment and Caching Fixes
+
+### Summary
+Fixed chart rendering performance issues and timezone discrepancies for the daily charts and interactive detail charts. 
+
+### What Changed
+* **Timeseries Database Caching & Schwab API Integration**: Updated the FastAPI chart data endpoint `/api/research/chart-data` in [backend/fastapi_app/routers/analysis.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/routers/analysis.py) to prioritize fetching unbackfilled candles from the Schwab Market Data API first, falling back to Polygon and yfinance only if Schwab is unavailable. All successfully fetched fallback candles are written directly to the `price_history_1min` database table, ensuring subsequent loads load from the DB in <80ms.
+* **Browser Local Timezone Offset Shifting**: Shifted UTC timestamps in the frontend components [frontend/components/InteractiveSessionChart.tsx](file:///home/jackc/projects/homma-research/frontend/components/InteractiveSessionChart.tsx) and [frontend/components/MiniSessionChart.tsx](file:///home/jackc/projects/homma-research/frontend/components/MiniSessionChart.tsx) by the browser's local timezone offset. This forces Lightweight Charts (which defaults to UTC) to render times matching the user's laptop.
+* **Dynamic Timezone Labels**: Replaced the hardcoded 'ET' label in the interactive chart header with the user's browser-detected timezone abbreviation (e.g. CDT, EDT, PDT).
+* **Validation**: Verified with the timeseries test suite (`pytest tests/test_routers_timeseries.py`), all tests pass successfully.
+
 ## [2026-06-02] Momentum Breadth & Volatility Halts Banner Integration
 
 ### Summary
