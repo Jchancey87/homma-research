@@ -4,8 +4,12 @@ FastAPI port of routes/analysis.py
 """
 import uuid
 import asyncio
-from datetime import datetime, date
+from datetime import datetime, date, time, timedelta
 from typing import Optional, List
+import pytz
+import pandas as pd
+import numpy as np
+import yfinance as yf
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request, Query
 from fastapi.responses import StreamingResponse
@@ -298,6 +302,7 @@ async def get_archetypes(conn: asyncpg.Connection = Depends(get_db)):
 async def get_chart_data(
     ticker: str,
     date: date,
+    mini: bool = Query(False, description="If True, return only ohlcv, volume, and ema_21"),
     db: asyncpg.Connection = Depends(get_db)
 ):
     """
@@ -305,7 +310,7 @@ async def get_chart_data(
     This queries TimescaleDB first, then falls back to live API fetching (Polygon/yfinance).
     """
     import pytz
-    from datetime import datetime, time
+    from datetime import datetime, time, timedelta
     
     ticker_val = ticker.upper().strip()
     date_str = date.isoformat()
@@ -345,10 +350,11 @@ async def get_chart_data(
     except Exception as exc:
         log.error("Failed to query price_history_1min for chart-data: %s", exc)
 
-    def _compute_chart_data(db_bars=None):
+    def _compute_chart_data(db_bars=None, mini_mode=False):
         import pandas as pd
         import numpy as np
         from fastapi_app.tasks.llm_tasks import _fetch_intraday_polygon
+        import yfinance as yf
 
         if db_bars:
             bars_df = pd.DataFrame(db_bars)
@@ -374,9 +380,7 @@ async def get_chart_data(
             # 3. Try yfinance fallback
             if bars_df.empty:
                 try:
-                    import yfinance as yf
-                    from datetime import timedelta, datetime as dt_class
-                    start_dt_yf = dt_class.strptime(date_str, '%Y-%m-%d')
+                    start_dt_yf = datetime.strptime(date_str, '%Y-%m-%d')
                     end_dt_yf   = start_dt_yf + timedelta(days=1)
                     yf_df = yf.download(ticker_val,
                                          start=start_dt_yf.strftime('%Y-%m-%d'),
@@ -396,12 +400,10 @@ async def get_chart_data(
             # 4. Try previous day fallback (Polygon/yfinance)
             if bars_df.empty:
                 try:
-                    from datetime import timedelta, datetime as dt_class
-                    prev_date = (dt_class.strptime(date_str, '%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
+                    prev_date = (datetime.strptime(date_str, '%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
                     bars_df = _fetch_intraday_polygon(ticker_val, prev_date)
                     if bars_df.empty:
-                        import yfinance as yf
-                        start_dt_yf = dt_class.strptime(prev_date, '%Y-%m-%d')
+                        start_dt_yf = datetime.strptime(prev_date, '%Y-%m-%d')
                         end_dt_yf   = start_dt_yf + timedelta(days=1)
                         bars_df = yf.download(ticker_val, start=start_dt_yf.strftime('%Y-%m-%d'),
                                              end=end_dt_yf.strftime('%Y-%m-%d'),
@@ -416,7 +418,6 @@ async def get_chart_data(
 
         records_to_insert = []
         if not db_bars and not bars_df.empty:
-            import pytz
             utc = pytz.utc
             for idx, row in bars_df.iterrows():
                 ts = idx.to_pydatetime()
@@ -443,34 +444,35 @@ async def get_chart_data(
         epoch = pd.Timestamp('1970-01-01', tz='UTC')
         df['time'] = ((df.index - epoch).total_seconds()).astype(int)
 
-        for span in [8, 13, 21, 34, 55]:
-            df[f'ema_{span}'] = df['close'].ewm(span=span, adjust=False).mean()
+        if mini_mode:
+            df['ema_21'] = df['close'].ewm(span=21, adjust=False).mean()
+            df = df.dropna(subset=['ema_21'])
+        else:
+            for span in [8, 13, 21, 34, 55]:
+                df[f'ema_{span}'] = df['close'].ewm(span=span, adjust=False).mean()
 
-        vol_avg = df['volume'].rolling(20).mean()
-        df['rvol'] = (df['volume'] / vol_avg).fillna(1.0)
+            vol_avg = df['volume'].rolling(20).mean()
+            df['rvol'] = (df['volume'] / vol_avg).fillna(1.0)
 
-        tr1 = df['high'] - df['low']
-        tr2 = (df['high'] - df['close'].shift(1)).abs()
-        tr3 = (df['low']  - df['close'].shift(1)).abs()
-        tr  = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-        df['atr'] = tr.ewm(alpha=1/14, adjust=False).mean()
+            tr1 = df['high'] - df['low']
+            tr2 = (df['high'] - df['close'].shift(1)).abs()
+            tr3 = (df['low']  - df['close'].shift(1)).abs()
+            tr  = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+            df['atr'] = tr.ewm(alpha=1/14, adjust=False).mean()
 
-        up_move   = df['high'] - df['high'].shift(1)
-        down_move = df['low'].shift(1) - df['low']
-        pos_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0.0)
-        neg_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0.0)
-        pos_dm_s  = pd.Series(pos_dm, index=df.index).ewm(alpha=1/14, adjust=False).mean()
-        neg_dm_s  = pd.Series(neg_dm, index=df.index).ewm(alpha=1/14, adjust=False).mean()
-        tr_s      = tr.ewm(alpha=1/14, adjust=False).mean()
-        df['plus_di']  = 100 * (pos_dm_s / tr_s)
-        df['minus_di'] = 100 * (neg_dm_s / tr_s)
-        dx = 100 * (df['plus_di'] - df['minus_di']).abs() / (df['plus_di'] + df['minus_di']).abs()
-        df['adx'] = dx.ewm(alpha=1/14, adjust=False).mean()
+            up_move   = df['high'] - df['high'].shift(1)
+            down_move = df['low'].shift(1) - df['low']
+            pos_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0.0)
+            neg_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0.0)
+            pos_dm_s  = pd.Series(pos_dm, index=df.index).ewm(alpha=1/14, adjust=False).mean()
+            neg_dm_s  = pd.Series(neg_dm, index=df.index).ewm(alpha=1/14, adjust=False).mean()
+            tr_s      = tr.ewm(alpha=1/14, adjust=False).mean()
+            df['plus_di']  = 100 * (pos_dm_s / tr_s)
+            df['minus_di'] = 100 * (neg_dm_s / tr_s)
+            dx = 100 * (df['plus_di'] - df['minus_di']).abs() / (df['plus_di'] + df['minus_di']).abs()
+            df['adx'] = dx.ewm(alpha=1/14, adjust=False).mean()
+            df = df.dropna(subset=['ema_55', 'adx'])
 
-        vol_colors = ['rgba(34,211,167,0.5)' if c >= o else 'rgba(240,77,90,0.5)'
-                      for c, o in zip(df['close'], df['open'])]
-
-        df = df.dropna(subset=['ema_55', 'adx'])
         t = df['time'].tolist()
 
         def line_series(col: str):
@@ -482,10 +484,19 @@ async def get_chart_data(
              'low': round(float(l), 4), 'close': round(float(c), 4)}
             for ti, o, h, l, c in zip(t, df['open'], df['high'], df['low'], df['close'])
         ]
+        vol_colors = ['rgba(34,211,167,0.5)' if c >= o else 'rgba(240,77,90,0.5)'
+                      for c, o in zip(df['close'], df['open'])]
         vol_records = [
             {'time': int(ti), 'value': int(v), 'color': col}
             for ti, v, col in zip(t, df['volume'], vol_colors)
         ]
+
+        if mini_mode:
+            return {
+                'ohlcv':    ohlcv_records,
+                'volume':   vol_records,
+                'ema_21':   line_series('ema_21'),
+            }, records_to_insert
 
         return {
             'ohlcv':    ohlcv_records,
@@ -502,7 +513,7 @@ async def get_chart_data(
             'atr':      line_series('atr'),
         }, records_to_insert
         
-    result, records_to_insert = await asyncio.to_thread(_compute_chart_data, db_bars)
+    result, records_to_insert = await asyncio.to_thread(_compute_chart_data, db_bars, mini)
     if result is None:
         raise HTTPException(status_code=404, detail=f"No intraday data available for {ticker} on {date_str}")
         

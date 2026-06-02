@@ -75,7 +75,7 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
     setLoading(true)
     setError(null)
     try {
-      const res  = await fetch(`${API_BASE}/api/research/chart-data?ticker=${ticker}&date=${date}`)
+      const res  = await fetch(`${API_BASE}/api/research/chart-data?ticker=${ticker}&date=${date}&mini=true`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       // Only extract what we need to keep memory low
