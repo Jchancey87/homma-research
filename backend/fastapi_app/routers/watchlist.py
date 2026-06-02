@@ -161,39 +161,49 @@ async def remove_from_watchlist(ticker: str, db: asyncpg.Connection = Depends(ge
 
 @router.get("/prices")
 async def watchlist_prices(db: asyncpg.Connection = Depends(get_db)):
-    """Return Polygon snapshot price + % change for every watchlist ticker."""
+    """Return Schwab (or Polygon fallback) price + % change for every watchlist ticker in batch."""
     rows = await db.fetch("SELECT ticker FROM watchlist ORDER BY added_at DESC")
     tickers = [r["ticker"] for r in rows]
     if not tickers:
         return {}
 
-    polygon_key = settings.polygon_api_key
-    if not polygon_key:
-        return {}
-
-    def _fetch_prices() -> dict:
-        import requests as _req
-        results: dict = {}
+    results = {}
+    try:
+        from momentum_screener.schwab.http_client import get_quotes
+        quotes = await asyncio.to_thread(get_quotes, list(tickers))
         for t in tickers:
-            try:
-                url = (
-                    f"https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/{t}"
-                )
-                resp = _req.get(url, params={"apiKey": polygon_key}, timeout=5)
-                if resp.ok:
-                    snap   = resp.json().get("ticker", {})
-                    day    = snap.get("day", {})
-                    prev   = snap.get("prevDay", {})
-                    price  = day.get("c") or snap.get("last", {}).get("price")
-                    prev_c = prev.get("c")
-                    chg_pct = (
-                        round((price - prev_c) / prev_c * 100, 2)
-                        if price and prev_c
-                        else None
-                    )
-                    results[t] = {"price": price, "chg_pct": chg_pct, "volume": day.get("v")}
-            except Exception:
+            q_data = quotes.get(t, {})
+            quote = q_data.get('quote', {}) if q_data else {}
+            results[t] = {
+                "price": quote.get("lastPrice"),
+                "chg_pct": quote.get("netPercentChange"),
+                "volume": quote.get("totalVolume")
+            }
+    except Exception as e:
+        log.warning(f"Failed to fetch Schwab quotes for watchlist: {e}")
+        polygon_key = settings.polygon_api_key
+        if polygon_key:
+            def _fetch_polygon_prices() -> dict:
+                import requests as _req
+                poly_results = {}
+                for t in tickers:
+                    try:
+                        url = f"https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/{t}"
+                        resp = _req.get(url, params={"apiKey": polygon_key}, timeout=5)
+                        if resp.ok:
+                            snap = resp.json().get("ticker", {})
+                            day = snap.get("day", {})
+                            prev = snap.get("prevDay", {})
+                            price = day.get("c") or snap.get("last", {}).get("price")
+                            prev_c = prev.get("c")
+                            chg_pct = round((price - prev_c) / prev_c * 100, 2) if price and prev_c else None
+                            poly_results[t] = {"price": price, "chg_pct": chg_pct, "volume": day.get("v")}
+                    except Exception:
+                        poly_results[t] = {"price": None, "chg_pct": None, "volume": None}
+                return poly_results
+            results = await asyncio.to_thread(_fetch_polygon_prices)
+        else:
+            for t in tickers:
                 results[t] = {"price": None, "chg_pct": None, "volume": None}
-        return results
 
-    return await asyncio.to_thread(_fetch_prices)
+    return results

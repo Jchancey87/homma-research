@@ -41,6 +41,12 @@ async def lifespan(app: FastAPI):
     await create_pool()
     log.info("[startup] Starting APScheduler…")
     start_scheduler()
+    log.info("[startup] Starting live screener background services…")
+    try:
+        from services.live_screener import start_auto_persist
+        start_auto_persist()
+    except Exception as e:
+        log.error(f"[startup] Failed to start live screener background services: {e}")
     log.info("[startup] FastAPI app ready on port 5000")
     yield
     log.info("[shutdown] Stopping APScheduler…")

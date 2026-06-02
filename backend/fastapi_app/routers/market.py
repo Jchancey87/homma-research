@@ -73,28 +73,55 @@ async def market_breadth():
     spy_chg: Optional[float] = None
     vix: Optional[float] = None
 
-    # Delegate to existing polygon/Schwab shim — runs in a thread to avoid
-    # blocking the event loop (the shim is still sync).
-    for ticker in INDICES:
-        try:
-            snap = await asyncio.to_thread(_fetch_snapshot_sync, ticker)
-        except Exception as exc:
-            log.warning("[market] Snapshot error for %s: %s", ticker, exc)
-            snap = None
+    # Try Schwab batch quotes first
+    try:
+        from momentum_screener.schwab.http_client import get_quotes
+        quotes = await asyncio.to_thread(get_quotes, INDICES)
+        for ticker in INDICES:
+            q_data = quotes.get(ticker, {})
+            quote = q_data.get('quote', {}) if q_data else {}
+            close = quote.get("lastPrice")
+            chg_pct = quote.get("netPercentChange")
+            volume = quote.get("totalVolume")
+            
+            if close is not None:
+                if ticker == "SPY":
+                    spy_chg = chg_pct
+                indices[ticker] = {
+                    "ticker":  ticker,
+                    "price":   close,
+                    "chg_pct": chg_pct,
+                    "volume":  volume,
+                }
+    except Exception as exc:
+        log.warning("[market] Schwab breadth fetch failed: %s. Falling back to Polygon.", exc)
 
-        if snap:
-            close  = _extract_close(snap)
-            prev_c = _extract_prev_close(snap)
-            volume = _extract_volume(snap)
-            chg_pct = round((close - prev_c) / prev_c * 100, 2) if close and prev_c else None
-            if ticker == "SPY":
-                spy_chg = chg_pct
-            indices[ticker] = {
-                "ticker":  ticker,
-                "price":   close,
-                "chg_pct": chg_pct,
-                "volume":  volume,
-            }
+    # Fallback to parallel Polygon snapshot fetches if any indices are missing
+    missing_indices = [t for t in INDICES if t not in indices]
+    if missing_indices:
+        async def fetch_one(ticker):
+            try:
+                snap = await asyncio.to_thread(_fetch_snapshot_sync, ticker)
+                return ticker, snap
+            except Exception as exc:
+                log.warning("[market] Snapshot error for %s: %s", ticker, exc)
+                return ticker, None
+
+        snaps = await asyncio.gather(*(fetch_one(t) for t in missing_indices))
+        for ticker, snap in snaps:
+            if snap:
+                close  = _extract_close(snap)
+                prev_c = _extract_prev_close(snap)
+                volume = _extract_volume(snap)
+                chg_pct = round((close - prev_c) / prev_c * 100, 2) if close and prev_c else None
+                if ticker == "SPY":
+                    spy_chg = chg_pct
+                indices[ticker] = {
+                    "ticker":  ticker,
+                    "price":   close,
+                    "chg_pct": chg_pct,
+                    "volume":  volume,
+                }
 
     data = {
         "indices":    indices,
@@ -268,8 +295,11 @@ async def get_momentum_breadth(
 
     try:
         async with httpx.AsyncClient() as client:
-            r_adv = await client.post(url, json=payload_adv, headers=headers, timeout=5.0)
-            r_dec = await client.post(url, json=payload_dec, headers=headers, timeout=5.0)
+            resps = await asyncio.gather(
+                client.post(url, json=payload_adv, headers=headers, timeout=5.0),
+                client.post(url, json=payload_dec, headers=headers, timeout=5.0)
+            )
+            r_adv, r_dec = resps
             if r_adv.status_code == 200 and r_dec.status_code == 200:
                 adv_count = r_adv.json().get("totalCount", 0)
                 dec_count = r_dec.json().get("totalCount", 0)

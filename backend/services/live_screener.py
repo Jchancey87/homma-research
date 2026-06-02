@@ -591,18 +591,9 @@ def refresh_cache(force: bool = False) -> dict:
 
     if not force:
         with _cache_lock:
-            # 1. If cache is fresh, reuse it
-            fetched = _cache['fetched_at']
-            is_fresh = False
-            if fetched is not None:
-                age = (datetime.utcnow() - fetched).total_seconds()
-                is_fresh = age < CACHE_TTL_SECONDS
-            
-            if is_fresh and _cache['gainers']:
-                return dict(_cache)
-            # 2. If the market is currently closed, and we already have gainers cached,
-            # we can reuse it indefinitely since EOD data is static.
-            if session == 'closed' and _cache['gainers'] and _cache['session'] == 'closed':
+            # If cache has data, return it immediately to keep API response latency extremely low.
+            # The background cache refresh thread is responsible for updating the cache asynchronously.
+            if _cache['gainers']:
                 return dict(_cache)
 
     # During deep-closed hours (midnight to 3:59 AM ET) don't burn API calls if we already have data
@@ -713,17 +704,51 @@ def _auto_persist_loop():
             time.sleep(60)
 
 
+def _background_refresh_loop():
+    """Background thread: refreshes the live screener cache every 60 seconds during active sessions."""
+    log.info("[LiveScreener] Background cache refresh loop started")
+    
+    # Wait 2 seconds before the first refresh to let the app start up cleanly
+    time.sleep(2)
+    
+    # Run initial cache refresh on startup so cache is populated immediately
+    try:
+        log.info("[LiveScreener] Running initial cache refresh on startup...")
+        refresh_cache(force=True)
+    except Exception as e:
+        log.error(f"[LiveScreener] Initial cache refresh failed: {e}")
+
+    while True:
+        try:
+            time.sleep(CACHE_TTL_SECONDS)
+            now_et = datetime.now(EASTERN)
+            session = get_market_session(now_et)
+            
+            # Refresh if market is active (pre-market, open, post-market)
+            # If closed, we don't need to refresh because EOD data is static.
+            if session != 'closed':
+                log.info(f"[LiveScreener] Auto-refreshing live cache (session: {session})...")
+                refresh_cache(force=True)
+        except Exception as e:
+            log.error(f"[LiveScreener] Background cache refresh loop error: {e}")
+
+
 def start_auto_persist():
     """
-    Launch the EOD auto-persist background thread and the news enrichment loop.
-    Called once from app.py during startup.
+    Launch the EOD auto-persist background thread, the live cache refresh loop,
+    and the news enrichment loop.
     """
-    # EOD persist watchdog
+    # 1. EOD persist watchdog
     t = threading.Thread(target=_auto_persist_loop, name='live-screener-persist', daemon=True)
     t.start()
     log.info("[LiveScreener] Auto-persist thread launched")
 
-    # Phase 2: background news verification loop (every 3 min during market hours)
+    # 2. Live cache refresh loop
+    t_refresh = threading.Thread(target=_background_refresh_loop, name='live-screener-refresh', daemon=True)
+    t_refresh.start()
+    log.info("[LiveScreener] Background cache refresh thread launched")
+
+    # 3. Phase 2: background news verification loop (every 3 min during market hours)
     try:
         from services.pump_classifier import start_news_enrichment_loop
 
