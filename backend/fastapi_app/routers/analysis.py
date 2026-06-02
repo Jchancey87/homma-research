@@ -10,7 +10,10 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+import logging
 import asyncpg
+
+log = logging.getLogger(__name__)
 
 from fastapi_app.db import get_db, row_to_dict, rows_to_list
 from fastapi_app.tasks import llm_tasks
@@ -506,7 +509,8 @@ async def get_chart_data(
     if records_to_insert:
         try:
             from fastapi_app.db.ohlcv import insert_bars_1min
-            await insert_bars_1min(db, records_to_insert)
+            async with db.transaction():
+                await insert_bars_1min(db, records_to_insert)
         except Exception as exc:
             log.error("Failed to cache fetched chart data in DB: %s", exc)
             
