@@ -599,3 +599,76 @@ class PickAddBody(BaseModel):
             # Single pick sent as a bare object
             return {"picks": [v]}
         return v
+
+
+# ---------------------------------------------------------------------------
+# strategies.py & signals.py — Strategy, backtest, and signal schemas
+# ---------------------------------------------------------------------------
+
+class StrategyCreateBody(BaseModel):
+    """POST /strategies"""
+    name: Annotated[str, Field(min_length=1, max_length=128)]
+    description: Optional[str] = None
+    version: str = "1.0.0"
+    asset_class: Optional[str] = None
+    timeframes: Optional[list[str]] = None
+    parameters: dict = Field(default_factory=dict)
+    is_active: bool = False
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def strip_name(cls, v):
+        return str(v).strip() if v else v
+
+
+class StrategyUpdateBody(BaseModel):
+    """PUT /strategies/{id}"""
+    name: Optional[Annotated[str, Field(min_length=1, max_length=128)]] = None
+    description: Optional[str] = None
+    version: Optional[str] = None
+    asset_class: Optional[str] = None
+    timeframes: Optional[list[str]] = None
+    parameters: Optional[dict] = None
+    is_active: Optional[bool] = None
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def strip_name(cls, v):
+        return str(v).strip() if v else v
+
+
+class BacktestSaveBody(BaseModel):
+    """POST /strategies/{id}/backtests"""
+    symbol: Annotated[str, Field(min_length=1, max_length=32)]
+    timeframe: Annotated[str, Field(min_length=1, max_length=16)]
+    start_date: datetime.date
+    end_date: datetime.date
+    parameters: dict = Field(default_factory=dict)
+    metrics: dict = Field(default_factory=dict)
+    trades: Optional[list] = None
+    equity_curve: Optional[list] = None
+    notes: Optional[str] = None
+
+    @field_validator("symbol", mode="before")
+    @classmethod
+    def normalise_symbol(cls, v):
+        return _upper_strip(str(v)) if v else v
+
+
+class SignalCreateBody(BaseModel):
+    """POST /webhook/signal or POST /signals"""
+    symbol: Annotated[str, Field(min_length=1, max_length=32)]
+    signal_type: Literal['ENTRY_LONG', 'ENTRY_SHORT', 'EXIT', 'ALERT']
+    price: float
+    strategy_id: Optional[int] = None
+    timeframe: Optional[str] = None
+    stop_loss: Optional[float] = None
+    take_profit: Optional[float] = None
+    confidence: Optional[float] = None
+    metadata: Optional[dict] = None
+    ts: Optional[datetime.datetime] = None
+
+    @field_validator("symbol", mode="before")
+    @classmethod
+    def normalise_symbol(cls, v):
+        return _upper_strip(str(v)) if v else v

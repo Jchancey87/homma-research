@@ -593,3 +593,94 @@ export interface WatchlistPrice {
 }
 export const getWatchlistPrices = () =>
   api.get<Record<string, WatchlistPrice>>('/api/watchlist/prices').then(r => r.data)
+
+
+// ── Strategies & Backtests (Phase 5) ───────────────────────────────────────
+
+export interface Strategy {
+  id: number
+  name: string
+  description: string | null
+  version: string
+  author: string
+  asset_class: string | null
+  timeframes: string[] | null
+  parameters: Record<string, any>
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface BacktestRun {
+  id: number
+  strategy_id: number
+  strategy_name?: string
+  run_at: string
+  symbol: string
+  timeframe: string
+  start_date: string
+  end_date: string
+  parameters: Record<string, any>
+  total_trades: number | null
+  win_rate: number | null
+  profit_factor: number | null
+  net_pnl: number | null
+  max_drawdown: number | null
+  sharpe_ratio: number | null
+  sortino_ratio: number | null
+  avg_win: number | null
+  avg_loss: number | null
+  trades?: any[] | null
+  equity_curve?: number[] | null
+  notes: string | null
+}
+
+export interface Signal {
+  id: number
+  ts: string
+  symbol: string
+  strategy_id: number | null
+  strategy_name: string | null
+  signal_type: 'ENTRY_LONG' | 'ENTRY_SHORT' | 'EXIT' | 'ALERT'
+  timeframe: string | null
+  price: number
+  stop_loss: number | null
+  take_profit: number | null
+  confidence: number | null
+  metadata: Record<string, any>
+}
+
+export const getStrategies = (activeOnly = false) =>
+  api.get<Strategy[]>('/api/strategies', { params: { active_only: activeOnly } }).then(r => r.data)
+
+export const createStrategy = (data: Omit<Strategy, 'id' | 'created_at' | 'updated_at' | 'author'>) =>
+  api.post<Strategy>('/api/strategies', data).then(r => r.data)
+
+export const getStrategy = (id: number) =>
+  api.get<Strategy>(`/api/strategies/${id}`).then(r => r.data)
+
+export const updateStrategy = (id: number, data: Partial<Omit<Strategy, 'id' | 'created_at' | 'updated_at' | 'author'>>) =>
+  api.put<Strategy>(`/api/strategies/${id}`, data).then(r => r.data)
+
+export const deleteStrategy = (id: number) =>
+  api.delete<{ deleted: boolean }>(`/api/strategies/${id}`).then(r => r.data)
+
+export const saveBacktest = (strategyId: number, data: Omit<BacktestRun, 'id' | 'strategy_id' | 'run_at' | 'strategy_name'>) =>
+  api.post<{ id: number }>(`/api/strategies/${strategyId}/backtests`, data).then(r => r.data)
+
+export const getStrategyBacktests = (strategyId: number, symbol?: string, limit = 50) =>
+  api.get<BacktestRun[]>(`/api/strategies/${strategyId}/backtests`, { params: { symbol, limit } }).then(r => r.data)
+
+export const getBacktest = (id: number) =>
+  api.get<BacktestRun>(`/api/strategies/backtests/${id}`).then(r => r.data)
+
+export const getSignals = (params?: {
+  symbol?: string
+  signal_type?: string
+  strategy_id?: number
+  limit?: number
+}) => api.get<Signal[]>('/api/signals', { params }).then(r => r.data)
+
+export const createSignal = (data: Omit<Signal, 'id' | 'ts' | 'strategy_name'> & { ts?: string }) =>
+  api.post<{ id: number }>('/api/signals', data).then(r => r.data)
+

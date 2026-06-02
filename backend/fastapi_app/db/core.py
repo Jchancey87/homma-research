@@ -1,5 +1,5 @@
 """
-fastapi_app/db.py
+fastapi_app/db/core.py
 Async database layer built on asyncpg.
 
 Provides:
@@ -15,7 +15,7 @@ from typing import AsyncGenerator
 
 import asyncpg
 
-from .config import settings
+from fastapi_app.config import settings
 
 log = logging.getLogger(__name__)
 

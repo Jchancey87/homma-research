@@ -294,58 +294,102 @@ async def get_archetypes(conn: asyncpg.Connection = Depends(get_db)):
 @router.get("/research/chart-data")
 async def get_chart_data(
     ticker: str,
-    date: date
+    date: date,
+    db: asyncpg.Connection = Depends(get_db)
 ):
     """
     Return OHLCV + all indicator series as JSON for the interactive Lightweight Charts frontend.
-    This was heavy pandas logic in Flask, we port it to run in a thread.
+    This queries TimescaleDB first, then falls back to live API fetching (Polygon/yfinance).
     """
+    import pytz
+    from datetime import datetime, time
+    
+    ticker_val = ticker.upper().strip()
     date_str = date.isoformat()
     
-    def _compute_chart_data():
+    # Try to fetch from internal TimescaleDB
+    db_bars = None
+    try:
+        eastern = pytz.timezone('US/Eastern')
+        start_dt = eastern.localize(datetime.combine(date, time.min))
+        end_dt = eastern.localize(datetime.combine(date, time.max))
+        
+        rows = await db.fetch(
+            """
+            SELECT timestamp, open, high, low, close, volume
+            FROM price_history_1min
+            WHERE symbol = $1
+              AND timestamp >= $2
+              AND timestamp <= $3
+            ORDER BY timestamp ASC
+            """,
+            ticker_val,
+            start_dt,
+            end_dt
+        )
+        if rows:
+            db_bars = [
+                {
+                    "time": r["timestamp"],
+                    "open": r["open"],
+                    "high": r["high"],
+                    "low": r["low"],
+                    "close": r["close"],
+                    "volume": r["volume"]
+                }
+                for r in rows
+            ]
+    except Exception as exc:
+        log.error("Failed to query price_history_1min for chart-data: %s", exc)
+
+    def _compute_chart_data(db_bars=None):
         import pandas as pd
         import numpy as np
         from fastapi_app.tasks.llm_tasks import _fetch_intraday_polygon
 
-        bars_df = _fetch_intraday_polygon(ticker, date_str)
+        if db_bars:
+            bars_df = pd.DataFrame(db_bars)
+            bars_df.set_index('time', inplace=True)
+        else:
+            bars_df = _fetch_intraday_polygon(ticker_val, date_str)
 
-        if bars_df.empty:
-            try:
-                import yfinance as yf
-                from datetime import timedelta, datetime
-                start_dt = datetime.strptime(date_str, '%Y-%m-%d')
-                end_dt   = start_dt + timedelta(days=1)
-                yf_df = yf.download(ticker,
-                                     start=start_dt.strftime('%Y-%m-%d'),
-                                     end=end_dt.strftime('%Y-%m-%d'),
-                                     interval='1m', prepost=True, progress=False)
-                if not yf_df.empty:
-                    if hasattr(yf_df.columns, 'levels'):
-                        yf_df.columns = yf_df.columns.get_level_values(0)
-                    yf_df = yf_df.rename(columns={
-                        'Open': 'open', 'High': 'high', 'Low': 'low',
-                        'Close': 'close', 'Volume': 'volume'
-                    })
-                    bars_df = yf_df
-            except Exception as e:
-                pass
-
-        if bars_df.empty:
-            try:
-                from datetime import timedelta, datetime
-                prev_date = (datetime.strptime(date_str, '%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
-                bars_df = _fetch_intraday_polygon(ticker, prev_date)
-                if bars_df.empty:
+            if bars_df.empty:
+                try:
                     import yfinance as yf
-                    start_dt = datetime.strptime(prev_date, '%Y-%m-%d')
+                    from datetime import timedelta, datetime as dt_class
+                    start_dt = dt_class.strptime(date_str, '%Y-%m-%d')
                     end_dt   = start_dt + timedelta(days=1)
-                    bars_df = yf.download(ticker, start=start_dt.strftime('%Y-%m-%d'),
+                    yf_df = yf.download(ticker_val,
+                                         start=start_dt.strftime('%Y-%m-%d'),
                                          end=end_dt.strftime('%Y-%m-%d'),
                                          interval='1m', prepost=True, progress=False)
-                    if not bars_df.empty and hasattr(bars_df.columns, 'levels'):
-                        bars_df.columns = bars_df.columns.get_level_values(0)
-                        bars_df = bars_df.rename(columns={'Open':'open','High':'high','Low':'low','Close':'close','Volume':'volume'})
-            except: pass
+                    if not yf_df.empty:
+                        if hasattr(yf_df.columns, 'levels'):
+                            yf_df.columns = yf_df.columns.get_level_values(0)
+                        yf_df = yf_df.rename(columns={
+                            'Open': 'open', 'High': 'high', 'Low': 'low',
+                            'Close': 'close', 'Volume': 'volume'
+                        })
+                        bars_df = yf_df
+                except Exception as e:
+                    pass
+
+            if bars_df.empty:
+                try:
+                    from datetime import timedelta, datetime as dt_class
+                    prev_date = (dt_class.strptime(date_str, '%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
+                    bars_df = _fetch_intraday_polygon(ticker_val, prev_date)
+                    if bars_df.empty:
+                        import yfinance as yf
+                        start_dt = dt_class.strptime(prev_date, '%Y-%m-%d')
+                        end_dt   = start_dt + timedelta(days=1)
+                        bars_df = yf.download(ticker_val, start=start_dt.strftime('%Y-%m-%d'),
+                                             end=end_dt.strftime('%Y-%m-%d'),
+                                             interval='1m', prepost=True, progress=False)
+                        if not bars_df.empty and hasattr(bars_df.columns, 'levels'):
+                            bars_df.columns = bars_df.columns.get_level_values(0)
+                            bars_df = bars_df.rename(columns={'Open':'open','High':'high','Low':'low','Close':'close','Volume':'volume'})
+                except: pass
 
         if bars_df.empty:
             return None
@@ -418,7 +462,7 @@ async def get_chart_data(
             'atr':      line_series('atr'),
         }
         
-    result = await asyncio.to_thread(_compute_chart_data)
+    result = await asyncio.to_thread(_compute_chart_data, db_bars)
     if result is None:
         raise HTTPException(status_code=404, detail=f"No intraday data available for {ticker} on {date_str}")
     return result

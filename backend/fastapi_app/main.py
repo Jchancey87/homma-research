@@ -123,9 +123,11 @@ app.include_router(observations.router, prefix="/api")
 app.include_router(continuation.router, prefix="/api")
 
 # Phase 4 routers
-from .routers import analysis, alerts
+from .routers import analysis, alerts, market_data, strategies
 app.include_router(analysis.router, prefix="/api")
 app.include_router(alerts.router, prefix="/api")
+app.include_router(market_data.router, prefix="/api")
+app.include_router(strategies.router, prefix="/api")
 
 # Serve static storage files (charts, screenshots)
 from fastapi.staticfiles import StaticFiles

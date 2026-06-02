@@ -2,6 +2,65 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-01] TimescaleDB Time-Series Integration — Phase 5 Complete
+
+### Summary
+Successfully integrated Phase 5 (Integration) of the TimescaleDB time-series migration. Updated the core interactive chart-data endpoint to consume TimescaleDB hypertable historical candles first, implemented a global multi-symbol signals log GET endpoint for dashboards and n8n integration, and exposed Strategy/Backtest/Signal endpoints and typed interfaces to the frontend API client.
+
+### What Changed
+* **Internal Database Chart Data:** Updated the `/api/research/chart-data` endpoint in [backend/fastapi_app/routers/analysis.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/routers/analysis.py) to query the `price_history_1min` TimescaleDB hypertable first, falling back to external APIs (Polygon/yfinance) only if local historical data is missing.
+* **Global Signals Listing:** Enhanced `get_signals` in [backend/fastapi_app/db/signals.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/db/signals.py) and added a global GET `/api/signals` endpoint in [backend/fastapi_app/routers/market_data.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/routers/market_data.py) to retrieve trading signals globally across all symbols (or filterable by symbol, type, or strategy) for dashboards and scheduled n8n workflows.
+* **Frontend API Client:** Added Strategy, BacktestRun, and Signal interfaces and API wrappers to [frontend/lib/api.ts](file:///home/jackc/projects/homma-research/frontend/lib/api.ts).
+* **Validation:** Appended comprehensive integration tests to [backend/tests/test_routers_timeseries.py](file:///home/jackc/projects/homma-research/backend/tests/test_routers_timeseries.py) for the TimescaleDB chart data endpoint and global signals query. All tests pass successfully.
+
+---
+
+## [2026-06-01] TimescaleDB Time-Series Integration — Phase 2, 3 & 4 Complete
+
+### Summary
+Finished building the Python data access layer package, successfully backfilled historical daily and intraday stock bar data, created the REST APIs for strategy and market data endpoints, and validated everything via integration tests.
+
+### What Changed
+* **Database Access Helpers (Phase 2):** Completed `backend/fastapi_app/db/ohlcv.py`, `backend/fastapi_app/db/indicators.py`, `backend/fastapi_app/db/signals.py`, and `backend/fastapi_app/db/strategies.py`. Enhanced retrieving functions to auto-deserialize JSONB column strings into Python dictionaries/lists.
+* **Historical Backfill (Phase 3):** Run `backend/scripts/backfill_ohlcv.py` for default index and stock tickers. Backfilled 10,040 daily bars (5 years) and 21,840 1-minute bars (7 days) into the hypertables.
+* **FastAPI Routers (Phase 4):**
+  - Created [backend/fastapi_app/routers/strategies.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/routers/strategies.py) for strategy registry and backtest runs CRUD.
+  - Created [backend/fastapi_app/routers/market_data.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/routers/market_data.py) for OHLCV fetches, on-the-fly resampling via `time_bucket()`, technical indicators, and signal/webhook intakes.
+  - Wired routes to [backend/fastapi_app/main.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/main.py).
+* **Validation:** Created a comprehensive router integration test suite at [backend/tests/test_routers_timeseries.py](file:///home/jackc/projects/homma-research/backend/tests/test_routers_timeseries.py). All tests pass successfully.
+
+---
+
+## [2026-06-01] TimescaleDB Time-Series Schema — Phase 1 Complete
+
+### Summary
+Evaluated QuestDB vs. TimescaleDB for time-series storage. Decision: lean into existing TimescaleDB instance rather than adding a second database. Created net-new tables and enabled hypertable features that were previously unused.
+
+### What Changed
+* **New relational tables:** `strategies`, `backtest_runs`, `signals` (with real FK to strategies)
+* **New hypertable:** `indicators` (EMA, RSI, ATR, MACD values — partitioned by time)
+* **Converted to hypertable:** `price_history_daily` (was a regular table)
+* **Compression policies enabled:**
+  * `price_history_1min` — compress after 7 days
+  * `price_history_daily` — compress after 90 days
+  * `indicators` — compress after 14 days
+* **SQL init script:** `backend/sql/init_timeseries.sql`
+
+### Hypertable Inventory
+| Table | Hypertable | Compression |
+|---|---|---|
+| `price_history_1min` | ✓ (pre-existing) | ✓ 7d policy |
+| `price_history_daily` | ✓ (converted) | ✓ 90d policy |
+| `indicators` | ✓ (new) | ✓ 14d policy |
+| `options_snapshot` | ✓ (pre-existing) | ✓ |
+| `screener_alerts` | ✓ (pre-existing) | ✓ |
+
+### Architecture Decision
+Chose to keep all data in a single TimescaleDB instance instead of adding QuestDB as a second database. Benefits: real FK constraints, UPDATE/DELETE support, single connection pool, same asyncpg driver, no cross-DB joins needed. See `handoffs/questdb_postgres_handoff.md` for the original QuestDB reference architecture.
+
+### Next Steps (Phase 2)
+Build Python data layer modules (`db/ohlcv.py`, `db/indicators.py`, `db/signals.py`, `db/strategies.py`) using existing asyncpg pattern, then backfill historical OHLCV from yfinance.
+
 ---
 
 ## [2026-05-19] Milestone: FastAPI Phase 3 Route Migration & Integration Tests Passing
