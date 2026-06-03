@@ -94,6 +94,16 @@ This file acts as a persistent memory block where AI coding agents record prompt
 
 ---
 
+### [2026-06-03] frontend - Codebase Review with Fallow
+
+* **Struggle: Running Fallow in Multi-Language Repositories**
+  * *Context*: Running `npx fallow` from the repository root threw dependency warnings and missed package-level checks.
+  * *Cause*: Fallow scans the directory it is run in. Since the repository root lacks a `package.json` and `node_modules` (which are nested in `frontend/`), it cannot trace dependency graphs correctly.
+  * *Resolution*: Always run Fallow commands inside the `frontend/` directory (e.g., `npx fallow` inside `frontend/`) to enable full package resolution.
+  * *Tool Interaction*: When executing `npx fallow` via background task runners, the tool may prompt `Ok to proceed? (y)`. We must monitor the output stream and use the `send_input` tool to provide confirmation (`y\n`).
+
+---
+
 ## 📜 Central Directives for Future Agents
 
 * **Environment Configuration**: Always verify environment variables in both the development workspace and the active production file [backend/.env](file:///home/jackc/projects/homma-research/backend/.env).
