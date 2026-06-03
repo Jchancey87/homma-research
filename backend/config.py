@@ -54,3 +54,8 @@ class Config:
     SMTP_USER           = os.getenv('SMTP_USER', '')
     SMTP_PASSWORD       = os.getenv('SMTP_PASSWORD', '')
     NOTIFY_EMAIL        = os.getenv('NOTIFY_EMAIL', '')
+
+    # Telegram Bot Settings
+    TELEGRAM_BOT_TOKEN  = os.getenv('TELEGRAM_BOT_TOKEN', '')
+    TELEGRAM_CHAT_ID    = os.getenv('TELEGRAM_CHAT_ID', '')
+

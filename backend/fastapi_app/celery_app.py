@@ -16,7 +16,10 @@ celery_app = Celery(
     "homma_tasks",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=["fastapi_app.tasks.llm_tasks"]
+    include=[
+        "fastapi_app.tasks.llm_tasks",
+        "fastapi_app.tasks.alerts"
+    ]
 )
 
 # Optional configuration

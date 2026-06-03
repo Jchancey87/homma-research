@@ -67,5 +67,9 @@ class Settings:
     celery_broker_url: str     = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
     celery_result_backend: str = os.getenv("CELERY_RESULT_BACKEND", "redis://127.0.0.1:6379/1")
 
+    # ── Telegram Bot Settings ───────────────────────────────────────────────
+    telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    telegram_chat_id: str   = os.getenv("TELEGRAM_CHAT_ID", "")
+
 
 settings = Settings()
