@@ -51,7 +51,7 @@ export interface ChartCapture {
   created_at: string
 }
 
-export interface LLMJob {
+interface LLMJob {
   id: string
   type: string
   status: 'pending' | 'running' | 'done' | 'error'
@@ -60,15 +60,6 @@ export interface LLMJob {
   model_used: string | null
   created_at: string
   updated_at: string
-}
-
-export interface ArchetypeStat {
-  tag: string
-  count: number
-  avg_gap_pct: number | null
-  avg_float_m: number | null
-  avg_rvol: number | null
-  avg_cleanliness: number | null
 }
 
 // ── Gainers ───────────────────────────────────────────────────────────────
@@ -84,26 +75,7 @@ export const getGainers = (params?: {
 export interface GainerSummary {
   date: string | null
   total: number
-  gainers: Array<{
-    ticker: string
-    gap_pct: number | null
-    float_shares: number | null
-    rvol_15m: number | null
-    sector: string | null
-    news_headline: string | null
-    news_fresh: boolean | null
-    close_price: number | null
-    open_price: number | null
-    high_price: number | null
-    low_price: number | null
-    prev_close: number | null
-    vwap: number | null
-    dollar_volume: number | null
-    close_location: number | null
-    rs_vs_spy: number | null
-    shares_outstanding: number | null
-    avg_volume: number | null
-  }>
+  gainers: Array<Omit<Gainer, 'id' | 'date' | 'created_at' | 'market_cap'>>
 }
 
 export const getGainersSummary = () =>
@@ -280,13 +252,7 @@ export const importGeminiAnalysis = (
 
 export interface JobResponse   { job_id: string; status: string; cached?: false }
 export interface CacheResponse { cached: true; report: string; version: number; created_at: string }
-export type ResearchResponse = JobResponse | CacheResponse
-
-export const startContinuation = (date: string) =>
-  api.post<{ job_id: string; status: string }>('/api/continuation', { date }).then(r => r.data)
-
-export const startSentiment = (query: string) =>
-  api.post<{ job_id: string; status: string }>('/api/sentiment', { query }).then(r => r.data)
+type ResearchResponse = JobResponse | CacheResponse
 
 export const startResearch = (ticker: string, date?: string, force = false) =>
   api.post<ResearchResponse>('/api/research', { ticker, date, force }).then(r => r.data)
@@ -300,19 +266,10 @@ export const startCatalystAnalysis = (ticker: string, date?: string, force = fal
 export const startDeepContext = (ticker: string, force = false) =>
   api.post<ResearchResponse>('/api/research/context', { ticker, force }).then(r => r.data)
 
-export const getJob = (jobId: string) =>
+const getJob = (jobId: string) =>
   api.get<LLMJob>(`/api/jobs/${jobId}`).then(r => r.data)
 
 export const getJobStatus = getJob
-
-export const listJobs = (type?: string, limit = 50) =>
-  api.get<LLMJob[]>('/api/jobs', { params: { type, limit } }).then(r => r.data)
-
-export const getArchetypes = () =>
-  api.get<ArchetypeStat[]>('/api/archetypes').then(r => r.data)
-
-export const retryJob = (jobId: string) =>
-  api.post<{ job_id: string; status: string }>(`/api/jobs/${jobId}/retry`).then(r => r.data)
 
 // ── Research History & Export ─────────────────────────────────────────────
 
@@ -403,22 +360,8 @@ export const getContinuationPicks = (includeInactive = false) =>
     params: { include_inactive: includeInactive }
   }).then(r => r.data)
 
-export const addContinuationPick = (data: {
-  ticker: string
-  date: string
-  reason?: string
-  gap_pct?: number
-  float_shares?: number
-  rvol_15m?: number
-  sector?: string
-  rank?: number
-}) => api.post<{ inserted: number }>('/api/continuation-picks', [data]).then(r => r.data)
-
 export const deactivateContinuationPick = (id: number, reason?: string) =>
   api.post(`/api/continuation-picks/${id}/deactivate`, { reason }).then(r => r.data)
-
-export const deleteContinuationPick = (id: number) =>
-  api.delete(`/api/continuation-picks/${id}`).then(r => r.data)
 
 // ── Observations ──────────────────────────────────────────────────────────
 
@@ -444,9 +387,6 @@ export const getObservations = (params?: {
   limit?: number
 }) => api.get<Observation[]>('/api/observations', { params }).then(r => r.data)
 
-export const getObservationsForTicker = (ticker: string) =>
-  api.get<Observation[]>(`/api/observations/${ticker}`).then(r => r.data)
-
 export const createObservation = (data: {
   ticker: string
   date: string
@@ -456,18 +396,6 @@ export const createObservation = (data: {
   tags?: string[]
   linked_chart_id?: number
 }) => api.post<{ id: number }>('/api/observations', data).then(r => r.data)
-
-export const updateObservation = (
-  id: number,
-  data: Partial<{
-    title: string
-    body: string
-    sentiment: 'bullish' | 'bearish' | 'neutral'
-    tags: string[]
-    date: string
-    linked_chart_id: number
-  }>
-) => api.put(`/api/observations/${id}`, data).then(r => r.data)
 
 export const deleteObservation = (id: number) =>
   api.delete(`/api/observations/${id}`).then(r => r.data)
@@ -597,94 +525,6 @@ export const getWatchlistPrices = () =>
   api.get<Record<string, WatchlistPrice>>('/api/watchlist/prices').then(r => r.data)
 
 
-// ── Strategies & Backtests (Phase 5) ───────────────────────────────────────
-
-export interface Strategy {
-  id: number
-  name: string
-  description: string | null
-  version: string
-  author: string
-  asset_class: string | null
-  timeframes: string[] | null
-  parameters: Record<string, any>
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
-
-export interface BacktestRun {
-  id: number
-  strategy_id: number
-  strategy_name?: string
-  run_at: string
-  symbol: string
-  timeframe: string
-  start_date: string
-  end_date: string
-  parameters: Record<string, any>
-  total_trades: number | null
-  win_rate: number | null
-  profit_factor: number | null
-  net_pnl: number | null
-  max_drawdown: number | null
-  sharpe_ratio: number | null
-  sortino_ratio: number | null
-  avg_win: number | null
-  avg_loss: number | null
-  trades?: any[] | null
-  equity_curve?: number[] | null
-  notes: string | null
-}
-
-export interface Signal {
-  id: number
-  ts: string
-  symbol: string
-  strategy_id: number | null
-  strategy_name: string | null
-  signal_type: 'ENTRY_LONG' | 'ENTRY_SHORT' | 'EXIT' | 'ALERT'
-  timeframe: string | null
-  price: number
-  stop_loss: number | null
-  take_profit: number | null
-  confidence: number | null
-  metadata: Record<string, any>
-}
-
-export const getStrategies = (activeOnly = false) =>
-  api.get<Strategy[]>('/api/strategies', { params: { active_only: activeOnly } }).then(r => r.data)
-
-export const createStrategy = (data: Omit<Strategy, 'id' | 'created_at' | 'updated_at' | 'author'>) =>
-  api.post<Strategy>('/api/strategies', data).then(r => r.data)
-
-export const getStrategy = (id: number) =>
-  api.get<Strategy>(`/api/strategies/${id}`).then(r => r.data)
-
-export const updateStrategy = (id: number, data: Partial<Omit<Strategy, 'id' | 'created_at' | 'updated_at' | 'author'>>) =>
-  api.put<Strategy>(`/api/strategies/${id}`, data).then(r => r.data)
-
-export const deleteStrategy = (id: number) =>
-  api.delete<{ deleted: boolean }>(`/api/strategies/${id}`).then(r => r.data)
-
-export const saveBacktest = (strategyId: number, data: Omit<BacktestRun, 'id' | 'strategy_id' | 'run_at' | 'strategy_name'>) =>
-  api.post<{ id: number }>(`/api/strategies/${strategyId}/backtests`, data).then(r => r.data)
-
-export const getStrategyBacktests = (strategyId: number, symbol?: string, limit = 50) =>
-  api.get<BacktestRun[]>(`/api/strategies/${strategyId}/backtests`, { params: { symbol, limit } }).then(r => r.data)
-
-export const getBacktest = (id: number) =>
-  api.get<BacktestRun>(`/api/strategies/backtests/${id}`).then(r => r.data)
-
-export const getSignals = (params?: {
-  symbol?: string
-  signal_type?: string
-  strategy_id?: number
-  limit?: number
-}) => api.get<Signal[]>('/api/signals', { params }).then(r => r.data)
-
-export const createSignal = (data: Omit<Signal, 'id' | 'ts' | 'strategy_name'> & { ts?: string }) =>
-  api.post<{ id: number }>('/api/signals', data).then(r => r.data)
 
 // ── Momentum Breadth & Market Health ──────────────────────────────────────────
 
