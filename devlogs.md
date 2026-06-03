@@ -2,6 +2,18 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-03] Screener Expansion Interactions & Detailed Intraday Sparklines
+
+### Summary
+Improved Live Screener and Repeat Runner UI interaction and trend visualization. Converted detail menus to expand strictly on-click (removing high-overhead hover interactions that caused rendering lag), and added downsampled intraday price sparklines to replace the standard 5-day historical trend.
+
+### What Changed
+* **Intraday Sparklines Calculation**: Integrated minute-candle fetching into `get_minute_metrics` in [live_screener.py](file:///home/jackc/projects/homma-research/backend/services/live_screener.py) to downsample standard daily minute bars into a 30-point array representing the current session's trend. The array dynamically mirrors the real-time last trade price.
+* **API Schema Extension**: Appended `sparkline_intraday` to live snapshot structures and mapped it into `/api/gainers/repeat-runners` responses in [gainers.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/routers/gainers.py) and [api.ts](file:///home/jackc/projects/homma-research/frontend/lib/api.ts).
+* **Click-to-Expand Details**: Refactored [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx) to only expand row details when a row is explicitly clicked.
+* **Performance Enhancements**: Removed React mouse-enter/mouse-leave hover state handlers and refs from screener rows, delegating hover styling entirely to CSS hover rules. This reduces rendering CPU load and makes scroll/interaction instantaneous.
+* **Trend Visualization**: Updated [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx) and [RepeatRunnerAlert.tsx](file:///home/jackc/projects/homma-research/frontend/components/RepeatRunnerAlert.tsx) to render the new detailed intraday trend line with a fallback to the 5d historical trend.
+
 ## [2026-06-03] Agentic Workflow & Collaboration Reflections
 
 ### Summary

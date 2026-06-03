@@ -129,6 +129,7 @@ export interface LiveGainerRow {
   news_fresh:    boolean | null
   // Enrichment fields (2026-05)
   sparkline_5d?: number[]
+  sparkline_intraday?: number[]
   sma20?: number | null
   sma50?: number | null
   sma100?: number | null
@@ -507,6 +508,7 @@ export interface RepeatRunner {
   avg_rvol:     number | null
   avg_float_m:  number | null
   sparkline_5d?: number[]
+  sparkline_intraday?: number[]
   sma20?: number | null
   sma50?: number | null
   sma100?: number | null

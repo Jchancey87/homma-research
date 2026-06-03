@@ -205,15 +205,13 @@ function PriceCell({ last, prev }: { last: number | null; prev: number | null })
   )
 }
 
-function Sparkline({ points }: { points?: number[] }) {
-  if (!points || points.length < 2) return <div className="w-16 h-5" />
+function Sparkline({ points, width = 64, height = 20 }: { points?: number[]; width?: number; height?: number }) {
+  if (!points || points.length < 2) return <div style={{ width, height }} />
   
   const min = Math.min(...points)
   const max = Math.max(...points)
   const range = max - min
   
-  const width = 64;
-  const height = 20;
   const padding = 2;
   
   const coords = points.map((p, idx) => {
@@ -296,56 +294,13 @@ function GainerTable({
   defaultSortDir = 'asc',
   flashingTickers = {},
 }: GainerTableProps) {
-  const [hoveredTicker, setHoveredTicker] = useState<string | null>(null)
   const [lockedTicker, setLockedTicker] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<'rank' | 'ticker' | 'price' | 'change' | 'mom_2m' | 'atr_hod' | 'float'>(defaultSortKey)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(defaultSortDir)
 
-  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const leaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-
-  useEffect(() => {
-    return () => {
-      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current)
-      if (leaveTimeoutRef.current) clearTimeout(leaveTimeoutRef.current)
-    }
-  }, [])
-
-  const handleRowMouseEnter = (ticker: string) => {
-    if (leaveTimeoutRef.current) {
-      clearTimeout(leaveTimeoutRef.current)
-      leaveTimeoutRef.current = null
-    }
-    if (hoveredTicker === ticker) return
-
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current)
-    }
-
-    hoverTimeoutRef.current = setTimeout(() => {
-      setHoveredTicker(ticker)
-    }, 1000)
-  }
-
-  const handleRowMouseLeave = () => {
-    if (hoverTimeoutRef.current) {
-      clearTimeout(hoverTimeoutRef.current)
-      hoverTimeoutRef.current = null
-    }
-
-    if (leaveTimeoutRef.current) {
-      clearTimeout(leaveTimeoutRef.current)
-    }
-
-    leaveTimeoutRef.current = setTimeout(() => {
-      setHoveredTicker(null)
-    }, 100)
-  }
-
   const handleRowClick = (ticker: string) => {
     setLockedTicker(prev => {
       if (prev === ticker) {
-        setHoveredTicker(null)
         return null
       }
       return ticker
@@ -463,7 +418,7 @@ function GainerTable({
             ) : (
               sortedGainers.map((g) => {
                 const originalRank = fullList.findIndex(x => x.ticker === g.ticker) + 1
-                const isExpanded = hoveredTicker === g.ticker || lockedTicker === g.ticker
+                const isExpanded = lockedTicker === g.ticker
 
                 // Actionability Status Badge Calculations
                 let playStatus = null
@@ -538,8 +493,6 @@ function GainerTable({
                         isExpanded ? 'bg-gray-850/20' : ''
                       }`}
                       onClick={() => handleRowClick(g.ticker)}
-                      onMouseEnter={() => handleRowMouseEnter(g.ticker)}
-                      onMouseLeave={() => handleRowMouseLeave()}
                     >
                       {/* 1. Rank */}
                       {showRank && (
@@ -645,8 +598,6 @@ function GainerTable({
                     <tr 
                       key={`${g.ticker}-expand`} 
                       className={`bg-gray-900/10`}
-                      onMouseEnter={() => handleRowMouseEnter(g.ticker)}
-                      onMouseLeave={() => handleRowMouseLeave()}
                     >
                       <td colSpan={colSpanCount} className="p-0 border-0">
                         <div
@@ -770,11 +721,17 @@ function GainerTable({
 
                                 {/* Right Column: Trend Sparkline & Actions */}
                                 <div className="flex flex-col justify-between gap-4">
-                                  {g.sparkline_5d && g.sparkline_5d.length > 0 ? (
+                                  {(g.sparkline_intraday && g.sparkline_intraday.length > 0) || (g.sparkline_5d && g.sparkline_5d.length > 0) ? (
                                     <div className="space-y-1.5">
-                                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider select-none block">5d Trend Sparkline:</span>
+                                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider select-none block">
+                                        {g.sparkline_intraday && g.sparkline_intraday.length > 0 ? 'Intraday Trend:' : '5d Trend Sparkline:'}
+                                      </span>
                                       <div className="bg-[#0b0b0f] p-2 rounded border border-gray-800/80 inline-block shadow-inner">
-                                        <Sparkline points={g.sparkline_5d} />
+                                        <Sparkline 
+                                          points={g.sparkline_intraday && g.sparkline_intraday.length > 0 ? g.sparkline_intraday : g.sparkline_5d} 
+                                          width={100}
+                                          height={28}
+                                        />
                                       </div>
                                     </div>
                                   ) : (

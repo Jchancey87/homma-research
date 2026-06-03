@@ -81,6 +81,19 @@ This file acts as a persistent memory block where AI coding agents record prompt
 
 ---
 
+### [2026-06-03] frontend & backend - Click-to-Expand Screener & Detailed Intraday Sparklines
+
+* **Struggle 1: Production Deployment Permission Denied**
+  * *Context*: Running `git pull` inside `/opt/trading-journal` failed with `cannot open '.git/FETCH_HEAD': Permission denied`.
+  * *Cause*: The production folder is owned by the `root` user, but the local agent commands run as user `jackc`.
+  * *Resolution*: Run the deployment operations (such as pulls and `/home/jackc/projects/homma-research/deploy.sh`) using `sudo` to bypass permission checks.
+* **Struggle 2: Component Performance & Re-render Overhead**
+  * *Context*: Moving the mouse over the screener rows scheduled React state updates and timeouts, leading to high CPU usage and unnecessary list re-renders.
+  * *Cause*: Mouseenter/mouseleave events on rows set the `hoveredTicker` state which was used to handle hover expansion.
+  * *Resolution*: Removed hover event handlers entirely, allowing Tailwind CSS (`hover:bg-gray-850/40`) to handle stylistic hover transitions efficiently while React state handles the toggle-on-click interaction purely.
+
+---
+
 ## 📜 Central Directives for Future Agents
 
 * **Environment Configuration**: Always verify environment variables in both the development workspace and the active production file [backend/.env](file:///home/jackc/projects/homma-research/backend/.env).
@@ -93,3 +106,5 @@ This file acts as a persistent memory block where AI coding agents record prompt
 * **Schwab Instrument API Parsing**: The Schwab API returns `{'instruments': [...]}` where instruments is a list. Mapped dictionary lookups (such as `.get(symbol)`) are not native; you must iterate and map the list into a dictionary keyed by symbol before attempting lookups.
 * **Schwab Shares & Market Cap Units**: Schwab API returns absolute integers for `sharesOutstanding` and `marketCap`. Do not apply redundant `1,000,000` multipliers to them, as that will break float categorizations and filters.
 * **Testing Infinite Event Streams**: When mocking infinite async generators (e.g. Redis pub/sub message loops in FastAPIs) for `pytest-asyncio` / `httpx.ASGITransport` tests, raise `asyncio.CancelledError` on termination rather than using long sleeps, preventing the test suite from hanging.
+* **Detailed Intraday Sparkline Enrichment**: The live screener enriches snapshot gainers with a `sparkline_intraday` field containing downsampled (30 points) minute-close arrays. This is calculated dynamically inside `get_minute_metrics` and updated in real-time with the last trade price.
+* **Toggle-on-Click Screener Details**: Screener detail rows in [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx) must only expand on explicit user click (`lockedTicker === g.ticker`). Avoid using React state for mouse hover interactions on large tables to prevent heavy UI lag.

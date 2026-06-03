@@ -9,15 +9,13 @@ function fmt(n: number | null, suffix = '') {
   return `${n.toFixed(1)}${suffix}`
 }
 
-function Sparkline({ points }: { points?: number[] }) {
-  if (!points || points.length < 2) return <div className="w-16 h-5" />
+function Sparkline({ points, width = 64, height = 20 }: { points?: number[]; width?: number; height?: number }) {
+  if (!points || points.length < 2) return <div style={{ width, height }} />
   
   const min = Math.min(...points)
   const max = Math.max(...points)
   const range = max - min
   
-  const width = 64;
-  const height = 20;
   const padding = 2;
   
   const coords = points.map((p, idx) => {
@@ -110,8 +108,12 @@ export default function RepeatRunnerAlert() {
           </div>
 
           {/* Sparkline */}
-          <div className="shrink-0 w-16 flex items-center justify-center">
-            <Sparkline points={r.sparkline_5d} />
+          <div className="shrink-0 w-20 flex items-center justify-center">
+            <Sparkline 
+              points={r.sparkline_intraday && r.sparkline_intraday.length > 0 ? r.sparkline_intraday : r.sparkline_5d} 
+              width={80}
+              height={24}
+            />
           </div>
 
           {/* Key stats */}

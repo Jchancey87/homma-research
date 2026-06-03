@@ -157,13 +157,17 @@ def get_minute_metrics(ticker: str, last_price: Optional[float], high_price: Opt
             ts, data = _minute_cache[ticker]
             if now - ts < 30:
                 # Update high-frequency values dynamically if we have a cached base
-                if last_price is not None and data.get('atr_14') and data['atr_14'] > 0:
-                    if high_price is not None:
-                        data['atr_hod'] = round((high_price - last_price) / data['atr_14'], 2)
-                    if bid is not None and ask is not None:
-                        data['atr_sprd'] = round((ask - bid) / data['atr_14'], 2)
-                    if data.get('vwap') is not None:
-                        data['atr_vwap'] = round((last_price - data['vwap']) / data['atr_14'], 2)
+                if last_price is not None:
+                    if data.get('atr_14') and data['atr_14'] > 0:
+                        if high_price is not None:
+                            data['atr_hod'] = round((high_price - last_price) / data['atr_14'], 2)
+                        if bid is not None and ask is not None:
+                            data['atr_sprd'] = round((ask - bid) / data['atr_14'], 2)
+                        if data.get('vwap') is not None:
+                            data['atr_vwap'] = round((last_price - data['vwap']) / data['atr_14'], 2)
+                    if 'intraday_sparkline' in data and data['intraday_sparkline']:
+                        data['intraday_sparkline'] = list(data['intraday_sparkline'])
+                        data['intraday_sparkline'][-1] = last_price
                 return data
 
     try:
@@ -177,7 +181,8 @@ def get_minute_metrics(ticker: str, last_price: Optional[float], high_price: Opt
                 'atr_vwap': None,
                 'zen_v': None,
                 'atr_14': None,
-                'vwap': None
+                'vwap': None,
+                'intraday_sparkline': []
             }
         else:
             # 1. Compute ATR(14)
@@ -260,6 +265,21 @@ def get_minute_metrics(ticker: str, last_price: Optional[float], high_price: Opt
             # 7. Compute ATR VWAP
             atr_vwap = round((curr_p - vwap) / atr, 2) if atr > 0 else 0.0
 
+            # 8. Compute Detailed Intraday Sparkline
+            closes = [c.get('c') for c in candles if c.get('c') is not None]
+            intraday_sparkline = []
+            if closes:
+                target_len = 30
+                if len(closes) > target_len:
+                    intraday_sparkline = [
+                        closes[int(i * (len(closes) - 1) / (target_len - 1))]
+                        for i in range(target_len)
+                    ]
+                else:
+                    intraday_sparkline = closes
+                if last_price is not None:
+                    intraday_sparkline[-1] = last_price
+
             metrics = {
                 'mom_2m': mom_2m,
                 'raw_mom_2m': mom_2m,
@@ -268,7 +288,8 @@ def get_minute_metrics(ticker: str, last_price: Optional[float], high_price: Opt
                 'atr_vwap': atr_vwap,
                 'zen_v': zen_v,
                 'atr_14': atr,
-                'vwap': vwap
+                'vwap': vwap,
+                'intraday_sparkline': intraday_sparkline
             }
     except Exception as e:
         log.warning(f"Error computing minute metrics for {ticker}: {e}", exc_info=True)
@@ -279,7 +300,8 @@ def get_minute_metrics(ticker: str, last_price: Optional[float], high_price: Opt
             'atr_vwap': None,
             'zen_v': None,
             'atr_14': None,
-            'vwap': None
+            'vwap': None,
+            'intraday_sparkline': []
         }
 
     with _minute_cache_lock:
@@ -346,11 +368,13 @@ def enrich_gainers_with_sparklines_and_history(gainers: list[dict]) -> list[dict
                 g['atr_sprd'] = min_metrics['atr_sprd']
                 g['atr_vwap'] = min_metrics['atr_vwap']
                 g['zen_v'] = min_metrics['zen_v']
+                g['sparkline_intraday'] = min_metrics.get('intraday_sparkline', [])
                 
             except Exception as e:
                 log.warning(f"Failed to enrich {g['ticker']}: {e}")
                 g.update({
                     'sparkline_5d': [],
+                    'sparkline_intraday': [],
                     'above_sma20': False, 'above_sma50': False, 'above_sma100': False,
                     'sma20': None, 'sma50': None, 'sma100': None,
                     'mom_2m': None, 'atr_hod': None, 'atr_sprd': None, 'atr_vwap': None, 'zen_v': None

@@ -314,6 +314,7 @@ async def repeat_runners(db: asyncpg.Connection = Depends(get_db)):
     for r in results:
         g = gainers_by_ticker.get(r['ticker'], {})
         r['sparkline_5d'] = g.get('sparkline_5d', [])
+        r['sparkline_intraday'] = g.get('sparkline_intraday', [])
         r['sma20'] = g.get('sma20')
         r['sma50'] = g.get('sma50')
         r['sma100'] = g.get('sma100')
