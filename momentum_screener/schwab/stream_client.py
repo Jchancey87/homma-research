@@ -349,8 +349,9 @@ class SchwabStreamer:
             try:
                 async with self.db_pool.acquire() as conn:
                     should_fire = await conn.fetchval(
-                        "SELECT alerts.should_fire_alert($1, $2, $3, $4, $5)",
-                        symbol, last_price, timedelta(minutes=10), timedelta(seconds=10), 5
+                        "SELECT alerts.should_fire_alert($1, $2, $3, $4, $5, $6, $7)",
+                        symbol, last_price, timedelta(minutes=10), timedelta(seconds=10), 5,
+                        Config.ALERT_MIN_PCT_INCREASE, timedelta(minutes=Config.ALERT_MIN_TIME_COOLDOWN_MINS)
                     )
             except Exception as e:
                 logger.error(f"Error querying should_fire_alert for {symbol}: {e}")

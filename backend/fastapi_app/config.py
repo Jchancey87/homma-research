@@ -71,5 +71,9 @@ class Settings:
     telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
     telegram_chat_id: str   = os.getenv("TELEGRAM_CHAT_ID", "")
 
+    # ── Alert Cooldown & Tuning Settings ──────────────────────────────────
+    alert_min_pct_increase: float      = float(os.getenv("ALERT_MIN_PCT_INCREASE", "0.03"))
+    alert_min_time_cooldown_mins: int  = int(os.getenv("ALERT_MIN_TIME_COOLDOWN_MINUTES", "2"))
+
 
 settings = Settings()

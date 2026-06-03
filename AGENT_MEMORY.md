@@ -78,6 +78,10 @@ This file acts as a persistent memory block where AI coding agents record prompt
     3. Corrected raw list parsing for `get_instruments`.
     4. Removed the redundant `* 1_000_000` multiplier.
     5. Expanded alert filters (price: $1.00-$30.00, float: < 100M).
+* **Struggle 5: Breakout Alert Spam During Runs (Tick-by-Tick Alerts)**
+  * *Context*: Ticker alerts fired constantly (sometimes multiple times per second) as a stock broke out and rose rapidly, resulting in Telegram alert spam.
+  * *Cause*: The `should_fire_alert` logic allowed any breakout to bypass the lockout period if the current price exceeded the previous trigger price, leading to alerts on every uptick.
+  * *Resolution*: Redefined `alerts.should_fire_alert` to enforce both a percentage-based threshold (default 3% price rise) AND a minimum time cooldown (default 2 minutes) during the lockout. If a ticker is locked out, it can only trigger another alert if it has gone up at least 3% since the last alert and at least 2 minutes have elapsed.
 
 ---
 
@@ -107,7 +111,7 @@ This file acts as a persistent memory block where AI coding agents record prompt
 ## 📜 Central Directives for Future Agents
 
 * **Environment Configuration**: Always verify environment variables in both the development workspace and the active production file [backend/.env](file:///home/jackc/projects/homma-research/backend/.env).
-* **Database Cooldown Check**: The Schwab streaming client must query the PostgreSQL function `alerts.should_fire_alert` before publishing alerts to enforce ticker cooldowns and index-wide macro rate suppression.
+* **Database Cooldown Check**: The Schwab streaming client must query the PostgreSQL function `alerts.should_fire_alert` before publishing alerts to enforce ticker cooldowns and index-wide macro rate suppression. This function accepts `ALERT_MIN_PCT_INCREASE` (default 3% rise) and `ALERT_MIN_TIME_COOLDOWN_MINUTES` (default 2 mins) to suppress rapid-fire spam on running stocks during the active lockout.
 * **No Raw Audio Asset Dependences**: Do not add raw sound files (`.wav`/`.mp3`) to the codebase for notification sounds. Use the browser-native Web Audio API `playPlinkChime` in [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx#L890) to synthesize sound chimes dynamically.
 * **Production Deployment Flow**:
   1. Commit files locally in `/home/jackc/projects/homma-research`.

@@ -60,6 +60,9 @@ class TestStreamClientAlerts(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(args[2], timedelta(minutes=10))
         self.assertEqual(args[3], timedelta(seconds=10))
         self.assertEqual(args[4], 5)
+        from config import Config
+        self.assertEqual(args[5], Config.ALERT_MIN_PCT_INCREASE)
+        self.assertEqual(args[6], timedelta(minutes=Config.ALERT_MIN_TIME_COOLDOWN_MINS))
         
         # Verify save_alert_to_db was called
         streamer.save_alert_to_db.assert_called_once_with(

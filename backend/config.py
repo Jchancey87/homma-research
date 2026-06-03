@@ -59,3 +59,7 @@ class Config:
     TELEGRAM_BOT_TOKEN  = os.getenv('TELEGRAM_BOT_TOKEN', '')
     TELEGRAM_CHAT_ID    = os.getenv('TELEGRAM_CHAT_ID', '')
 
+    # Alert Cooldown & Tuning Settings
+    ALERT_MIN_PCT_INCREASE        = float(os.getenv('ALERT_MIN_PCT_INCREASE', '0.03'))
+    ALERT_MIN_TIME_COOLDOWN_MINS  = int(os.getenv('ALERT_MIN_TIME_COOLDOWN_MINUTES', '2'))
+

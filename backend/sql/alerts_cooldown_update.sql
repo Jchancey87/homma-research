@@ -1,21 +1,11 @@
 -- =============================================================================
--- Migration: Alerts Cooldown and Throttling logic
--- Phase 1 of the Real-Time Breakout Alerts & Notifications plan
+-- Migration: Update alerts.should_fire_alert to implement a percentage-based
+-- price increase and minimum time cooldown criteria during active lockout.
 -- =============================================================================
 
 BEGIN;
 
-CREATE SCHEMA IF NOT EXISTS alerts;
-
-CREATE TABLE IF NOT EXISTS alerts.ticker_cooldowns (
-    ticker VARCHAR(12) PRIMARY KEY,
-    last_triggered_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    highest_trigger_price NUMERIC(12, 4) NOT NULL,
-    lockout_expires_at TIMESTAMP WITH TIME ZONE NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_ticker_cooldowns_expiry 
-    ON alerts.ticker_cooldowns (ticker, lockout_expires_at);
+DROP FUNCTION IF EXISTS alerts.should_fire_alert(VARCHAR, NUMERIC, INTERVAL, INTERVAL, INT);
 
 CREATE OR REPLACE FUNCTION alerts.should_fire_alert(
     p_ticker VARCHAR,
