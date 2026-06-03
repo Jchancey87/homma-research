@@ -2,6 +2,25 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-03] Codebase Review & Health Optimization using Fallow
+
+### Summary
+Cleaned up dead code, unused file assets, redundant type/function exports, and duplicated React UI components across the frontend Next.js application using the Fallow tools reviewer. Refactoring was carried out inside a dedicated safety branch `cleanup-experiment`, achieving a net reduction of 1,259 lines of code and improving codebase maintainability from 89.4 to 91.8.
+
+### What Changed
+* **Safety Branch Setup:** Isolated all refactoring activities in the `cleanup-experiment` branch.
+* **Dead Code Cleanup:** Deleted 4 unused React components from the file system:
+  * [InteractiveSessionChart.tsx](file:///home/jackc/projects/homma-research/frontend/components/InteractiveSessionChart.tsx) (replaced by lightweight charts)
+  * [ResearchPanel.tsx](file:///home/jackc/projects/homma-research/frontend/components/ResearchPanel.tsx) (old prototype layout)
+  * [SystemStatus.tsx](file:///home/jackc/projects/homma-research/frontend/components/SystemStatus.tsx) (unused utility component)
+  * [TodayGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/TodayGainers.tsx) (legacy component)
+* **Unused Exports & Types Removal:** Removed 20 unused API request methods and type interfaces (like `startContinuation`, `getArchetypes`, `Strategy`, `BacktestRun`) in [lib/api.ts](file:///home/jackc/projects/homma-research/frontend/lib/api.ts) to resolve TypeScript/ESLint unused-variable warnings.
+* **UI Sparkline Deduplication:** Created a shared [Sparkline.tsx](file:///home/jackc/projects/homma-research/frontend/components/Sparkline.tsx) component and migrated [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx) and [RepeatRunnerAlert.tsx](file:///home/jackc/projects/homma-research/frontend/components/RepeatRunnerAlert.tsx) to consume it, removing duplicate SVG rendering functions.
+* **Property Duplication Refactoring:** Refactored `GainerSummary['gainers']` in [lib/api.ts](file:///home/jackc/projects/homma-research/frontend/lib/api.ts) to extend the `Gainer` interface using TypeScript's `Omit` utility, eliminating duplicate field lists.
+* **Dependency & Build Validation:** Moved `@tailwindcss/typography` from production dependencies to `devDependencies` in [package.json](file:///home/jackc/projects/homma-research/frontend/package.json), removed unused `plotly.js-dist-min`, and verified that the production build completes with 0 compiler warnings.
+
+---
+
 ## [2026-06-03] Screener Expansion Interactions & Detailed Intraday Sparklines
 
 ### Summary
