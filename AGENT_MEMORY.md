@@ -4,29 +4,77 @@ This file acts as a persistent memory block where AI coding agents record prompt
 
 ---
 
-## [2026-06-03] Real-Time Notification & Visual Alert System Implementation
+## 🏛️ Chronological History of Learnings & Struggles
 
-### 1. Objective & Outcomes
-* **Objective**: Add database rate-limiting and Telegram alerts for breakout events, plus a reactive Next.js UI showing visual highlights and audio chimes.
-* **Deliverables**:
-  - `alerts.ticker_cooldowns` table and `alerts.should_fire_alert` Postgres procedure.
-  - Celery background task (`send_telegram_alert_task`) in FastAPI dispatching formatted bot messages via HTTP.
-  - Next.js real-time event stream subscription, toast notifications card stack, fading background flashes in the Live Gainers grid, Web Audio plink chime synthesizer, and mute settings controls.
+---
 
-### 2. Prompt Adaptations & Alignments
-* **Discrepancy Correction**: The user's architectural handoff file suggested a SvelteKit frontend. We cross-referenced the active workspace files and detected the frontend is Next.js (React + Tailwind). I raised this and rewrote the blueprints into React.
-* **Architecture Clarifications**: I used an interactive Q&A "grill session" to clarify design decisions prior to implementation, allowing us to align on:
-  1. Using Redis Pub/Sub for SSE but checking a DB stored procedure first.
-  2. Running the Telegram dispatcher as a background Celery task to ensure zero lag on the Schwab streamer.
-  3. Synthesizing audio cues dynamically via Web Audio API to bypass raw file path loading dependencies.
+### [2026-05-19] backend/ - FastAPI Migration & Event Loop Issues
+* **Struggle 1: Test Suite Hangs (Event Loop Mismatch)**
+  * *Context*: Running `pytest` would hang indefinitely when initializing database pools.
+  * *Cause*: Conflict between `anyio` and `pytest-asyncio` driving different loop scopes.
+  * *Resolution*: Forced `pytest-asyncio` to own session-scoped loops and disabled anyio (`-p no:anyio` flag). Future test runs should always run async-native with `-p no:anyio`.
+* **Struggle 2: asyncpg Strict Datatype Checks**
+  * *Context*: watchlists and observations queries failed with `expected datetime instance, got str`.
+  * *Cause*: `asyncpg` does not implicitly cast ISO-formatted strings to `TIMESTAMPTZ` columns in Postgres (unlike psycopg2 or sqlite).
+  * *Resolution*: Always construct and pass python `datetime` objects directly rather than calling `.isoformat()` when working with `asyncpg` queries.
+* **Struggle 3: Python Import Shadowing (`sys.path` Conflict)**
+  * *Context*: `fastapi_app/main.py` failed to import configs properly.
+  * *Cause*: Adding `fastapi_app/` to the front of `sys.path` shadowed `backend/config.py` with `fastapi_app/config.py` (which contains FastAPI `Settings`).
+  * *Resolution*: Path bootstrappers in entry points must point to the parent `backend/` root directory instead of the sub-router folders.
 
-### 3. Mistakes & Self-Corrections
-* **Venv Pathing during Tests**: A subagent encountered a `ModuleNotFoundError` during tests due to using standard python instead of the local production virtualenv (`/opt/trading-journal/backend/venv`). I corrected the python path, ensuring proper test execution.
-* **Workspace vs. Production Decoupling**: During testing, we hit `0 active subscribers` in the Redis loop because the development workspace (`/home/jackc/projects/homma-research`) is completely decoupled from the production deployment folder (`/opt/trading-journal`). We staged, committed, and pulled the changes to synchronize production.
-* **Typo in Env Keys**: The user copy-pasted their bot token but saved it as `TELEGRAM_BOT_TOKEN0`. We corrected the key to `TELEGRAM_BOT_TOKEN` in `.env` to fix the `401 Unauthorized` check.
+---
 
-### 4. Directives for Future Agents
-* **Environment Configuration**: Always verify keys in the active `backend/.env` file. Check spelling carefully.
-* **Screener Streamer Logging**: All screener alerts insert into `screener_alerts` and publish to the `screener:alerts` Redis channel.
-* **Web Audio Synthesis**: In `LiveGainers.tsx`, use the browser Web Audio API `playPlinkChime` function to play alerts dynamically. Do not add raw audio file attachments.
-* **Deployment Workflow**: Remember that code must be committed in `/home/jackc/projects/homma-research`, pulled into `/opt/trading-journal`, and deployed using `/opt/trading-journal/deploy.sh` to take effect.
+### [2026-05-20] frontend/ - Webpage CORS & Route Resolution
+* **Struggle: CORS Wildcard with Credentials Block**
+  * *Context*: Browser console CORS blocks on client-side requests: `No Access-Control-Allow-Origin header is present...`
+  * *Cause*: FastAPI's `CORSMiddleware` cannot use `allow_origins=["*"]` when `allow_credentials=True`.
+  * *Resolution*: In [main.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/main.py), strip `*` from allowed origins and define `allow_origin_regex="https?://.*"` to echo back the requesting client origin.
+
+---
+
+### [2026-06-01] database - TimescaleDB Hypertables Schema Setup
+* **Struggle: Hypertable Unique Constraints violation**
+  * *Context*: Converting `screener_alerts` to a TimescaleDB hypertable failed.
+  * *Cause*: In TimescaleDB, all unique constraints (including primary keys) must include the time partitioning column (`alert_time` in this case).
+  * *Resolution*: Define PKs on hypertables as compound indexes (e.g. `PRIMARY KEY (id, alert_time)`). Never use a single `SERIAL PRIMARY KEY` on hypertable structures.
+
+---
+
+### [2026-06-02] frontend - Chart Timezones & Latency Bottlenecks
+* **Struggle 1: Lightweight Charts Timezone Shift**
+  * *Context*: Interactive detail charts rendered UTC times that mismatched the trader's desktop times.
+  * *Cause*: TradingView Lightweight Charts default to rendering in UTC.
+  * *Resolution*: Shift the raw UTC timestamps in the frontend components by the browser's local offset: `timestamp - (offset_minutes * 60)` and dynamically resolve timezone labels (e.g. CDT, EDT) in UI headers.
+* **Struggle 2: Page Loading Latency Blockers**
+  * *Context*: Navigating between dashboard tabs took up to 3.4 seconds due to blocking API lookups.
+  * *Cause*: Demand-driven cache updates blocked thread execution, and watchlist updates queried Symbol details sequentially.
+  * *Resolution*:
+    1. Replaced sequential HTTP loops with Schwab's batch quotes endpoint (`level_one_equity_subs` / batch requests).
+    2. Converted demand-driven cache updates to an off-thread background refresh daemon `live-screener-refresh` in [live_screener.py](file:///home/jackc/projects/homma-research/backend/services/live_screener.py#L46), dropping endpoint response latency to <10ms.
+
+---
+
+### [2026-06-03] backend & frontend - Breakout Alerts Throttling & UI Chimes
+
+* **Struggle 1: Environment Pathing inside System Tests**
+  * *Context*: Testing the Schwab streaming client changes failed with `ModuleNotFoundError: No module named 'schwab'`.
+  * *Cause*: Running tests with the global standard `python3` command bypassed the production virtualenv libraries.
+  * *Resolution*: Always run test scripts or debug checks using the virtualenv interpreter: `/opt/trading-journal/backend/venv/bin/python3`.
+* **Struggle 2: Redis Client 0-Subscribers Mismatch**
+  * *Context*: Publishing mock alerts to Redis showed `Delivered to 0 subscribers` even with the browser tab open.
+  * *Cause*: The development workspace at `/home/jackc/projects/homma-research` is completely decoupled from the production deployment workspace at `/opt/trading-journal`. Edits must be committed, pulled to `/opt/trading-journal`, and built before changes take effect on the active servers.
+* **Struggle 3: Capitalization Typo in Settings Loading**
+  * *Context*: Dispatching live Telegram messages failed with `401 Unauthorized` because the API token had a trailing `0` in `.env` (`TELEGRAM_BOT_TOKEN0`).
+  * *Resolution*: Fixed key name typo in `.env` and verified Telegram returns `200 OK` for the dispatch.
+
+---
+
+## 📜 Central Directives for Future Agents
+
+* **Environment Configuration**: Always verify environment variables in both the development workspace and the active production file [backend/.env](file:///home/jackc/projects/homma-research/backend/.env).
+* **Database Cooldown Check**: The Schwab streaming client must query the PostgreSQL function `alerts.should_fire_alert` before publishing alerts to enforce ticker cooldowns and index-wide macro rate suppression.
+* **No Raw Audio Asset Dependences**: Do not add raw sound files (`.wav`/`.mp3`) to the codebase for notification sounds. Use the browser-native Web Audio API `playPlinkChime` in [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx#L890) to synthesize sound chimes dynamically.
+* **Production Deployment Flow**:
+  1. Commit files locally in `/home/jackc/projects/homma-research`.
+  2. Pull files on the server: `sudo git -C /opt/trading-journal pull dev master`.
+  3. Rebuild/Restart using the deployment script: `sudo /opt/trading-journal/deploy.sh`.
