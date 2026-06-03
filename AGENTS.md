@@ -10,6 +10,7 @@ When starting a session or a new task, perform the following steps to orient you
 1. **Check Git Status**: Run `git status` to see if there are any untracked or modified files.
 2. **Check Logs / Recent Activity**: Review [devlogs.md](file:///home/jackc/projects/homma-research/devlogs.md) to understand recent modifications and status updates.
 3. **Inspect Active Workspaces**: Locate the frontend/backend services and ensure they are running properly.
+4. **Check Agent Memory**: Read [AGENT_MEMORY.md](file:///home/jackc/projects/homma-research/AGENT_MEMORY.md) to align on styles, prompt adaptations, and lessons learned in previous sessions.
 
 ---
 
@@ -53,6 +54,9 @@ To maintain code quality and prevent system drift, adhere strictly to the follow
   * Use quiet flags like `-q` or `-s` when verbose output is unnecessary, but do not hide useful failure diagnostics.
   * After modifying code, run the relevant local tests and lint checks before finalizing.
 
+### 4. Agentic Reflections & Memory
+* **Session Wrap-up**: Before concluding a task, you **MUST** append a structured reflection entry to [AGENT_MEMORY.md](file:///home/jackc/projects/homma-research/AGENT_MEMORY.md) detailing the session's objective, prompt-adaptations, mistakes/self-corrections, and key directives for future sessions. Ensure the format matches the established template.
+
 ---
 
 ## 📂 Key Files & Directories
@@ -62,6 +66,7 @@ To maintain code quality and prevent system drift, adhere strictly to the follow
   * [docs/ARCHITECTURE.md](file:///home/jackc/projects/homma-research/docs/ARCHITECTURE.md) - Detailed backend & database architecture.
   * [docs/DEVOPS_GUIDE.md](file:///home/jackc/projects/homma-research/docs/DEVOPS_GUIDE.md) - Hosting, deployment, and service management.
   * [devlogs.md](file:///home/jackc/projects/homma-research/devlogs.md) - Chronological development logs and state tracker.
+  * [AGENT_MEMORY.md](file:///home/jackc/projects/homma-research/AGENT_MEMORY.md) - Agent reflections, adaptations, and learning logs.
 * **Data & Authority Mapping**:
   * [pocket-data/issue-setup.md](file:///home/jackc/projects/homma-research/pocket-data/issue-setup.md) - Pocket data alignment and GitHub issue flows.
   * [handoffs/](file:///home/jackc/projects/homma-research/handoffs/) - Historical coding agent handoff documents.
@@ -74,3 +79,4 @@ To maintain code quality and prevent system drift, adhere strictly to the follow
 - [ ] Review current database schema and verify Schwab token retrieval processes.
 - [ ] Investigate issues or feature updates requested by the user.
 - [ ] Keep [devlogs.md](file:///home/jackc/projects/homma-research/devlogs.md) updated as changes are made.
+- [ ] Keep [AGENT_MEMORY.md](file:///home/jackc/projects/homma-research/AGENT_MEMORY.md) updated at the end of each session.
