@@ -27,7 +27,11 @@ import {
   X,
   Sparkles,
   Pin,
-  Info
+  Info,
+  Volume2,
+  VolumeX,
+  Bell,
+  BellOff
 } from 'lucide-react'
 import MiniSessionChart from '@/components/MiniSessionChart'
 
@@ -276,6 +280,7 @@ interface GainerTableProps {
   loading?: boolean
   defaultSortKey?: 'rank' | 'ticker' | 'price' | 'change' | 'mom_2m' | 'atr_hod' | 'float'
   defaultSortDir?: 'asc' | 'desc'
+  flashingTickers?: Record<string, boolean>
 }
 
 function GainerTable({
@@ -289,6 +294,7 @@ function GainerTable({
   loading = false,
   defaultSortKey = 'rank',
   defaultSortDir = 'asc',
+  flashingTickers = {},
 }: GainerTableProps) {
   const [hoveredTicker, setHoveredTicker] = useState<string | null>(null)
   const [lockedTicker, setLockedTicker] = useState<string | null>(null)
@@ -518,10 +524,16 @@ function GainerTable({
                   }
                 }
 
+                const isFlashing = !!flashingTickers[g.ticker]
                 return (
                   <Fragment key={g.ticker}>
                     <tr
                       key={g.ticker}
+                      style={
+                        isFlashing
+                          ? { backgroundColor: 'rgba(245, 158, 11, 0.3)', transition: 'none' }
+                          : { transition: 'background-color 3.5s cubic-bezier(0.25, 1, 0.5, 1)' }
+                      }
                       className={`hover:bg-gray-850/40 transition-colors group cursor-pointer ${
                         isExpanded ? 'bg-gray-850/20' : ''
                       }`}
@@ -834,6 +846,18 @@ function GainerTable({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+interface AlertItem {
+  id: string
+  ticker: string
+  price: number
+  alertType: string
+  time: string
+  volume?: number
+  rvol?: number
+  gapPct?: number
+  floatShares?: number
+}
+
 export default function LiveGainers() {
   const router = useRouter()
   const [snap,        setSnap]        = useState<LiveGainerSnapshot | null>(null)
@@ -842,6 +866,121 @@ export default function LiveGainers() {
   const [refreshing,  setRefreshing]  = useState(false)
   const [ageStr,      setAgeStr]      = useState('')
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Real-Time Breakout Alerts & Notifications (Phase 3)
+  const [audioChimesEnabled, setAudioChimesEnabled] = useState(false)
+  const [toastStackEnabled, setToastStackEnabled] = useState(true)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [recentAlerts, setRecentAlerts] = useState<AlertItem[]>([])
+  const [flashingTickers, setFlashingTickers] = useState<Record<string, boolean>>({})
+  const [toasts, setToasts] = useState<AlertItem[]>([])
+
+  const audioChimesEnabledRef = useRef(audioChimesEnabled)
+  const toastStackEnabledRef = useRef(toastStackEnabled)
+  const audioCtxRef = useRef<AudioContext | null>(null)
+
+  useEffect(() => {
+    audioChimesEnabledRef.current = audioChimesEnabled
+  }, [audioChimesEnabled])
+
+  useEffect(() => {
+    toastStackEnabledRef.current = toastStackEnabled
+  }, [toastStackEnabled])
+
+  const playPlinkChime = useCallback(() => {
+    try {
+      if (typeof window === 'undefined') return
+      if (!audioCtxRef.current) {
+        const AudioContextClass = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+        if (!AudioContextClass) return
+        audioCtxRef.current = new AudioContextClass()
+      }
+      const ctx = audioCtxRef.current
+      if (ctx.state === 'suspended') {
+        ctx.resume()
+      }
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.type = 'sine'
+      const now = ctx.currentTime
+      osc.frequency.setValueAtTime(800, now)
+      osc.frequency.exponentialRampToValueAtTime(1200, now + 0.08)
+      gain.gain.setValueAtTime(0.12, now)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3)
+      osc.start(now)
+      osc.stop(now + 0.32)
+    } catch (e) {
+      console.error('Web Audio error:', e)
+    }
+  }, [])
+
+  // SSE connection for real-time alerts
+  useEffect(() => {
+    const eventSource = new EventSource('/api/alerts/stream')
+
+    eventSource.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data)
+        const ticker = payload.symbol
+        const price = payload.price
+        const alertType = payload.alert_type
+
+        // Play chime if enabled
+        if (audioChimesEnabledRef.current) {
+          playPlinkChime()
+        }
+
+        // Render toast if enabled
+        if (toastStackEnabledRef.current) {
+          const id = Math.random().toString(36).substring(2, 9)
+          const newToast: AlertItem = {
+            id,
+            ticker,
+            price,
+            alertType,
+            time: new Date().toLocaleTimeString(),
+          }
+          setToasts(prev => [newToast, ...prev].slice(0, 5))
+          setTimeout(() => {
+            setToasts(prev => prev.filter(t => t.id !== id))
+          }, 6000)
+        }
+
+        // Recent alerts list (cap at 50)
+        const recentAlertItem: AlertItem = {
+          id: Math.random().toString(36).substring(2, 9),
+          ticker,
+          price,
+          alertType,
+          time: new Date().toLocaleTimeString(),
+          volume: payload.volume,
+          rvol: payload.rvol,
+          gapPct: payload.gap_pct,
+          floatShares: payload.float_shares
+        }
+        setRecentAlerts(prev => [recentAlertItem, ...prev].slice(0, 50))
+
+        // Trigger flash effect for the ticker
+        setFlashingTickers(prev => ({ ...prev, [ticker]: true }))
+        setTimeout(() => {
+          setFlashingTickers(prev => ({ ...prev, [ticker]: false }))
+        }, 200)
+
+      } catch (err) {
+        console.error('Failed to process SSE message:', err)
+      }
+    }
+
+    eventSource.onerror = (err) => {
+      console.error('SSE Stream Error:', err)
+    }
+
+    return () => {
+      eventSource.close()
+    }
+  }, [playPlinkChime])
 
   // UX states
   const [modalGainer, setModalGainer]       = useState<LiveGainerRow | null>(null)
@@ -1007,6 +1146,34 @@ export default function LiveGainers() {
         </div>
 
         <div className="flex items-center gap-3 select-none">
+          {/* Audio Chime Toggle */}
+          <button
+            onClick={() => setAudioChimesEnabled(!audioChimesEnabled)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+              audioChimesEnabled
+                ? 'bg-emerald-600/15 border-emerald-500/35 text-emerald-400 hover:bg-emerald-600/25'
+                : 'bg-gray-900/40 border-gray-800/60 text-gray-450 hover:text-gray-300 hover:bg-gray-900/60'
+            }`}
+            title="Toggle Audio Chimes on Breakouts"
+          >
+            {audioChimesEnabled ? <Volume2 size={12} /> : <VolumeX size={12} />}
+            <span>Audio</span>
+          </button>
+
+          {/* Toast Stack Toggle */}
+          <button
+            onClick={() => setToastStackEnabled(!toastStackEnabled)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+              toastStackEnabled
+                ? 'bg-emerald-600/15 border-emerald-500/35 text-emerald-400 hover:bg-emerald-600/25'
+                : 'bg-gray-900/40 border-gray-800/60 text-gray-450 hover:text-gray-300 hover:bg-gray-900/60'
+            }`}
+            title="Toggle Toast Stack Notifications"
+          >
+            {toastStackEnabled ? <Bell size={12} /> : <BellOff size={12} />}
+            <span>Toasts</span>
+          </button>
+
           <button
             onClick={() => {
               const newValue = !priceFilterEnabled
@@ -1063,6 +1230,7 @@ export default function LiveGainers() {
           onOpenModal={setModalGainer}
           handleResearch={handleResearch}
           loading={loading}
+          flashingTickers={flashingTickers}
         />
         <GainerTable
           gainers={loading ? [] : filteredGainers.filter(g => g.atr_hod != null && g.atr_hod < 1.0)}
@@ -1075,6 +1243,7 @@ export default function LiveGainers() {
           loading={loading}
           defaultSortKey="atr_hod"
           defaultSortDir="asc"
+          flashingTickers={flashingTickers}
         />
       </div>
 
@@ -1279,6 +1448,45 @@ export default function LiveGainers() {
           </div>
         </div>
       )}
+
+      {/* Toast notifications stack */}
+      <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-3 max-w-sm w-full pointer-events-none">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className="pointer-events-auto bg-[#0b0b0f] border border-gray-800 rounded-xl p-4 shadow-2xl flex flex-col gap-2 hover:border-emerald-500/50 transition-all cursor-pointer transform hover:scale-[1.02] active:scale-[0.98] animate-in slide-in-from-bottom duration-200"
+            onClick={() => {
+              const today = new Date().toISOString().slice(0, 10)
+              router.push(`/research?ticker=${toast.ticker}&date=${today}`)
+              setToasts(prev => prev.filter(t => t.id !== toast.id))
+            }}
+          >
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-white font-mono flex items-center gap-1.5 text-sm">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                {toast.ticker}
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setToasts(prev => prev.filter(t => t.id !== toast.id))
+                }}
+                className="text-gray-500 hover:text-white transition-colors p-0.5"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-gray-400">
+                Trigger: <span className="font-mono text-white font-semibold">${toast.price.toFixed(2)}</span>
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                {toast.alertType}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

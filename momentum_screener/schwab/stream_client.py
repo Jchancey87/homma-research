@@ -20,6 +20,7 @@ if _backend not in sys.path:
 from config import Config
 from momentum_screener.schwab.auth import get_client
 from schwab.streaming import StreamClient
+from fastapi_app.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -159,17 +160,11 @@ class SchwabStreamer:
                 
             await asyncio.sleep(300) # run every 5 minutes
 
-    def evaluate_and_fire_alert(self, symbol, last_price, total_volume, high_price, low_price, open_price):
+    async def evaluate_and_fire_alert(self, symbol, last_price, total_volume, high_price, low_price, open_price):
         """Evaluate hybrid momentum filters and fire alerts via Postgres and Redis Pub/Sub."""
         fund = self.fundamentals_cache.get(symbol)
         if not fund:
             return
-
-        # Cooldown check (10 minutes)
-        now = datetime.utcnow()
-        if symbol in self.cooldowns:
-            if now - self.cooldowns[symbol] < timedelta(minutes=10):
-                return
 
         # 1. Update VWAP
         vwap = 0.0
@@ -232,28 +227,47 @@ class SchwabStreamer:
         float_ok = fund['shares_outstanding'] < 30_000_000 # Using shares out as float proxy
         
         if triggered and price_ok and float_ok:
-            # Fire Alert!
-            self.cooldowns[symbol] = now
-            
-            # 1. Save alert in DB (using asyncio-safe runner)
-            asyncio.create_task(self.save_alert_to_db(
-                symbol, last_price, total_volume, rvol, gap_pct,
-                fund['shares_outstanding'], alert_type
-            ))
-            
-            # 2. Publish JSON alert payload to Redis
-            alert_payload = {
-                'symbol': symbol,
-                'price': last_price,
-                'volume': total_volume,
-                'rvol': round(rvol, 2),
-                'gap_pct': round(gap_pct, 2),
-                'float_shares': fund['shares_outstanding'],
-                'alert_type': alert_type,
-                'time': now.isoformat()
-            }
-            redis_client.publish('screener:alerts', json.dumps(alert_payload))
-            logger.info(f"🚨 ALERT FIRED: {symbol} @ ${last_price} ({alert_type}) | RVOL: {rvol:.2f}x")
+            # Query alerts.should_fire_alert from database to check cooldown & macro-market suppressions
+            try:
+                async with self.db_pool.acquire() as conn:
+                    should_fire = await conn.fetchval(
+                        "SELECT alerts.should_fire_alert($1, $2, $3, $4, $5)",
+                        symbol, last_price, timedelta(minutes=10), timedelta(seconds=10), 5
+                    )
+            except Exception as e:
+                logger.error(f"Error querying should_fire_alert for {symbol}: {e}")
+                should_fire = False
+
+            if should_fire:
+                now = datetime.utcnow()
+                # 1. Save alert in DB
+                await self.save_alert_to_db(
+                    symbol, last_price, total_volume, rvol, gap_pct,
+                    fund['shares_outstanding'], alert_type
+                )
+                
+                # 2. Publish JSON alert payload to Redis
+                alert_payload = {
+                    'symbol': symbol,
+                    'price': last_price,
+                    'volume': total_volume,
+                    'rvol': round(rvol, 2),
+                    'gap_pct': round(gap_pct, 2),
+                    'float_shares': fund['shares_outstanding'],
+                    'alert_type': alert_type,
+                    'time': now.isoformat()
+                }
+                redis_client.publish('screener:alerts', json.dumps(alert_payload))
+                logger.info(f"🚨 ALERT FIRED: {symbol} @ ${last_price} ({alert_type}) | RVOL: {rvol:.2f}x")
+
+                # 3. Trigger Celery task asynchronously using celery_app.send_task
+                try:
+                    celery_app.send_task(
+                        "fastapi_app.tasks.alerts.send_telegram_alert_task",
+                        args=[alert_payload]
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to dispatch Telegram Celery task for {symbol}: {e}")
 
     async def save_alert_to_db(self, symbol, price, volume, rvol, gap_pct, float_shares, alert_type):
         try:
@@ -327,12 +341,12 @@ class SchwabStreamer:
                 if last_price is None or total_volume is None:
                     continue
                     
-                self.evaluate_and_fire_alert(
+                asyncio.create_task(self.evaluate_and_fire_alert(
                     symbol, last_price, total_volume,
                     high_price or last_price,
                     low_price or last_price,
                     open_price or last_price
-                )
+                ))
         except Exception as e:
             logger.error(f"Error handling quote update: {e}")
 

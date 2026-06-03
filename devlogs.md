@@ -2,6 +2,41 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-03] Real-Time Breakout Alerts & Notifications — Phase 3
+
+### Summary
+Implemented Phase 3 of the Real-Time Breakout Alerts & Notifications system in the frontend client. Connected to the backend SSE `/api/alerts/stream` endpoint, built visual row highlight flashes, implemented a dynamic Web Audio chime synthesizer, created a corner-stacked toast notification system, and added dashboard toggles.
+
+### What Changed
+* **SSE Stream Client**: Established EventSource connection to `/api/alerts/stream` on mount in `LiveGainers.tsx`, handling automated cleanup on unmount.
+* **Control Toggles**: Added settings toggle buttons next to the price filter in the dashboard header to allow users to mute chimes and toggle toast notifications.
+* **Web Audio API Synth**: Implemented a dynamic Web Audio synthesizer `playPlinkChime` that plays a professional high-pitch "plink" sound without needing static audio asset files.
+* **Row Flash & Slow Fade**: Built an instant-on, slow-decay highlight effect on row breakouts. When a symbol fires an alert, its rows in "All Live Gainers" and "Near HOD Radar" flash a custom neon amber color (`rgba(245, 158, 11, 0.3)`) instantly and transition back to transparent over 3.5 seconds.
+* **Toast Notification Stack**: Created a bottom-right fixed notification stack for incoming breakouts showing ticker, trigger price, and alert type badges. Clicking on a toast navigates the user to research mode for the ticker.
+* **TypeScript & Lint Verification**: Resolved unused variable and explicit `any` warnings, ensuring the code compiles with zero compiler or linter errors.
+
+## [2026-06-03] Real-Time Breakout Alerts & Notifications — Phase 2
+
+### Summary
+Implemented Phase 2 of the Real-Time Breakout Alerts & Notifications system. Added Telegram Bot settings/configuration variables, created the `send_telegram_alert_task` Celery task, and registered the task in the Celery app registry. Wrote and executed scratch tests validating the task layout and network dispatch formatting.
+
+### What Changed
+* **Environment Variables & Configuration**: Added placeholders for `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` to both [backend/.env.example](file:///home/jackc/projects/homma-research/backend/.env.example) and the top-level [.env.example](file:///home/jackc/projects/homma-research/.env.example), and appended them to [backend/.env](file:///home/jackc/projects/homma-research/backend/.env). Updated settings classes in [backend/config.py](file:///home/jackc/projects/homma-research/backend/config.py) and [backend/fastapi_app/config.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/config.py) to load them from environment.
+* **Celery Telegram Task**: Created [backend/fastapi_app/tasks/alerts.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/tasks/alerts.py) with the `send_telegram_alert_task` Celery task. The task constructs clean Markdown breakout messages, handles special Markdown character escaping (like underscores in symbol names or alert types), and dispatches them via POST requests to the Telegram Bot API using `httpx`.
+* **Celery Configuration**: Registered the new tasks module in the Celery app `include` list within [backend/fastapi_app/celery_app.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/celery_app.py).
+* **Validation**: Wrote and successfully executed a mock unit/integration test script at [backend/scratch/test_telegram_alert.py](file:///home/jackc/projects/homma-research/backend/scratch/test_telegram_alert.py) validating the formatted payload layout, the HTTP request parameters, and HTTP error resilience.
+
+## [2026-06-02] Real-Time Breakout Alerts & Notifications — Phase 1
+
+### Summary
+Implemented Phase 1 of the Real-Time Breakout Alerts & Notifications system. Created database-backed alert suppression (macro-market throttle & ticker cooldown) logic and integrated it into the Schwab streaming data ingestion client.
+
+### What Changed
+* **Database Migration & Logic**: Created and applied SQL migration [backend/sql/alerts_cooldown_migration.sql](file:///home/jackc/projects/homma-research/backend/sql/alerts_cooldown_migration.sql). This created the `alerts` schema, `alerts.ticker_cooldowns` table, and the `alerts.should_fire_alert` stored procedure.
+* **Schwab Stream Client Integration**: Refactored `evaluate_and_fire_alert` in [momentum_screener/schwab/stream_client.py](file:///home/jackc/projects/homma-research/momentum_screener/schwab/stream_client.py) to be asynchronous.
+* **Alert Throttling & Celery Tasks**: Replaced the in-memory cooldown cache checks with a direct async DB call to `alerts.should_fire_alert`. Added automated background task triggering for `fastapi_app.tasks.alerts.send_telegram_alert_task` via `celery_app.send_task` when an alert is fired.
+* **Verification & Validation**: Created comprehensive unit/integration test scripts at [backend/scratch/test_alerts_cooldown.py](file:///home/jackc/projects/homma-research/backend/scratch/test_alerts_cooldown.py) and [backend/scratch/test_stream_client_alerts.py](file:///home/jackc/projects/homma-research/backend/scratch/test_stream_client_alerts.py). Verified that all logical checks (macro suppression, cooldown periods, higher-high breakouts, and Celery task dispatch) pass correctly.
+
 ## [2026-06-02] Dashboard Endpoint Latency & Page Switch Optimizations
 
 ### Summary
