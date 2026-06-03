@@ -628,6 +628,21 @@ Diagnosed and resolved critical issues with the live screener tables' hover-to-e
 * **Cause**: Mounting `/storage` in [backend/fastapi_app/main.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/main.py) resolved `settings.storage_path` relative to `fastapi_app/` instead of `backend/` root, looking for `/opt/trading-journal/backend/storage` instead of `/opt/trading-journal/storage`. The missing folder path caused Starlette to throw a startup exception.
 * **Resolution**: Fixed path resolution in [backend/fastapi_app/config.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/config.py) to resolve relative to the `backend` parent directory. Also added a defensive check (`if os.path.exists`) around `app.mount()` in [backend/fastapi_app/main.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/main.py) to print warnings rather than crash if the directory is missing.
 
+---
+
+## [2026-06-03] Real-Time Breakout Alerts — Troubleshooting & Ingestion Fixes
+
+### Summary
+Diagnosed and resolved critical issues preventing real-time Telegram alerts from triggering and sending. Identified and fixed bugs in Schwab instrument response parsing, float/market cap scaling, and candidates dynamic subscription.
+
+### What Changed
+* **Dynamic Candidate Ingestion**: Updated `get_candidate_symbols` in [momentum_screener/schwab/stream_client.py](file:///home/jackc/projects/homma-research/momentum_screener/schwab/stream_client.py) to dynamically fetch active movers from the local FastAPI `/api/gainers/live` endpoint. This ensures the Schwab streamer is subscribed to active gainers and momentum stocks in real time rather than just static watchlist/cooldown candidate lists.
+* **Self-Healing Fundamental Ingestion**: Refactored `load_fundamentals` in [momentum_screener/schwab/stream_client.py](file:///home/jackc/projects/homma-research/momentum_screener/schwab/stream_client.py) to fetch missing fundamentals on-the-fly from Schwab API using `get_instruments` and save them to `stock_fundamentals` database table. This guarantees that candidate stocks with missing DB fundamentals are not ignored.
+* **Schwab API Instrument Parsing**: Fixed a critical parser bug in [momentum_screener/schwab/stream_client.py](file:///home/jackc/projects/homma-research/momentum_screener/schwab/stream_client.py) and [backend/jobs/ingest_minute_candles.py](file:///home/jackc/projects/homma-research/backend/jobs/ingest_minute_candles.py) where raw response returned `{'instruments': [...]}` list but code was attempting a direct lookup `data.get(sym)`. Mapped the list to a dictionary keyed by symbol before lookup.
+* **Redundant Multiplier Fix**: Removed `* 1_000_000` multiplier from `sharesOutstanding` and `marketCap` fields in [momentum_screener/schwab/stream_client.py](file:///home/jackc/projects/homma-research/momentum_screener/schwab/stream_client.py) and [backend/jobs/ingest_minute_candles.py](file:///home/jackc/projects/homma-research/backend/jobs/ingest_minute_candles.py). Schwab returns absolute values for these fields, so multiplying them by 1M caused every ticker's float to scale into the trillions and fail the streamer's float filter.
+* **Expanded Alerts Range**: Expanded `evaluate_and_fire_alert` filters in [momentum_screener/schwab/stream_client.py](file:///home/jackc/projects/homma-research/momentum_screener/schwab/stream_client.py) to support price range `$1.00-$30.00` and float limit up to `100,000,000` shares, matching the frontend dashboard screener parameters.
+
+
 
 
 

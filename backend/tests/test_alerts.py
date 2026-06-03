@@ -22,14 +22,13 @@ async def test_get_alerts_stream_headers(client):
     mock_pubsub.close = AsyncMock()
     mock_redis.aclose = AsyncMock()
     
-    # Custom non-exhaustible mock for get_message
+    # Custom mock for get_message that raises CancelledError to stop the generator
     calls = []
     async def mock_get_message(*args, **kwargs):
         if not calls:
             calls.append(1)
             return {'type': 'message', 'data': b'{"symbol": "TEST", "price": 10.0}'}
-        await asyncio.sleep(10)  # Sleep/block to let test exit cleanly
-        return None
+        raise asyncio.CancelledError()
         
     mock_pubsub.get_message = mock_get_message
     

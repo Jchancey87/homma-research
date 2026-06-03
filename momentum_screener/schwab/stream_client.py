@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import pytz
 import redis
 import asyncpg
+import httpx
 
 # Add paths
 _backend = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', '..', 'backend'))
@@ -68,7 +69,9 @@ class SchwabStreamer:
         logger.info("Database pool established.")
 
     async def load_fundamentals(self, symbols):
-        """Load fundamentals and technical indicators from Postgres to memory cache."""
+        """Load fundamentals and technical indicators from Postgres to memory cache.
+        If missing from DB, fetches from Schwab API on-the-fly and saves to DB.
+        """
         if not symbols:
             return
         
@@ -92,6 +95,107 @@ class SchwabStreamer:
                     'low_52wk': r['low_52wk'] or 0.0,
                     'float_category': r['float_category'] or 'Unknown'
                 }
+
+        # Identify missing symbols and fetch them from Schwab API on-the-fly
+        missing = set(symbols) - set(self.fundamentals_cache.keys())
+        if missing:
+            logger.info(f"Fundamentals missing for {len(missing)} symbols: {missing}. Fetching from Schwab API...")
+            from momentum_screener.schwab.http_client import get_instruments
+            missing_list = list(missing)
+            # Fetch in batches of 50 to prevent URI length limit issues
+            for i in range(0, len(missing_list), 50):
+                batch = missing_list[i:i+50]
+                batch_str = ",".join(batch)
+                loop = asyncio.get_event_loop()
+                try:
+                    data = await loop.run_in_executor(None, get_instruments, batch_str)
+                    if data:
+                        instruments_dict = {}
+                        if 'instruments' in data:
+                            for inst in data['instruments']:
+                                sym = inst.get('symbol')
+                                if sym:
+                                    instruments_dict[sym] = inst
+
+                        async with self.db_pool.acquire() as conn:
+                            for sym in batch:
+                                inst = instruments_dict.get(sym)
+                                if not inst or 'fundamental' not in inst:
+                                    # Cache dummy values so we don't spam API requests for invalid symbols
+                                    self.fundamentals_cache[sym] = {
+                                        'shares_outstanding': 0,
+                                        'market_cap': 0,
+                                        'pe_ratio': 0.0,
+                                        'dividend_yield': 0.0,
+                                        'vol_10d_avg': 1,
+                                        'high_52wk': 0.0,
+                                        'low_52wk': 0.0,
+                                        'float_category': 'Unknown'
+                                    }
+                                    continue
+                                
+                                fund = inst['fundamental']
+                                co_name = inst.get('description', '')
+                                mkt_cap = int(fund.get('marketCap', 0))
+                                shares_out = int(fund.get('sharesOutstanding', 0))
+                                div_yield = fund.get('dividendYield', 0.0)
+                                pe_ratio = fund.get('peRatio', 0.0)
+                                pb_ratio = fund.get('pbRatio', 0.0)
+                                beta = fund.get('beta', 0.0)
+                                vol_1d = int(fund.get('vol1DayAverage', 0))
+                                vol_10d = int(fund.get('vol10DayAverage', 0))
+                                vol_3m = int(fund.get('vol3MonthAverage', 0))
+                                high_52w = fund.get('high52Week', 0.0)
+                                low_52w = fund.get('low52Week', 0.0)
+                                
+                                float_cat = "Unknown"
+                                if shares_out:
+                                    if shares_out <= 10_000_000: float_cat = "Micro-Float"
+                                    elif shares_out <= 20_000_000: float_cat = "Low-Float"
+                                    elif shares_out <= 50_000_000: float_cat = "Mid-Float"
+                                    else: float_cat = "High-Float"
+                                
+                                await conn.execute("""
+                                    INSERT INTO stock_fundamentals (
+                                        symbol, company_name, shares_outstanding, market_cap,
+                                        pe_ratio, pb_ratio, dividend_yield, beta,
+                                        vol_1d_avg, vol_10d_avg, vol_3m_avg, high_52wk, low_52wk,
+                                        float_category, updated_at
+                                    ) VALUES (
+                                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW()
+                                    ) ON CONFLICT (symbol) DO UPDATE SET
+                                        company_name = EXCLUDED.company_name,
+                                        shares_outstanding = EXCLUDED.shares_outstanding,
+                                        market_cap = EXCLUDED.market_cap,
+                                        pe_ratio = EXCLUDED.pe_ratio,
+                                        pb_ratio = EXCLUDED.pb_ratio,
+                                        dividend_yield = EXCLUDED.dividend_yield,
+                                        beta = EXCLUDED.beta,
+                                        vol_1d_avg = EXCLUDED.vol_1d_avg,
+                                        vol_10d_avg = EXCLUDED.vol_10d_avg,
+                                        vol_3m_avg = EXCLUDED.vol_3m_avg,
+                                        high_52wk = EXCLUDED.high_52wk,
+                                        low_52wk = EXCLUDED.low_52wk,
+                                        float_category = EXCLUDED.float_category,
+                                        updated_at = NOW()
+                                """, sym, co_name, shares_out, mkt_cap,
+                                    pe_ratio, pb_ratio, div_yield, beta,
+                                    vol_1d, vol_10d, vol_3m, high_52w, low_52w,
+                                    float_cat)
+                                
+                                self.fundamentals_cache[sym] = {
+                                    'shares_outstanding': shares_out,
+                                    'market_cap': mkt_cap,
+                                    'pe_ratio': pe_ratio,
+                                    'dividend_yield': div_yield,
+                                    'vol_10d_avg': vol_10d or 1,
+                                    'high_52wk': high_52w,
+                                    'low_52wk': low_52w,
+                                    'float_category': float_cat
+                                }
+                                logger.info(f"Successfully loaded and cached fundamentals for {sym}")
+                except Exception as e:
+                    logger.error(f"Error fetching fundamentals from Schwab: {e}")
                 
     async def get_candidate_symbols(self):
         """Fetch watchlist tickers and pre-market/active movers from database."""
@@ -110,7 +214,22 @@ class SchwabStreamer:
             for r in rows:
                 candidates.add(r['ticker'])
                 
-        # 3. Fallback: Add some default high volume tickers if candidates list is empty
+        # 3. Active movers from Live Gainers API (real-time HOD / momentum candidates)
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get("http://127.0.0.1:5000/api/gainers/live")
+                if response.status_code == 200:
+                    data = response.json()
+                    gainers_list = data.get('gainers', [])
+                    for g in gainers_list:
+                        ticker = g.get('ticker')
+                        if ticker:
+                            candidates.add(ticker)
+                    logger.info(f"Added {len(gainers_list)} tickers from live gainers API.")
+        except Exception as e:
+            logger.error(f"Failed to fetch live gainers API candidates: {e}")
+
+        # 4. Fallback: Add some default high volume tickers if candidates list is still empty
         if not candidates:
             async with self.db_pool.acquire() as conn:
                 rows = await conn.fetch("""
@@ -221,10 +340,9 @@ class SchwabStreamer:
             triggered = True
             alert_type = "VWAP_CROSSOVER"
 
-        # Apply Ross Cameron primary filters
-        # Price: $1.00 - $20.00, Float: < 20M shares
-        price_ok = 1.00 <= last_price <= 20.00
-        float_ok = fund['shares_outstanding'] < 30_000_000 # Using shares out as float proxy
+        # Apply momentum filters (price $1.00 - $30.00, float < 100M shares to match dashboard scanner)
+        price_ok = 1.00 <= last_price <= 30.00
+        float_ok = fund['shares_outstanding'] < 100_000_000 # Using shares out as float proxy
         
         if triggered and price_ok and float_ok:
             # Query alerts.should_fire_alert from database to check cooldown & macro-market suppressions

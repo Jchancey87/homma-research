@@ -66,6 +66,18 @@ This file acts as a persistent memory block where AI coding agents record prompt
 * **Struggle 3: Capitalization Typo in Settings Loading**
   * *Context*: Dispatching live Telegram messages failed with `401 Unauthorized` because the API token had a trailing `0` in `.env` (`TELEGRAM_BOT_TOKEN0`).
   * *Resolution*: Fixed key name typo in `.env` and verified Telegram returns `200 OK` for the dispatch.
+* **Struggle 4: Missing Live Candidate Ingestion & Redundant Multipliers**
+  * *Context*: Telegram alarms were not being received for stock breakouts seen on the HOD scanner.
+  * *Cause*:
+    1. During the day, `daily_gainers` and `stock_fundamentals` tables were empty, so the Schwab websocket streamer only subscribed to static watchlist symbols.
+    2. A bug in parsing the Schwab `get_instruments` API response (attempting `.get(sym)` on raw `{'instruments': [...]}`) caused the nightly fundamental ingestion job to fail to load fundamentals.
+    3. An incorrect `* 1_000_000` multiplier in `sharesOutstanding` and `marketCap` caused stock floats to scale into trillions, failing the streamer's float filter.
+  * *Resolution*:
+    1. Updated candidates fetching to query the FastAPI `/api/gainers/live` endpoint dynamically.
+    2. Added self-healing logic to query the Schwab API for fundamentals on-demand if missing in the DB.
+    3. Corrected raw list parsing for `get_instruments`.
+    4. Removed the redundant `* 1_000_000` multiplier.
+    5. Expanded alert filters (price: $1.00-$30.00, float: < 100M).
 
 ---
 

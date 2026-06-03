@@ -118,17 +118,24 @@ def update_fundamentals_cache():
                 time.sleep(RATE_LIMIT_DELAY)
                 continue
                 
+            instruments_dict = {}
+            if data and 'instruments' in data:
+                for inst in data['instruments']:
+                    sym = inst.get('symbol')
+                    if sym:
+                        instruments_dict[sym] = inst
+
             with get_connection() as conn:
                 cur = conn._conn.cursor()
                 for sym in batch:
-                    inst = data.get(sym)
+                    inst = instruments_dict.get(sym)
                     if not inst or 'fundamental' not in inst:
                         continue
                     
                     fund = inst['fundamental']
                     co_name = inst.get('description', '')
-                    mkt_cap = int(fund.get('marketCap', 0) * 1_000_000) # Schwab cap is in millions
-                    shares_out = int(fund.get('sharesOutstanding', 0) * 1_000_000)
+                    mkt_cap = int(fund.get('marketCap', 0))
+                    shares_out = int(fund.get('sharesOutstanding', 0))
                     div_yield = fund.get('dividendYield', 0.0)
                     pe_ratio = fund.get('peRatio', 0.0)
                     pb_ratio = fund.get('pbRatio', 0.0)
