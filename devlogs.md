@@ -2,6 +2,27 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-03] Agentic Workflow & Collaboration Reflections
+
+### Summary
+This entry documents the adaptive reasoning, collaborative steps, and meta-learning experiences from this implementation session. It serves as a guide for how future agents (including this agent and Hermes) can learn from our design decisions, struggles, and alignment flows.
+
+### Adaptations & Decisions
+1. **Framework Alignment**: The initial handoff document proposed SvelteKit code. By checking the repository workspace structure, I identified that the codebase actually uses Next.js 14 (App Router) & React. I adapted the Svelte layout into a React state/ref-based connection loop.
+2. **Interactive Alignment (The "Grill" Session)**: Before writing the task breakdown, I presented 6 targeted architectural questions to clarify user preferences. This resolved:
+   - *UI Layout*: Developing both a Toast card container and "Flash & Fade" grid highlights.
+   - *SSE Pipeline*: Sticking with the existing Redis Pub/Sub stream, but querying a DB stored procedure `should_fire_alert` before publishing to enforce throttling.
+   - *Telegram Integration*: Decoupling the worker as an asynchronous Celery task.
+   - *Audio Chimes*: Synthesizing chimes dynamically via the browser Web Audio API, avoiding raw sound asset file path errors.
+3. **Multi-Agent Orchestration**: I split tasks among three distinct agents (High, Medium, Low ability levels) based on complexity and dependency sequence:
+   - *High*: Database schema design, Postgres procedure logic, and Schwab streamer refactoring.
+   - *Medium*: Settings config classes, Celery worker integration, and Telegram Bot post formatting.
+   - *Low*: Frontend EventSource hook, toast stacking, CSS flash transitions, and audio synth.
+4. **Environment Debugging**: A subagent encountered a `ModuleNotFoundError` during tests due to running the global python command instead of the production virtualenv (`/opt/trading-journal/backend/venv`). We corrected the python path, ensuring proper test execution.
+5. **Deployment Synchronization**: I diagnosed a `0 active subscribers` symptom during testing by recognizing that the development workspace (`/home/jackc/projects/homma-research`) is decoupled from the active server directory (`/opt/trading-journal`). We staged, committed, and pulled the changes to sync production.
+
+---
+
 ## [2026-06-03] Real-Time Breakout Alerts & Notifications — Phase 3
 
 ### Summary
