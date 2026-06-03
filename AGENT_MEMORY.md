@@ -90,3 +90,6 @@ This file acts as a persistent memory block where AI coding agents record prompt
   1. Commit files locally in `/home/jackc/projects/homma-research`.
   2. Pull files on the server: `sudo git -C /opt/trading-journal pull dev master`.
   3. Rebuild/Restart using the deployment script: `sudo /opt/trading-journal/deploy.sh`.
+* **Schwab Instrument API Parsing**: The Schwab API returns `{'instruments': [...]}` where instruments is a list. Mapped dictionary lookups (such as `.get(symbol)`) are not native; you must iterate and map the list into a dictionary keyed by symbol before attempting lookups.
+* **Schwab Shares & Market Cap Units**: Schwab API returns absolute integers for `sharesOutstanding` and `marketCap`. Do not apply redundant `1,000,000` multipliers to them, as that will break float categorizations and filters.
+* **Testing Infinite Event Streams**: When mocking infinite async generators (e.g. Redis pub/sub message loops in FastAPIs) for `pytest-asyncio` / `httpx.ASGITransport` tests, raise `asyncio.CancelledError` on termination rather than using long sleeps, preventing the test suite from hanging.
