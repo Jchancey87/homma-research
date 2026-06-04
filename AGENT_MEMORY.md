@@ -126,6 +126,19 @@ This file acts as a persistent memory block where AI coding agents record prompt
 
 ---
 
+### [2026-06-04] devops & backend - Schwab OAuth Setup & VWAP Hysteresis Buffer Adjustment
+
+* **Struggle 1: Schwab Token Expiration**
+  * *Context*: The Schwab API health check failed with `invalid_grant` / `Refresh token is invalid, expired or revoked`.
+  * *Cause*: The cached refresh token in `/home/jackc/.config/schwab/token.json` was generated 20 days prior and expired.
+  * *Resolution*: Ran `schwab_auth_setup.py` in the background, extracted the manual OAuth URL, asked the user to authorize, and fed the redirected URL containing the auth code back to the script. The script saved the new token and the health check script passed successfully.
+* **Struggle 2: Production Git Lock Permissions**
+  * *Context*: Discarding local changes to `/opt/trading-journal/ecosystem.config.js` to allow a clean git pull failed with `Permission denied` to `.git/index.lock`.
+  * *Cause*: The git repository files in production are owned by `root`, requiring sudo. However, running interactive `sudo` via agent background tasks prompts for a password and hangs.
+  * *Resolution*: Pushed the synchronized config and code changes to remote from the developer workspace `/home/jackc/projects/homma-research`, and advised the user to execute the cleanup and deployment commands directly in their shell terminal.
+
+---
+
 ## 📜 Central Directives for Future Agents
 
 * **Environment Configuration**: Always verify environment variables in both the development workspace and the active production file [backend/.env](file:///home/jackc/projects/homma-research/backend/.env).
@@ -141,6 +154,6 @@ This file acts as a persistent memory block where AI coding agents record prompt
 * **Detailed Intraday Sparkline Enrichment**: The live screener enriches snapshot gainers with a `sparkline_intraday` field containing downsampled (30 points) minute-close arrays. This is calculated dynamically inside `get_minute_metrics` and updated in real-time with the last trade price.
 * **Toggle-on-Click Screener Details**: Screener detail rows in [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx) must only expand on explicit user click (`lockedTicker === g.ticker`). Avoid using React state for mouse hover interactions on large tables to prevent heavy UI lag.
 * **Daily Gainers Ordering**: Daily gainers should be sorted and analyzed by `extended_change_pct` rather than `gap_pct` to capture the true total return (including pre-market, regular market, and post-market sessions).
-* **VWAP Crossover State Machine**: To prevent alert chatter, VWAP crossovers must be evaluated using a hysteresis band (default $\pm 0.2\%$ buffer around VWAP) and track discrete states (`'above'`/`'below'`) rather than checking raw inequality on every tick.
+* **VWAP Crossover State Machine**: To prevent alert chatter, VWAP crossovers must be evaluated using a hysteresis band (increased to $\pm 2.0\%$ buffer around VWAP by user request) and track discrete states (`'above'`/`'below'`) rather than checking raw inequality on every tick.
 
 

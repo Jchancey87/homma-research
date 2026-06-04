@@ -674,6 +674,23 @@ Diagnosed and resolved critical issues preventing real-time Telegram alerts from
 * **Expanded Alerts Range**: Expanded `evaluate_and_fire_alert` filters in [momentum_screener/schwab/stream_client.py](file:///home/jackc/projects/homma-research/momentum_screener/schwab/stream_client.py) to support price range `$1.00-$30.00` and float limit up to `100,000,000` shares, matching the frontend dashboard screener parameters.
 * **Alert Cooldown & Spam Suppression Tuning**: Redefined the `alerts.should_fire_alert` SQL database function to implement a percentage-based breakout (+3%) and minimum time-elapsed (2 minutes) criteria during active ticker lockout periods. Added configuration variables `ALERT_MIN_PCT_INCREASE` (default `0.03`) and `ALERT_MIN_TIME_COOLDOWN_MINUTES` (default `2`) in [backend/config.py](file:///home/jackc/projects/homma-research/backend/config.py), [backend/fastapi_app/config.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/config.py), and [backend/.env.example](file:///home/jackc/projects/homma-research/backend/.env.example), and updated [momentum_screener/schwab/stream_client.py](file:///home/jackc/projects/homma-research/momentum_screener/schwab/stream_client.py) and test suites to verify and pass these parameters dynamically to the database call.
 
+---
+
+## [2026-06-04] Schwab OAuth Token Re-Authorization & VWAP Hysteresis Adjustments
+
+### Summary
+1. Completed manual Schwab OAuth re-authorization to resolve expired/revoked credentials.
+2. Synchronized `ecosystem.config.js` service configurations from production to the developer workspace, committing and pushing them to git remote.
+3. Increased the hysteresis crossover price buffer for VWAP crossing alerts from 0.2% (`0.002`) to 2.0% (`0.02`) to reduce alert noise during price consolidation.
+
+### Details
+* Ran `schwab_auth_setup.py` as a background task to generate the new OAuth challenge URL.
+* Verified authentication, fetched and saved the new OAuth token file to `~/.config/schwab/token.json`.
+* Ran the `schwab_health_check.py` validation script, confirming 200 OK responses on the Schwab Market Data API and Trader API.
+* Copied the modified `ecosystem.config.js` from `/opt/trading-journal/ecosystem.config.js` to `/home/jackc/projects/homma-research/ecosystem.config.js` to track `celery-beat` registration and backend worker adjustments, and committed/pushed it to master.
+* Modified the VWAP crossover buffer assignment from `buffer = 0.002` to `buffer = 0.02` in [momentum_screener/schwab/stream_client.py](file:///home/jackc/projects/homma-research/momentum_screener/schwab/stream_client.py#L340). Committed and pushed this code modification to master.
+
+
 
 
 
