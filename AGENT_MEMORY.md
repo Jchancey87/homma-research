@@ -137,6 +137,32 @@ This file acts as a persistent memory block where AI coding agents record prompt
   * *Cause*: The git repository files in production are owned by `root`, requiring sudo. However, running interactive `sudo` via agent background tasks prompts for a password and hangs.
   * *Resolution*: Pushed the synchronized config and code changes to remote from the developer workspace `/home/jackc/projects/homma-research`, and advised the user to execute the cleanup and deployment commands directly in their shell terminal.
 
+### [2026-06-04] backend - Telegram Formatting & Watchlist-Only VWAP Alerts
+
+* **Struggle 1: Direct link formatting in Telegram MarkdownV1**
+  * *Context*: Tickers in Telegram alerts were plain text, making it tedious to open them in TradingView.
+  * *Cause*: The Telegram Celery task didn't format tickers as hyperlinks.
+  * *Resolution*: Updated `send_telegram_alert_task` in [alerts.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/tasks/alerts.py) to format the stock ticker symbol as a Markdown link targeting `https://www.tradingview.com/chart/?symbol={symbol}`. Clicking it now opens the chart page, triggering the TradingView mobile/desktop app deep link handler.
+* **Struggle 2: VWAP crossover alert noise on un-watched stocks**
+  * *Context*: VWAP crossover alerts were still firing too frequently on general market runners, polluting the alert feed.
+  * *Cause*: The streamer evaluated VWAP crossovers for all scanned candidates, rather than restricting it to high-interest tickers.
+  * *Resolution*: Added an in-memory `self.watchlist_symbols` set to `SchwabStreamer`, updated dynamically via the 5-minute subscription sync loop query. Refactored the crossover trigger in [stream_client.py](file:///home/jackc/projects/homma-research/momentum_screener/schwab/stream_client.py) to check that the ticker is in this watchlist before firing a `VWAP_CROSSOVER` alert.
+
+---
+
+### [2026-06-04] backend - Momentum Alerts: Halts, Volume Spikes, Daily Breakouts, VWAP Bounces, & Gappers
+
+* **Struggle 1: Tick boundary crossing volume calculation for 1-minute volume bars**
+  * *Context*: 1-minute volume spikes failed to trigger because candle volume delta calculated from previous-tick values resulted in 0.
+  * *Cause*: When the minute boundary changed, the previous candle was completed using `state['last_volume']` from the previous tick, which did not yet incorporate the boundary-crossing tick's volume.
+  * *Resolution*: Updated the candle transition logic in `stream_client.py` to finalize the previous candle's close price and volume using the current boundary-crossing tick's data before calculating completed volume and resetting the candle state.
+* **Struggle 2: Mocked test price range validation in unit tests**
+  * *Context*: `test_vwap_bounce` and `test_prev_day_breakout` failed mock validation.
+  * *Cause*:
+    1. The mock price used for the VWAP bounce test ($101.50) fell outside the momentum filter price range ($1.00 - $30.00), preventing the alert from firing.
+    2. The mock price used for the breakout test triggered the default HOD_BREAKOUT alert instead of the PREV_DAY_BREAKOUT alert because the high_price mock value was too low.
+  * *Resolution*: Refactored tests to use prices inside the valid $1.00 - $30.00 range (e.g. VWAP = $10.00, bounce = $10.15) and set high_price mock values to a high ceiling ($30.00) to isolate tests from HOD_BREAKOUT triggers.
+
 ---
 
 ## 📜 Central Directives for Future Agents
@@ -155,5 +181,9 @@ This file acts as a persistent memory block where AI coding agents record prompt
 * **Toggle-on-Click Screener Details**: Screener detail rows in [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx) must only expand on explicit user click (`lockedTicker === g.ticker`). Avoid using React state for mouse hover interactions on large tables to prevent heavy UI lag.
 * **Daily Gainers Ordering**: Daily gainers should be sorted and analyzed by `extended_change_pct` rather than `gap_pct` to capture the true total return (including pre-market, regular market, and post-market sessions).
 * **VWAP Crossover State Machine**: To prevent alert chatter, VWAP crossovers must be evaluated using a hysteresis band (increased to $\pm 2.0\%$ buffer around VWAP by user request) and track discrete states (`'above'`/`'below'`) rather than checking raw inequality on every tick.
+* **Watchlist-Restricted VWAP Crossover Alerts**: `VWAP_CROSSOVER` alerts in [stream_client.py](file:///home/jackc/projects/homma-research/momentum_screener/schwab/stream_client.py) must only trigger for ticker symbols that are currently present in the user's watchlist (`self.watchlist_symbols` set).
+* **TradingView Ticker Hyperlinks**: All stock tickers in Telegram alert messages must be formatted as TradingView hyperlinks matching the format `[$TICKER](https://www.tradingview.com/chart/?symbol=TICKER)`.
+* **Momentum Alert Types**: Keep in mind the new alert types: `VOLATILITY_HALT`, `VOLATILITY_RESUME`, `VOLUME_SPIKE`, `PREV_DAY_BREAKOUT`, and `VWAP_BOUNCE`. Make sure they follow the standard filters ($1-$30 price, <100M float) where applicable and trigger Telegram alerts.
+
 
 

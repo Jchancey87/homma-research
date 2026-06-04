@@ -2,6 +2,22 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-04] Momentum Alerts Implementation & Formatting
+
+### Summary
+Implemented 5 new momentum alert types: Volatility Halts/Resumes, 1-Minute Volume Spikes, Previous Day High Breakout, VWAP Support Holds/Bounces, and Pre-market Gappers scheduled summary. All alerts are integrated into the Schwab streaming client or FastAPI scheduler, logged to Postgres, published via Redis pub/sub, and broadcast to Telegram with TradingView hyperlink formatting.
+
+### What Changed
+* **Volatility Halts & Resumes (`VOLATILITY_HALT`, `VOLATILITY_RESUME`)**: In Schwab stream client (`stream_client.py`), status 'H' triggers a 'VOLATILITY_HALT' pub/sub message and a Telegram alert. Resuming to normal status ('ACTIVE', etc.) triggers a 'VOLATILITY_RESUME' message and a Telegram alert.
+* **1-Minute Volume Spikes (`VOLUME_SPIKE`)**: Tracks 1-minute volume bars in memory. When a bar completes, if its volume is >= 5x the average volume of the previous 20 completed bars, and the price rose by >= 1% in that candle, triggers a 'VOLUME_SPIKE' alert.
+* **Previous Day High Breakout (`PREV_DAY_BREAKOUT`)**: Queries `price_history_daily` on start/load in `load_fundamentals` to fetch the previous day's high for each subscribed symbol. Triggers a 'PREV_DAY_BREAKOUT' alert when the price breaks above the yesterday's high for the first time today.
+* **VWAP Support Holds & Bounces (`VWAP_BOUNCE`)**: Implemented a support test and bounce state machine for VWAP support holds. Pulling back to within 0.5% above VWAP on declining volume sets `vwap_test` to True and tracks the lowest test price. Bouncing by >= 1% off the low on expanding volume triggers a 'VWAP_BOUNCE' alert and resets the state.
+* **Pre-Market Gappers Summary**: Registered a Cron job at 9:10 AM ET Monday-Friday in `fastapi_app/scheduler.py` that queries TV gappers, filters for price ($1-$30), float (<100M), volume (>50k), and gap (>4%), and formats and sends a consolidated Telegram summary message with TradingView hyperlinks.
+* **Telegram Alert Formatting**: Updated `fastapi_app/tasks/alerts.py` to format these new alert types nicely in Telegram with custom icons, headers, and fields. Format all stock tickers as TradingView hyperlinks: `[$TICKER](https://www.tradingview.com/chart/?symbol=TICKER)`.
+* **Testing**: Added comprehensive unit tests in `backend/scratch/test_stream_client_alerts.py` to verify all alert triggers, filtering rules, state machines, and formatting. All tests passed.
+
+---
+
 ## [2026-06-03] Codebase Review & Health Optimization using Fallow
 
 ### Summary

@@ -46,8 +46,14 @@ class SchwabStreamer:
         self.fundamentals_cache = {}  # symbol -> dict
         self.vwap_state = {}          # symbol -> {'cum_vp': float, 'cum_vol': int, 'last_price': float, 'last_total_vol': int}
         self.price_history_1m = {}    # symbol -> list of float prices (rolling 1m window)
+        self.completed_bars_1m = {}   # symbol -> list of dict of completed 1m candles
+        self.bars_1m = {}             # symbol -> current 1m candle dict
+        self.last_known_price = {}    # symbol -> last known price
+        self.prev_day_breakout_fired = set()  # set of symbols that fired breakout today
+        self.current_date = None      # tracking current ET date
         self.cooldowns = {}           # symbol -> datetime of last alert
         self.halted_tickers = {}      # symbol -> timestamp of last halt alert
+        self.watchlist_symbols = set()
 
         
     async def init_db(self):
@@ -76,6 +82,19 @@ class SchwabStreamer:
             return
         
         async with self.db_pool.acquire() as conn:
+            today_et = datetime.now(pytz.timezone('US/Eastern')).date()
+            daily_rows = await conn.fetch("""
+                SELECT symbol, high
+                FROM (
+                    SELECT symbol, date, high,
+                           ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY date DESC) as rn
+                    FROM price_history_daily
+                    WHERE symbol = ANY($1) AND date < $2
+                ) t
+                WHERE rn = 1
+            """, list(symbols), today_et)
+            yesterday_highs = {r['symbol']: r['high'] for r in daily_rows}
+
             rows = await conn.fetch("""
                 SELECT symbol, shares_outstanding, market_cap, pe_ratio, dividend_yield,
                        vol_10d_avg, high_52wk, low_52wk, float_category
@@ -93,7 +112,8 @@ class SchwabStreamer:
                     'vol_10d_avg': r['vol_10d_avg'] or 1,
                     'high_52wk': r['high_52wk'] or 0.0,
                     'low_52wk': r['low_52wk'] or 0.0,
-                    'float_category': r['float_category'] or 'Unknown'
+                    'float_category': r['float_category'] or 'Unknown',
+                    'yesterday_high': yesterday_highs.get(sym, 0.0)
                 }
 
         # Identify missing symbols and fetch them from Schwab API on-the-fly
@@ -130,7 +150,8 @@ class SchwabStreamer:
                                         'vol_10d_avg': 1,
                                         'high_52wk': 0.0,
                                         'low_52wk': 0.0,
-                                        'float_category': 'Unknown'
+                                        'float_category': 'Unknown',
+                                        'yesterday_high': yesterday_highs.get(sym, 0.0)
                                     }
                                     continue
                                 
@@ -191,7 +212,8 @@ class SchwabStreamer:
                                     'vol_10d_avg': vol_10d or 1,
                                     'high_52wk': high_52w,
                                     'low_52wk': low_52w,
-                                    'float_category': float_cat
+                                    'float_category': float_cat,
+                                    'yesterday_high': yesterday_highs.get(sym, 0.0)
                                 }
                                 logger.info(f"Successfully loaded and cached fundamentals for {sym}")
                 except Exception as e:
@@ -200,12 +222,15 @@ class SchwabStreamer:
     async def get_candidate_symbols(self):
         """Fetch watchlist tickers and pre-market/active movers from database."""
         candidates = set()
+        watchlist_tickers = set()
         
         # 1. Active Watchlist Tickers
         async with self.db_pool.acquire() as conn:
             rows = await conn.fetch("SELECT ticker FROM watchlist")
             for r in rows:
                 candidates.add(r['ticker'])
+                watchlist_tickers.add(r['ticker'])
+        self.watchlist_symbols = watchlist_tickers
                 
         # 2. Daily runners (top daily gainers from today)
         today_str = datetime.now(pytz.timezone('US/Eastern')).strftime('%Y-%m-%d')
@@ -279,11 +304,74 @@ class SchwabStreamer:
                 
             await asyncio.sleep(300) # run every 5 minutes
 
+    async def check_and_fire_alert(self, symbol, last_price, total_volume, rvol, gap_pct, alert_type):
+        """Helper to run standard filters, cooldown DB checks, DB persistence, Redis broadcast, and Telegram alert."""
+        fund = self.fundamentals_cache.get(symbol)
+        if not fund:
+            return False
+
+        # Apply momentum filters (price $1.00 - $30.00, float < 100M shares to match dashboard scanner)
+        price_ok = 1.00 <= last_price <= 30.00
+        float_ok = fund['shares_outstanding'] < 100_000_000 # Using shares out as float proxy
+
+        if not (price_ok and float_ok):
+            return False
+
+        try:
+            async with self.db_pool.acquire() as conn:
+                should_fire = await conn.fetchval(
+                    "SELECT alerts.should_fire_alert($1, $2, $3, $4, $5, $6, $7)",
+                    symbol, last_price, timedelta(minutes=10), timedelta(seconds=10), 5,
+                    Config.ALERT_MIN_PCT_INCREASE, timedelta(minutes=Config.ALERT_MIN_TIME_COOLDOWN_MINS)
+                )
+        except Exception as e:
+            logger.error(f"Error querying should_fire_alert for {symbol}: {e}")
+            should_fire = False
+
+        if should_fire:
+            now = datetime.utcnow()
+            # 1. Save alert in DB
+            await self.save_alert_to_db(
+                symbol, last_price, total_volume, rvol, gap_pct,
+                fund['shares_outstanding'], alert_type
+            )
+
+            # 2. Publish JSON alert payload to Redis
+            alert_payload = {
+                'symbol': symbol,
+                'price': last_price,
+                'volume': total_volume,
+                'rvol': round(rvol, 2),
+                'gap_pct': round(gap_pct, 2),
+                'float_shares': fund['shares_outstanding'],
+                'alert_type': alert_type,
+                'time': now.isoformat()
+            }
+            redis_client.publish('screener:alerts', json.dumps(alert_payload))
+            logger.info(f"🚨 ALERT FIRED: {symbol} @ ${last_price} ({alert_type}) | RVOL: {rvol:.2f}x")
+
+            # 3. Trigger Celery task asynchronously using celery_app.send_task
+            try:
+                celery_app.send_task(
+                    "fastapi_app.tasks.alerts.send_telegram_alert_task",
+                    args=[alert_payload]
+                )
+            except Exception as e:
+                logger.error(f"Failed to dispatch Telegram Celery task for {symbol}: {e}")
+            return True
+        return False
+
     async def evaluate_and_fire_alert(self, symbol, last_price, total_volume, high_price, low_price, open_price):
         """Evaluate hybrid momentum filters and fire alerts via Postgres and Redis Pub/Sub."""
         fund = self.fundamentals_cache.get(symbol)
         if not fund:
             return
+
+        # Reset previous day breakout set if date changed (Eastern Time)
+        today_et = datetime.now(pytz.timezone('US/Eastern')).date()
+        if self.current_date != today_et:
+            self.current_date = today_et
+            self.prev_day_breakout_fired.clear()
 
         # 1. Update VWAP
         vwap = 0.0
@@ -316,25 +404,79 @@ class SchwabStreamer:
         rvol = total_volume / max(fund['vol_10d_avg'] * elapsed_pct, 1)
 
         # Gap calculation
-        # If open_price is not available, default gap to 0.0
         gap_pct = 0.0
-        # If we have 52wk low/prev close, we can calculate gap pct. Net change percent is also available.
-        # Let's check net change pct or assume gap_pct based on open vs prev_close if we can resolve it.
-        # We can approximate gap_pct using open_price if available:
         prev_close = fund.get('low_52wk') # default placeholder
         if open_price and prev_close:
             gap_pct = ((open_price - prev_close) / prev_close) * 100.0
 
-        # Evaluate Triggers
-        triggered = False
-        alert_type = ""
-        
+        # Update 1-minute volume candle
+        current_min = int(time.time() / 60)
+        state = self.bars_1m.get(symbol)
+        if not state:
+            self.bars_1m[symbol] = {
+                'minute': current_min,
+                'open': last_price,
+                'high': last_price,
+                'low': last_price,
+                'close': last_price,
+                'start_volume': total_volume,
+                'last_volume': total_volume,
+            }
+        else:
+            if current_min > state['minute']:
+                # Finalize previous candle values using the boundary tick
+                state['close'] = last_price
+                state['last_volume'] = max(state['last_volume'], total_volume)
+                
+                # Candle is completed!
+                candle_volume = state['last_volume'] - state['start_volume']
+                if candle_volume < 0:
+                    candle_volume = 0
+                
+                # Check if we have enough previous completed candles to evaluate
+                history = self.completed_bars_1m.setdefault(symbol, [])
+                if len(history) == 20:
+                    avg_vol = sum(c['volume'] for c in history) / 20.0
+                    price_rise_pct = 0.0
+                    if state['open'] > 0:
+                        price_rise_pct = (state['close'] - state['open']) / state['open']
+                    
+                    if avg_vol > 0 and candle_volume >= 5.0 * avg_vol and price_rise_pct >= 0.01:
+                        # Trigger VOLUME_SPIKE
+                        asyncio.create_task(self.check_and_fire_alert(
+                            symbol, state['close'], total_volume, rvol, gap_pct, "VOLUME_SPIKE"
+                        ))
+                
+                # Append current completed candle to history
+                history.append({
+                    'volume': candle_volume,
+                    'open': state['open'],
+                    'close': state['close']
+                })
+                if len(history) > 20:
+                    history.pop(0)
+                
+                # Start new candle
+                self.bars_1m[symbol] = {
+                    'minute': current_min,
+                    'open': last_price,
+                    'high': last_price,
+                    'low': last_price,
+                    'close': last_price,
+                    'start_volume': total_volume,
+                    'last_volume': total_volume,
+                }
+            else:
+                # Update current candle
+                state['high'] = max(state['high'], last_price)
+                state['low'] = min(state['low'], last_price)
+                state['close'] = last_price
+                state['last_volume'] = total_volume
+
         # Trigger 1: High of Day Breakout
-        # If the price breaks above the previous high_price (or today's high)
         if last_price >= high_price and last_price > open_price and rvol >= 1.5:
-            triggered = True
-            alert_type = "HOD_BREAKOUT"
-            
+            await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "HOD_BREAKOUT")
+
         # Trigger 2: VWAP Crossing (Hysteresis-based to prevent chatter during consolidation)
         if vwap > 0:
             buffer = 0.02 # 2% price buffer
@@ -346,59 +488,53 @@ class SchwabStreamer:
             else:
                 if v_state['status'] == 'below' and last_price >= vwap * (1.0 + buffer):
                     if rvol >= 2.0:
-                        triggered = True
-                        alert_type = "VWAP_CROSSOVER"
+                        if symbol in self.watchlist_symbols:
+                            await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "VWAP_CROSSOVER")
+                        else:
+                            logger.debug(f"Skipping VWAP_CROSSOVER alert for {symbol} because it is not in watchlist")
                     v_state['status'] = 'above'
                 elif v_state['status'] == 'above' and last_price <= vwap * (1.0 - buffer):
                     v_state['status'] = 'below'
 
-        # Apply momentum filters (price $1.00 - $30.00, float < 100M shares to match dashboard scanner)
-        price_ok = 1.00 <= last_price <= 30.00
-        float_ok = fund['shares_outstanding'] < 100_000_000 # Using shares out as float proxy
-        
-        if triggered and price_ok and float_ok:
-            # Query alerts.should_fire_alert from database to check cooldown & macro-market suppressions
-            try:
-                async with self.db_pool.acquire() as conn:
-                    should_fire = await conn.fetchval(
-                        "SELECT alerts.should_fire_alert($1, $2, $3, $4, $5, $6, $7)",
-                        symbol, last_price, timedelta(minutes=10), timedelta(seconds=10), 5,
-                        Config.ALERT_MIN_PCT_INCREASE, timedelta(minutes=Config.ALERT_MIN_TIME_COOLDOWN_MINS)
-                    )
-            except Exception as e:
-                logger.error(f"Error querying should_fire_alert for {symbol}: {e}")
-                should_fire = False
+        # Trigger 3: Previous Day High Breakout
+        yesterday_high = fund.get('yesterday_high', 0.0)
+        if yesterday_high > 0.0 and last_price > yesterday_high and symbol not in self.prev_day_breakout_fired:
+            fired = await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "PREV_DAY_BREAKOUT")
+            if fired:
+                self.prev_day_breakout_fired.add(symbol)
 
-            if should_fire:
-                now = datetime.utcnow()
-                # 1. Save alert in DB
-                await self.save_alert_to_db(
-                    symbol, last_price, total_volume, rvol, gap_pct,
-                    fund['shares_outstanding'], alert_type
-                )
+        # Trigger 4: VWAP Support Hold & Bounce
+        if vwap > 0:
+            completed_bars = self.completed_bars_1m.get(symbol, [])
+            
+            declining_volume = True
+            expanding_volume = True
+            if len(completed_bars) >= 2:
+                declining_volume = completed_bars[-1]['volume'] <= completed_bars[-2]['volume']
+                expanding_volume = completed_bars[-1]['volume'] > completed_bars[-2]['volume']
+
+            v_state.setdefault('vwap_test', False)
+            v_state.setdefault('vwap_low', None)
+
+            if last_price < vwap:
+                v_state['vwap_test'] = False
+                v_state['vwap_low'] = None
+            else:
+                if vwap < last_price <= vwap * 1.005:
+                    if declining_volume:
+                        if not v_state.get('vwap_test'):
+                            v_state['vwap_test'] = True
+                            v_state['vwap_low'] = last_price
+                            logger.info(f"VWAP test activated for {symbol} at low {last_price}")
+                        else:
+                            v_state['vwap_low'] = min(v_state['vwap_low'], last_price)
                 
-                # 2. Publish JSON alert payload to Redis
-                alert_payload = {
-                    'symbol': symbol,
-                    'price': last_price,
-                    'volume': total_volume,
-                    'rvol': round(rvol, 2),
-                    'gap_pct': round(gap_pct, 2),
-                    'float_shares': fund['shares_outstanding'],
-                    'alert_type': alert_type,
-                    'time': now.isoformat()
-                }
-                redis_client.publish('screener:alerts', json.dumps(alert_payload))
-                logger.info(f"🚨 ALERT FIRED: {symbol} @ ${last_price} ({alert_type}) | RVOL: {rvol:.2f}x")
-
-                # 3. Trigger Celery task asynchronously using celery_app.send_task
-                try:
-                    celery_app.send_task(
-                        "fastapi_app.tasks.alerts.send_telegram_alert_task",
-                        args=[alert_payload]
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to dispatch Telegram Celery task for {symbol}: {e}")
+                if v_state.get('vwap_test') and v_state.get('vwap_low') is not None:
+                    if last_price >= v_state['vwap_low'] * 1.01:
+                        if expanding_volume:
+                            await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "VWAP_BOUNCE")
+                            v_state['vwap_test'] = False
+                            v_state['vwap_low'] = None
 
     async def save_alert_to_db(self, symbol, price, volume, rvol, gap_pct, float_shares, alert_type):
         try:
@@ -442,6 +578,15 @@ class SchwabStreamer:
                 if not symbol:
                     continue
                 
+                last_price = item.get('LAST_PRICE')
+                total_volume = item.get('TOTAL_VOLUME')
+                high_price = item.get('HIGH_PRICE')
+                low_price = item.get('LOW_PRICE')
+                open_price = item.get('OPEN_PRICE')
+                
+                if last_price is not None:
+                    self.last_known_price[symbol] = last_price
+                
                 # Check for trading status / halts
                 trading_status = item.get('TRADING_STATUS')
                 if trading_status is not None:
@@ -454,19 +599,60 @@ class SchwabStreamer:
                             self.halted_tickers[symbol] = now
                             asyncio.create_task(self.save_halt_to_db(symbol))
                             logger.info(f"⏸️ VOLATILITY HALT DETECTED: {symbol}")
+                            
+                            now_dt = datetime.utcnow()
+                            lp = last_price if last_price is not None else self.last_known_price.get(symbol, 0.0)
+                            vol = total_volume if total_volume is not None else 0
+                            fund = self.fundamentals_cache.get(symbol, {})
+                            float_shares = fund.get('shares_outstanding', 0)
+                            halt_payload = {
+                                'symbol': symbol,
+                                'price': lp,
+                                'volume': vol,
+                                'rvol': 0.0,
+                                'gap_pct': 0.0,
+                                'float_shares': float_shares,
+                                'alert_type': 'VOLATILITY_HALT',
+                                'time': now_dt.isoformat()
+                            }
+                            redis_client.publish('screener:alerts', json.dumps(halt_payload))
+                            try:
+                                celery_app.send_task(
+                                    "fastapi_app.tasks.alerts.send_telegram_alert_task",
+                                    args=[halt_payload]
+                                )
+                            except Exception as e:
+                                logger.error(f"Failed to dispatch Volatility Halt Celery task for {symbol}: {e}")
                     elif status_str in ('T', 'Q', 'ACTIVE', 'NORMAL') or status_str == '':
                         # If it was halted, mark it as resumed
                         if symbol in self.halted_tickers:
                             self.halted_tickers.pop(symbol, None)
                             asyncio.create_task(self.save_resume_to_db(symbol))
                             logger.info(f"▶️ VOLATILITY RESUME DETECTED: {symbol}")
-
-                # Fetch fields
-                last_price = item.get('LAST_PRICE')
-                total_volume = item.get('TOTAL_VOLUME')
-                high_price = item.get('HIGH_PRICE')
-                low_price = item.get('LOW_PRICE')
-                open_price = item.get('OPEN_PRICE')
+                            
+                            now_dt = datetime.utcnow()
+                            lp = last_price if last_price is not None else self.last_known_price.get(symbol, 0.0)
+                            vol = total_volume if total_volume is not None else 0
+                            fund = self.fundamentals_cache.get(symbol, {})
+                            float_shares = fund.get('shares_outstanding', 0)
+                            resume_payload = {
+                                'symbol': symbol,
+                                'price': lp,
+                                'volume': vol,
+                                'rvol': 0.0,
+                                'gap_pct': 0.0,
+                                'float_shares': float_shares,
+                                'alert_type': 'VOLATILITY_RESUME',
+                                'time': now_dt.isoformat()
+                            }
+                            redis_client.publish('screener:alerts', json.dumps(resume_payload))
+                            try:
+                                celery_app.send_task(
+                                    "fastapi_app.tasks.alerts.send_telegram_alert_task",
+                                    args=[resume_payload]
+                                )
+                            except Exception as e:
+                                logger.error(f"Failed to dispatch Volatility Resume Celery task for {symbol}: {e}")
                 
                 # Skip if core quote fields are missing
                 if last_price is None or total_volume is None:

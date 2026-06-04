@@ -78,7 +78,7 @@ def run_tests():
         
         # Assert format matches expected Markdown formatting
         assert "🚨 *BREAKOUT DETECTED* 🚨" in text
-        assert "- *Ticker:* $TSLA" in text
+        assert "- *Ticker:* [$TSLA](https://www.tradingview.com/chart/?symbol=TSLA)" in text
         assert "- *Price:* $220.50" in text
         assert "- *Signal:* HIGH\\_VOLUME\\_UP\\_BREAKOUT" in text  # Underscores escaped
         assert "- *Volume ratio:* 5.2x" in text

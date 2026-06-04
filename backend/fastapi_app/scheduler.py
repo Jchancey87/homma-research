@@ -53,6 +53,15 @@ def _build_scheduler():
         replace_existing=True,
     )
 
+    # ── Job 4: Pre-market gappers summary ─────────────────────────────────────
+    scheduler.add_job(
+        _premarket_gappers_summary,
+        CronTrigger(day_of_week="mon-fri", hour=9, minute=10, timezone="US/Eastern"),  # 9:10 AM ET
+        id="premarket_gappers_summary",
+        name="Pre-market Gappers Summary",
+        replace_existing=True,
+    )
+
     return scheduler
 
 
@@ -120,6 +129,88 @@ async def _expire_continuation_picks() -> None:
 async def _research_cache_refresh() -> None:
     """Placeholder — research router not yet ported (Phase 4)."""
     log.info("[scheduler] research_cache_refresh — placeholder, skipping (Phase 4)")
+
+
+async def _premarket_gappers_summary() -> None:
+    """Query pre-market gappers from TV, filter by rules, and broadcast via Telegram."""
+    log.info("[scheduler] premarket_gappers_summary starting")
+    try:
+        import pytz
+        import httpx
+        from fastapi_app.config import settings
+        from services.schwab_client import _get_tradingview_candidates
+
+        token = settings.telegram_bot_token
+        chat_id = settings.telegram_chat_id
+
+        if not token or not chat_id:
+            log.warning("[scheduler] Telegram not configured, skipping pre-market gappers summary.")
+            return
+
+        # Query candidates (TradingView scan)
+        import asyncio
+        candidates = await asyncio.to_thread(_get_tradingview_candidates)
+
+        gappers = []
+        for sym, val in candidates.items():
+            price = val.get("price") or 0.0
+            change = val.get("change") or 0.0
+            volume = val.get("volume") or 0
+            float_shares = val.get("float_shares")
+
+            # Filters:
+            # Price $1-$30
+            price_ok = 1.00 <= price <= 30.00
+            # Float <100M
+            float_ok = float_shares is None or float_shares < 100_000_000
+            # Volume >50k
+            volume_ok = volume > 50_000
+            # Gap >4%
+            gap_ok = change > 4.0
+
+            if price_ok and float_ok and volume_ok and gap_ok:
+                gappers.append((sym, price, change, volume, float_shares))
+
+        gappers.sort(key=lambda x: x[2], reverse=True)
+
+        eastern = pytz.timezone("US/Eastern")
+        date_str = datetime.now(eastern).strftime("%Y-%m-%d")
+
+        message = (
+            "🌅 *PRE-MARKET GAPPERS SUMMARY* 🌅\n"
+            f"Date: {date_str}\n\n"
+        )
+
+        if not gappers:
+            message += "No gappers matching the criteria today."
+        else:
+            for sym, price, change, volume, float_shares in gappers:
+                float_str = f"{float_shares/1_000_000:.1f}M" if float_shares else "N/A"
+                vol_str = f"{volume/1_000:.1f}k" if volume >= 1000 else str(volume)
+                escaped_sym = sym.replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("`", "\\`")
+                message += (
+                    f"• [${escaped_sym}](https://www.tradingview.com/chart/?symbol={sym}) | "
+                    f"Price: ${price:.2f} | "
+                    f"Gap: +{change:.1f}% | "
+                    f"Vol: {vol_str} | "
+                    f"Float: {float_str}\n"
+                )
+
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": message,
+            "parse_mode": "Markdown",
+            "disable_web_page_preview": True
+        }
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url, json=payload)
+            response.raise_for_status()
+
+        log.info("[scheduler] premarket_gappers_summary completed successfully")
+    except Exception as exc:
+        log.exception("[scheduler] premarket_gappers_summary failed: %s", exc)
 
 
 # ---------------------------------------------------------------------------

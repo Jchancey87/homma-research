@@ -56,14 +56,58 @@ def send_telegram_alert_task(alert_data: dict) -> dict:
     escaped_alert_type = escape_markdown(alert_type)
 
     # Construct the Markdown payload
-    message = (
-        "🚨 *BREAKOUT DETECTED* 🚨\n\n"
-        f"- *Ticker:* ${escaped_symbol}\n"
-        f"- *Price:* ${price:,.2f}\n"
-        f"- *Signal:* {escaped_alert_type}\n"
-        f"- *Volume ratio:* {rvol}x\n"
-        f"- *Time:* {timestamp}"
-    )
+    if alert_type == "VOLATILITY_HALT":
+        message = (
+            "⏸️ *VOLATILITY HALT* ⏸️\n\n"
+            f"- *Ticker:* [${escaped_symbol}](https://www.tradingview.com/chart/?symbol={symbol})\n"
+            f"- *Price:* ${price:,.2f}\n"
+            f"- *Signal:* Volatility Halt (Status H)\n"
+            f"- *Time:* {timestamp}"
+        )
+    elif alert_type == "VOLATILITY_RESUME":
+        message = (
+            "▶️ *VOLATILITY RESUME* ▶️\n\n"
+            f"- *Ticker:* [${escaped_symbol}](https://www.tradingview.com/chart/?symbol={symbol})\n"
+            f"- *Price:* ${price:,.2f}\n"
+            f"- *Signal:* Volatility Resume (Status Active)\n"
+            f"- *Time:* {timestamp}"
+        )
+    elif alert_type == "VOLUME_SPIKE":
+        message = (
+            "🔊 *VOLUME SPIKE* 🔊\n\n"
+            f"- *Ticker:* [${escaped_symbol}](https://www.tradingview.com/chart/?symbol={symbol})\n"
+            f"- *Price:* ${price:,.2f}\n"
+            f"- *Signal:* 1-Min Volume Spike (>= 5x Avg)\n"
+            f"- *Volume ratio:* {rvol}x\n"
+            f"- *Time:* {timestamp}"
+        )
+    elif alert_type == "PREV_DAY_BREAKOUT":
+        message = (
+            "🚀 *PREV DAY HIGH BREAKOUT* 🚀\n\n"
+            f"- *Ticker:* [${escaped_symbol}](https://www.tradingview.com/chart/?symbol={symbol})\n"
+            f"- *Price:* ${price:,.2f}\n"
+            f"- *Signal:* Previous Day High Breakout\n"
+            f"- *Volume ratio:* {rvol}x\n"
+            f"- *Time:* {timestamp}"
+        )
+    elif alert_type == "VWAP_BOUNCE":
+        message = (
+            "📈 *VWAP SUPPORT BOUNCE* 📈\n\n"
+            f"- *Ticker:* [${escaped_symbol}](https://www.tradingview.com/chart/?symbol={symbol})\n"
+            f"- *Price:* ${price:,.2f}\n"
+            f"- *Signal:* VWAP Support Hold & Bounce\n"
+            f"- *Volume ratio:* {rvol}x\n"
+            f"- *Time:* {timestamp}"
+        )
+    else:
+        message = (
+            "🚨 *BREAKOUT DETECTED* 🚨\n\n"
+            f"- *Ticker:* [${escaped_symbol}](https://www.tradingview.com/chart/?symbol={symbol})\n"
+            f"- *Price:* ${price:,.2f}\n"
+            f"- *Signal:* {escaped_alert_type}\n"
+            f"- *Volume ratio:* {rvol}x\n"
+            f"- *Time:* {timestamp}"
+        )
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
