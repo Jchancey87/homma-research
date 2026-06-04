@@ -108,6 +108,15 @@ This file acts as a persistent memory block where AI coding agents record prompt
 
 ---
 
+### [2026-06-04] backend - Daily Recap Extended Day Gainers
+
+* **Struggle: Sorting by regular session opening gap rather than total change**
+  * *Context*: The daily analysis email was only sorting daily gainers by the regular hours opening gap `gap_pct`.
+  * *Cause*: The database queries in `daily_analysis_report.py` and sorting logic in `ingest_gainers.py` were ordering by `gap_pct` rather than the total daily change (which at 8:05 PM includes post-market). Furthermore, `ingest_gainers.py` strictly filtered out tickers with `gap_pct < 5.0`, meaning intraday or post-market runners with flat opens were not recorded in `daily_gainers` at all.
+  * *Resolution*: Added `extended_change_pct` to the database schema, updated `ingest_gainers.py` to calculate it using the latest last price, relaxed the pre-filter and final ingestion filters to allow tickers that qualify via either `gap_pct >= 5.0` OR `extended_change_pct >= 5.0`, sorted the ingestion list by `extended_change_pct`, and updated `daily_analysis_report.py` and `llm_client.py` to select, order, format, and display the gainers by `extended_change_pct`.
+
+---
+
 ## 📜 Central Directives for Future Agents
 
 * **Environment Configuration**: Always verify environment variables in both the development workspace and the active production file [backend/.env](file:///home/jackc/projects/homma-research/backend/.env).
@@ -115,10 +124,12 @@ This file acts as a persistent memory block where AI coding agents record prompt
 * **No Raw Audio Asset Dependences**: Do not add raw sound files (`.wav`/`.mp3`) to the codebase for notification sounds. Use the browser-native Web Audio API `playPlinkChime` in [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx#L890) to synthesize sound chimes dynamically.
 * **Production Deployment Flow**:
   1. Commit files locally in `/home/jackc/projects/homma-research`.
-  2. Pull files on the server: `sudo git -C /opt/trading-journal pull dev master`.
+  2. Pull files on the server: `sudo git -C /opt/trading-journal/pull dev master` (or run deployment scripts).
   3. Rebuild/Restart using the deployment script: `sudo /opt/trading-journal/deploy.sh`.
 * **Schwab Instrument API Parsing**: The Schwab API returns `{'instruments': [...]}` where instruments is a list. Mapped dictionary lookups (such as `.get(symbol)`) are not native; you must iterate and map the list into a dictionary keyed by symbol before attempting lookups.
 * **Schwab Shares & Market Cap Units**: Schwab API returns absolute integers for `sharesOutstanding` and `marketCap`. Do not apply redundant `1,000,000` multipliers to them, as that will break float categorizations and filters.
 * **Testing Infinite Event Streams**: When mocking infinite async generators (e.g. Redis pub/sub message loops in FastAPIs) for `pytest-asyncio` / `httpx.ASGITransport` tests, raise `asyncio.CancelledError` on termination rather than using long sleeps, preventing the test suite from hanging.
 * **Detailed Intraday Sparkline Enrichment**: The live screener enriches snapshot gainers with a `sparkline_intraday` field containing downsampled (30 points) minute-close arrays. This is calculated dynamically inside `get_minute_metrics` and updated in real-time with the last trade price.
 * **Toggle-on-Click Screener Details**: Screener detail rows in [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx) must only expand on explicit user click (`lockedTicker === g.ticker`). Avoid using React state for mouse hover interactions on large tables to prevent heavy UI lag.
+* **Daily Gainers Ordering**: Daily gainers should be sorted and analyzed by `extended_change_pct` rather than `gap_pct` to capture the true total return (including pre-market, regular market, and post-market sessions).
+

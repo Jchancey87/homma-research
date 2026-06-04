@@ -130,7 +130,7 @@ def get_continuation_analysis(date: str, gainers: list[dict],
     Returns (report_text, model_name).
     """
     rows_md = "\n".join(
-        f"- **{g['ticker']}**: gap={g.get('gap_pct', '?')}%, "
+        f"- **{g['ticker']}**: change={g.get('extended_change_pct', '?')}%, gap={g.get('gap_pct', '?')}%, "
         f"float={_fmt_float(g.get('float_shares'))}, "
         f"rvol={g.get('rvol_15m', '?')}x, "
         f"sector={g.get('sector', '?')}, "
@@ -153,7 +153,7 @@ def get_continuation_analysis(date: str, gainers: list[dict],
 
     user_msg = (
         f"Date: {date}\n\n"
-        f"Today's top gainers (sorted by gap %):\n{rows_md}"
+        f"Today's top gainers (sorted by extended day change %):\n{rows_md}"
         f"{history_context}\n\n"
         "Produce the full nightly continuation report now."
     )

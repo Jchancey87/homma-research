@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS daily_gainers (
     operating_cash_flow  DOUBLE PRECISION,
     runway_months       DOUBLE PRECISION,
     dilution_risk       TEXT,
+    extended_change_pct DOUBLE PRECISION,
     created_at          TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(date, ticker)
 );
@@ -62,6 +63,7 @@ ALTER TABLE daily_gainers ADD COLUMN IF NOT EXISTS net_income          DOUBLE PR
 ALTER TABLE daily_gainers ADD COLUMN IF NOT EXISTS operating_cash_flow  DOUBLE PRECISION;
 ALTER TABLE daily_gainers ADD COLUMN IF NOT EXISTS runway_months       DOUBLE PRECISION;
 ALTER TABLE daily_gainers ADD COLUMN IF NOT EXISTS dilution_risk       TEXT;
+ALTER TABLE daily_gainers ADD COLUMN IF NOT EXISTS extended_change_pct DOUBLE PRECISION;
 
 CREATE INDEX IF NOT EXISTS idx_gainers_date   ON daily_gainers(date);
 CREATE INDEX IF NOT EXISTS idx_gainers_ticker ON daily_gainers(ticker);

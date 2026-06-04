@@ -119,8 +119,8 @@ def fetch_gainers(target_date: str) -> list[dict]:
         if result:
             gainers.append(result)
 
-    # Sort descending by gap
-    gainers.sort(key=lambda x: x['gap_pct'], reverse=True)
+    # Sort descending by extended change percent
+    gainers.sort(key=lambda x: x['extended_change_pct'], reverse=True)
     return gainers
 
 
@@ -187,13 +187,13 @@ def _enrich_ticker(snap: dict, grouped: dict[str, dict], target_date: str) -> di
     if not prev_close or not last_price or prev_close <= 0:
         return None
 
-    # ── Gap = (day open − prev close) / prev close ─────────────────────────
-    # We intentionally wait until we have the grouped-daily bar (step 2) to
-    # calculate this properly.  The snapshot last-trade price is fine for a
-    # quick pre-filter, but the authoritative gap uses the day's opening print.
-    # Pre-filter: skip anything that couldn't possibly clear MIN_GAP_PCT.
+    # ── Gap & Change Pre-filter ────────────────────────────────────────────
+    # Generous pre-filter: check if either the last price change or estimated gap change
+    # is at least half of MIN_GAP_PCT.
     quick_gap = ((last_price - prev_close) / prev_close) * 100
-    if quick_gap < MIN_GAP_PCT * 0.5:   # generous pre-filter; recalc below
+    open_px_est = _gf(day_obj, 'o') or last_price
+    approx_gap = ((open_px_est - prev_close) / prev_close) * 100
+    if quick_gap < MIN_GAP_PCT * 0.5 and approx_gap < MIN_GAP_PCT * 0.5:
         return None
 
     # ── Price Filter ───────────────────────────────────────────────────────
@@ -214,9 +214,10 @@ def _enrich_ticker(snap: dict, grouped: dict[str, dict], target_date: str) -> di
     vwap    = bar.get('vw') or _gf(day_obj, 'vw')
     volume  = bar.get('v') or _gf(day_obj, 'v') or 0
 
-    # ── Authoritative gap using day open vs prev close ─────────────────────
+    # ── Authoritative gap and extended change checks ─────────────────────
     gap_pct = round(((open_px - prev_close) / prev_close) * 100, 2)
-    if gap_pct < MIN_GAP_PCT:
+    extended_change_pct = round(((last_price - prev_close) / prev_close) * 100, 2)
+    if gap_pct < MIN_GAP_PCT and extended_change_pct < MIN_GAP_PCT:
         return None
 
     # ── FMP Profile → float, sector, avg_volume, shares_outstanding ────────
@@ -284,6 +285,7 @@ def _enrich_ticker(snap: dict, grouped: dict[str, dict], target_date: str) -> di
     return {
         'ticker':               ticker,
         'gap_pct':              gap_pct,
+        'extended_change_pct':  extended_change_pct,
         'float_shares':         float_shares,
         'rvol_15m':             rvol,
         'sector':               sector,
@@ -566,8 +568,8 @@ def write_gainers(gainers: list[dict], target_date: str) -> tuple[int, int]:
                         premarket_high, premarket_low, premarket_volume,
                         pct_above_vwap, atr_14, sma_20, sma_50,
                         cash, net_income, operating_cash_flow,
-                        runway_months, dilution_risk)
-                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                        runway_months, dilution_risk, extended_change_pct)
+                       VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                        ON CONFLICT (date, ticker) DO UPDATE SET
                         gap_pct = EXCLUDED.gap_pct,
                         float_shares = EXCLUDED.float_shares,
@@ -600,6 +602,7 @@ def write_gainers(gainers: list[dict], target_date: str) -> tuple[int, int]:
                         operating_cash_flow = EXCLUDED.operating_cash_flow,
                         runway_months = EXCLUDED.runway_months,
                         dilution_risk = EXCLUDED.dilution_risk,
+                        extended_change_pct = EXCLUDED.extended_change_pct,
                         created_at = NOW()""",
                     (
                         target_date,
@@ -635,6 +638,7 @@ def write_gainers(gainers: list[dict], target_date: str) -> tuple[int, int]:
                         g.get('operating_cash_flow'),
                         g.get('runway_months'),
                         g.get('dilution_risk'),
+                        g.get('extended_change_pct'),
                     ),
                 )
                 inserted += 1

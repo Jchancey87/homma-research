@@ -155,10 +155,11 @@ def parse_and_save_top_picks(continuation_md: str, date_str: str, gainers: list[
 def fetch_top_gainers_from_db(target_date: str, limit: int) -> list[dict]:
     query = """
         SELECT ticker, gap_pct, float_shares, rvol_15m, sector, market_cap,
-               news_headline, news_fresh, close_price, open_price
+               news_headline, news_fresh, close_price, open_price, prev_close,
+               COALESCE(extended_change_pct, gap_pct, 0) AS extended_change_pct
         FROM daily_gainers
         WHERE date = %s
-        ORDER BY gap_pct DESC
+        ORDER BY COALESCE(extended_change_pct, gap_pct, 0) DESC
         LIMIT %s
     """
     with get_connection() as conn:
@@ -339,6 +340,7 @@ def enrich_deep_technicals(gainers: list[dict]) -> list[dict]:
             enriched.append({
                 'ticker': ticker,
                 'Current Price': f"${g.get('close_price', 'N/A')}",
+                'Extended Change': f"{g.get('extended_change_pct', 'N/A')}%",
                 'Gap': f"{g.get('gap_pct', 'N/A')}%",
                 'Sector': g.get('sector', 'N/A'),
                 'Market Cap': format_large_number(g.get('market_cap')),
