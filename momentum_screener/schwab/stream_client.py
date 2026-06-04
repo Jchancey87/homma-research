@@ -288,6 +288,7 @@ class SchwabStreamer:
         # 1. Update VWAP
         vwap = 0.0
         v_state = self.vwap_state.setdefault(symbol, {'cum_vp': 0.0, 'cum_vol': 0, 'last_total_vol': 0})
+        v_state.setdefault('status', None)
         
         # Calculate volume delta
         if v_state['last_total_vol'] > 0 and total_volume > v_state['last_total_vol']:
@@ -334,11 +335,22 @@ class SchwabStreamer:
             triggered = True
             alert_type = "HOD_BREAKOUT"
             
-        # Trigger 2: VWAP Crossing
-        # If price crosses above VWAP and rvol is high
-        if vwap > 0 and last_price > vwap and rvol >= 2.0:
-            triggered = True
-            alert_type = "VWAP_CROSSOVER"
+        # Trigger 2: VWAP Crossing (Hysteresis-based to prevent chatter during consolidation)
+        if vwap > 0:
+            buffer = 0.002 # 0.2% price buffer
+            if v_state.get('status') is None:
+                if last_price <= vwap * (1.0 - buffer):
+                    v_state['status'] = 'below'
+                elif last_price >= vwap * (1.0 + buffer):
+                    v_state['status'] = 'above'
+            else:
+                if v_state['status'] == 'below' and last_price >= vwap * (1.0 + buffer):
+                    if rvol >= 2.0:
+                        triggered = True
+                        alert_type = "VWAP_CROSSOVER"
+                    v_state['status'] = 'above'
+                elif v_state['status'] == 'above' and last_price <= vwap * (1.0 - buffer):
+                    v_state['status'] = 'below'
 
         # Apply momentum filters (price $1.00 - $30.00, float < 100M shares to match dashboard scanner)
         price_ok = 1.00 <= last_price <= 30.00

@@ -117,6 +117,15 @@ This file acts as a persistent memory block where AI coding agents record prompt
 
 ---
 
+### [2026-06-04] backend - VWAP Crossover Hysteresis & Suppression
+
+* **Struggle: VWAP crossover alert spam during consolidation**
+  * *Context*: When a stock's price consolidated right around its VWAP, it triggered a massive cascade of VWAP crossover alerts.
+  * *Cause*: The streaming client lacked a proper crossover state machine and simply fired alerts on any tick where `last_price > vwap` and `rvol >= 2.0`. When the 10-minute database cooldown expired, any subsequent tick still above VWAP fired a new alert immediately, even if the price had been above VWAP the whole time. Furthermore, minor price oscillations back and forth over the exact VWAP price line produced rapid crossover signals.
+  * *Resolution*: Implemented a clean hysteresis state machine in `stream_client.py` using status states (`'above'` and `'below'`) and a `0.2%` price band buffer. The price must cross strictly above `vwap * 1.002` to trigger a crossover alert and set state to `'above'`, and it must drop below `vwap * 0.998` to reset state to `'below'`.
+
+---
+
 ## 📜 Central Directives for Future Agents
 
 * **Environment Configuration**: Always verify environment variables in both the development workspace and the active production file [backend/.env](file:///home/jackc/projects/homma-research/backend/.env).
@@ -132,4 +141,6 @@ This file acts as a persistent memory block where AI coding agents record prompt
 * **Detailed Intraday Sparkline Enrichment**: The live screener enriches snapshot gainers with a `sparkline_intraday` field containing downsampled (30 points) minute-close arrays. This is calculated dynamically inside `get_minute_metrics` and updated in real-time with the last trade price.
 * **Toggle-on-Click Screener Details**: Screener detail rows in [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx) must only expand on explicit user click (`lockedTicker === g.ticker`). Avoid using React state for mouse hover interactions on large tables to prevent heavy UI lag.
 * **Daily Gainers Ordering**: Daily gainers should be sorted and analyzed by `extended_change_pct` rather than `gap_pct` to capture the true total return (including pre-market, regular market, and post-market sessions).
+* **VWAP Crossover State Machine**: To prevent alert chatter, VWAP crossovers must be evaluated using a hysteresis band (default $\pm 0.2\%$ buffer around VWAP) and track discrete states (`'above'`/`'below'`) rather than checking raw inequality on every tick.
+
 
