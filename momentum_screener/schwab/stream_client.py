@@ -337,7 +337,7 @@ class SchwabStreamer:
             
         # Trigger 2: VWAP Crossing (Hysteresis-based to prevent chatter during consolidation)
         if vwap > 0:
-            buffer = 0.002 # 0.2% price buffer
+            buffer = 0.02 # 2% price buffer
             if v_state.get('status') is None:
                 if last_price <= vwap * (1.0 - buffer):
                     v_state['status'] = 'below'
