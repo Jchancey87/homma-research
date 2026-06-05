@@ -26,7 +26,6 @@ def _set_status(job_id: str, status: str, output: str = None, model_used: str = 
 
 def _cache_write(ticker: str, date: str | None, report_type: str, output: str, model_used: str, job_id: str):
     now = datetime.now(timezone.utc)
-    from backend.routes.analysis import _CACHE_TTL # Or redefine it here if we want to decouple
     
     # Let's redefine TTL locally to avoid circular import issues if routes/analysis is removed
     _CACHE_TTL = {

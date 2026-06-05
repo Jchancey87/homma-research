@@ -732,9 +732,14 @@ Diagnosed and resolved critical issues preventing real-time Telegram alerts from
 * Ran the `schwab_health_check.py` validation script, confirming 200 OK responses on the Schwab Market Data API and Trader API.
 * Copied the modified `ecosystem.config.js` from `/opt/trading-journal/ecosystem.config.js` to `/home/jackc/projects/homma-research/ecosystem.config.js` to track `celery-beat` registration and backend worker adjustments, and committed/pushed it to master.
 * Modified the VWAP crossover buffer assignment from `buffer = 0.002` to `buffer = 0.02` in [momentum_screener/schwab/stream_client.py](file:///home/jackc/projects/homma-research/momentum_screener/schwab/stream_client.py#L340). Committed and pushed this code modification to master.
+---
 
+## [2026-06-05] SMTP App Password Debugging & Celery Module Import Fix
 
+### Summary
+Diagnosed the failed nightly market brief email delivery and resolved a ModuleNotFoundError crashing Celery LLM background tasks.
 
-
-
-
+### What Changed
+* **Celery Import Bugfix (`llm_tasks.py`)**: Removed the obsolete import `from backend.routes.analysis import _CACHE_TTL` in [llm_tasks.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/tasks/llm_tasks.py) which caused a `ModuleNotFoundError` on Celery worker threads.
+* **SMTP Credentials Audit**: Verified via `debug_email_status.py` that both development and production Gmail SMTP passwords return `535 BadCredentials` authentication errors, explaining the missing nightly market brief emails.
+* **Digital Garden Routing Guidance**: Documented the root cause of the digital garden SSRF private IP block error and provided instructions to switch the API endpoint to the public proxy domain `https://homma-research.homma.casa`.
