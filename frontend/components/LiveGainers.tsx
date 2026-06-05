@@ -93,19 +93,28 @@ function getRvolBadgeStyle(rvol: number | null) {
   return { label: `${val.toFixed(1)}x`, className: 'bg-gray-500/10 text-gray-400 border border-gray-500/20' }
 }
 
+function getRvolColor(rvol: number | null) {
+  if (rvol == null) return 'text-gray-400'
+  if (rvol >= 1000) return 'text-rose-300 font-bold'
+  if (rvol >= 200)  return 'text-emerald-200 font-bold'
+  if (rvol >= 50)   return 'text-emerald-300 font-semibold'
+  if (rvol >= 5)    return 'text-emerald-400'
+  return 'text-gray-400'
+}
+
 function getFloatBadgeStyle(floatShares: number | null) {
-  if (floatShares == null) return { label: '—', className: 'bg-gray-500/10 text-gray-400 border border-gray-500/20' }
+  if (floatShares == null) return { label: '—', className: 'text-gray-400' }
   const formatted = fmtVol(floatShares)
   if (floatShares < 1_000_000) {
-    return { label: `${formatted} (Small)`, className: 'bg-rose-500/25 text-rose-300 border border-rose-500/40' }
+    return { label: `${formatted} (Small)`, className: 'text-rose-300' }
   }
   if (floatShares < 10_000_000) {
-    return { label: `${formatted} (Medium)`, className: 'bg-amber-500/25 text-amber-300 border border-amber-500/40' }
+    return { label: `${formatted} (Medium)`, className: 'text-amber-300' }
   }
   if (floatShares < 50_000_000) {
-    return { label: `${formatted} (Normal)`, className: 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/40' }
+    return { label: `${formatted} (Normal)`, className: 'text-emerald-300' }
   }
-  return { label: `${formatted} (Large)`, className: 'bg-blue-500/25 text-blue-300 border border-blue-500/40' }
+  return { label: `${formatted} (Large)`, className: 'text-blue-300' }
 }
 
 function getSpreadBadgeStyle(spreadPct: number | null) {
@@ -235,7 +244,7 @@ interface GainerTableProps {
   onOpenModal: (g: LiveGainerRow) => void
   handleResearch: (g: LiveGainerRow) => void
   loading?: boolean
-  defaultSortKey?: 'rank' | 'ticker' | 'price' | 'change' | 'mom_2m' | 'atr_hod' | 'float'
+  defaultSortKey?: 'rank' | 'ticker' | 'price' | 'change' | 'mom_2m' | 'atr_hod' | 'float' | 'rvol' | 'hod'
   defaultSortDir?: 'asc' | 'desc'
   flashingTickers?: Record<string, boolean>
 }
@@ -254,7 +263,7 @@ function GainerTable({
   flashingTickers = {},
 }: GainerTableProps) {
   const [lockedTicker, setLockedTicker] = useState<string | null>(null)
-  const [sortKey, setSortKey] = useState<'rank' | 'ticker' | 'price' | 'change' | 'mom_2m' | 'atr_hod' | 'float'>(defaultSortKey)
+  const [sortKey, setSortKey] = useState<'rank' | 'ticker' | 'price' | 'change' | 'mom_2m' | 'atr_hod' | 'float' | 'rvol' | 'hod'>(defaultSortKey)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(defaultSortDir)
 
   const handleRowClick = (ticker: string) => {
@@ -304,6 +313,14 @@ function GainerTable({
       case 'atr_hod':
         valA = a.atr_hod ?? 9999
         valB = b.atr_hod ?? 9999
+        break
+      case 'rvol':
+        valA = a.rvol_15m ?? 0
+        valB = b.rvol_15m ?? 0
+        break
+      case 'hod':
+        valA = a.high_price ?? 0
+        valB = b.high_price ?? 0
         break
       case 'float':
         valA = a.float_shares ?? 0
@@ -361,7 +378,11 @@ function GainerTable({
               <Th col="price" label="Price" align="right" width={showRank ? "w-[14%]" : "w-[16%]"} />
               <Th col="change" label="Change(%)" align="right" width={showRank ? "w-[14%]" : "w-[16%]"} />
               <Th col="mom_2m" label="Mom %" align="right" width={showRank ? "w-[14%]" : "w-[16%]"} />
-              <Th col="atr_hod" label="AtrHoD" align="right" width={showRank ? "w-[14%]" : "w-[16%]"} />
+              {title === "All Live Gainers" ? (
+                <Th col="rvol" label="RVOL" align="right" width={showRank ? "w-[14%]" : "w-[16%]"} />
+              ) : (
+                <Th col="hod" label="HOD" align="right" width={showRank ? "w-[14%]" : "w-[16%]"} />
+              )}
               <Th col="float" label="Float" align="right" width={showRank ? "w-[18%]" : "w-[20%]"} />
             </tr>
           </thead>
@@ -538,16 +559,22 @@ function GainerTable({
                         </span>
                       </td>
 
-                      {/* 6. AtrHoD */}
+                      {/* 6. RVOL or HOD Column */}
                       <td className="py-2.5 pr-4 text-right font-mono select-none animate-in fade-in duration-200">
-                        <span className={`font-semibold ${getAtrHodColor(g.atr_hod)}`}>
-                          {g.atr_hod != null ? g.atr_hod.toFixed(2) : '—'}
-                        </span>
+                        {title === "All Live Gainers" ? (
+                          <span className={`font-semibold ${getRvolColor(g.rvol_15m)}`}>
+                            {g.rvol_15m != null ? `${g.rvol_15m.toFixed(1)}x` : '—'}
+                          </span>
+                        ) : (
+                          <span className="font-semibold text-white">
+                            {g.high_price != null && g.high_price > 0 ? `$${g.high_price.toFixed(2)}` : '—'}
+                          </span>
+                        )}
                       </td>
 
                       {/* 7. Float */}
                       <td className="py-2.5 pr-4 text-right animate-in fade-in duration-200">
-                        <span className={`inline-flex whitespace-nowrap px-2 py-0.5 rounded text-[11px] font-mono font-bold ${getFloatBadgeStyle(g.float_shares).className}`}>
+                        <span className={`whitespace-nowrap text-[11px] font-mono font-bold ${getFloatBadgeStyle(g.float_shares).className}`}>
                           {getFloatBadgeStyle(g.float_shares).label}
                         </span>
                       </td>
@@ -1303,7 +1330,7 @@ export default function LiveGainers() {
                 <div className="p-3 bg-gray-900/15 border border-gray-850 rounded-xl space-y-1">
                   <span className="text-gray-500 block text-[10px] uppercase tracking-wider font-sans font-semibold">Float Shares</span>
                   <div>
-                    <span className={`inline-flex whitespace-nowrap px-1.5 py-0.5 rounded text-[10px] font-bold ${getFloatBadgeStyle(modalGainer.float_shares).className}`}>
+                    <span className={`whitespace-nowrap text-[10px] font-bold ${getFloatBadgeStyle(modalGainer.float_shares).className}`}>
                       {getFloatBadgeStyle(modalGainer.float_shares).label}
                     </span>
                   </div>

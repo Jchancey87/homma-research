@@ -175,6 +175,13 @@ def get_gainers_snapshot(include_otc: bool = False) -> List[Dict]:
         
         trade_time = quote.get('tradeTime')
         
+        # Ensure we have a valid total volume, falling back to TradingView's volume if Schwab's is missing/0
+        schwab_vol = quote.get('totalVolume')
+        tv_vol = cdata.get('volume') or 0
+        total_vol = schwab_vol if (schwab_vol is not None and schwab_vol > 0) else tv_vol
+        
+        avg_vol = fund.get('avg10DaysVolume') or fund.get('avg1YearVolume') or 0
+
         # Map to legacy MassiveSnapshotTicker shape
         tickers.append({
             'ticker': sym,
@@ -185,11 +192,11 @@ def get_gainers_snapshot(include_otc: bool = False) -> List[Dict]:
                 'h': quote.get('highPrice'),
                 'l': quote.get('lowPrice'),
                 'c': quote.get('lastPrice'),
-                'v': quote.get('totalVolume')
+                'v': total_vol
             },
             'prevDay': {
                 'c': quote.get('closePrice'),
-                'v': fund.get('avg10DaysVolume')
+                'v': avg_vol
             },
             'float_shares': cdata.get('float_shares'),
             'market_cap': cdata.get('market_cap'),

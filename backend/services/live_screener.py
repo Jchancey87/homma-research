@@ -252,7 +252,8 @@ def get_minute_metrics(ticker: str, last_price: Optional[float], high_price: Opt
                 zen_v = round(slope / atr, 2)
 
             # 5. Compute ATR Distance to High of Day (AtrHoD)
-            hod = high_price if high_price is not None else max((c.get('h') or 0.0) for c in candles)
+            candle_high = max((c.get('h') or c.get('c') or 0.0) for c in candles) if candles else 0.0
+            hod = max(high_price or 0.0, candle_high, curr_p)
             atr_hod = round((hod - curr_p) / atr, 2) if hod and atr > 0 else 0.0
             if atr_hod < 0:
                 atr_hod = 0.0
@@ -289,7 +290,8 @@ def get_minute_metrics(ticker: str, last_price: Optional[float], high_price: Opt
                 'zen_v': zen_v,
                 'atr_14': atr,
                 'vwap': vwap,
-                'intraday_sparkline': intraday_sparkline
+                'intraday_sparkline': intraday_sparkline,
+                'hod': hod
             }
     except Exception as e:
         log.warning(f"Error computing minute metrics for {ticker}: {e}", exc_info=True)
@@ -301,7 +303,8 @@ def get_minute_metrics(ticker: str, last_price: Optional[float], high_price: Opt
             'zen_v': None,
             'atr_14': None,
             'vwap': None,
-            'intraday_sparkline': []
+            'intraday_sparkline': [],
+            'hod': high_price or last_price
         }
 
     with _minute_cache_lock:
@@ -369,6 +372,8 @@ def enrich_gainers_with_sparklines_and_history(gainers: list[dict]) -> list[dict
                 g['atr_vwap'] = min_metrics['atr_vwap']
                 g['zen_v'] = min_metrics['zen_v']
                 g['sparkline_intraday'] = min_metrics.get('intraday_sparkline', [])
+                if min_metrics.get('hod'):
+                    g['high_price'] = round(min_metrics['hod'], 4)
                 
             except Exception as e:
                 log.warning(f"Failed to enrich {g['ticker']}: {e}")

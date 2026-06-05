@@ -2,6 +2,22 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-05] Live Screener UI Column Replacements & ATR HOD Pre-Market Fix
+
+### Summary
+Fixed pre-market ATR HOD showing 0.0 due to Schwab's Level 1 quote highPrice defaulting to 0.0, and updated the columns of the Live Gainers and Near HOD tables. Stripped background boxes from the Float shares column while maintaining text color coding.
+
+### What Changed
+* **ATR HOD Pre-market Candle High Fix (`live_screener.py`)**: Modified `get_minute_metrics` to calculate `hod` taking the maximum of `high_price` (quote), `candle_high` (from the full pre-market 1-minute bars history), and the current price. This ensures `hod` pulls back correctly and prevents `atr_hod` from collapsing to `0.0`. Dynamically updated the gainer snapshot's `high_price` with this more accurate calculated `hod`.
+* **RVOL Volume Fallbacks (`schwab_client.py`)**: Added volume fallback rules using TradingView Amerika scanner volume if Schwab's `totalVolume` is missing or 0, and using `avg1YearVolume` if `avg10DaysVolume` is missing or 0, to ensure relative volume calculations remain highly accurate.
+* **Float Column Box Styling Removal (`LiveGainers.tsx`)**: Removed the background, padding, and border styles from the Float shares column cells in both the tables and detail modal while retaining the color-coded text (`text-rose-300`, `text-amber-300`, `text-emerald-300`, `text-blue-300`).
+* **Table Column Replacements (`LiveGainers.tsx`)**:
+  * In the **"Near HOD Radar"** table: Replaced `AtrHoD` column with `HOD` (displays the actual high of day price `high_price`).
+  * In the **"All Live Gainers"** table: Replaced `AtrHoD` column with `RVOL` (displays `rvol_15m` relative volume multiplier, e.g. `2.5x`).
+* **Sorting & Interface Updates**: Added typescript interface and state support for sorting the new columns in `<GainerTable>` (by `'rvol'` and `'hod'`).
+
+---
+
 ## [2026-06-05] Live Screener Filter Alignment & Pre-Market Gap Fix
 
 ### Summary

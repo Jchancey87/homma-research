@@ -175,6 +175,21 @@ This file acts as a persistent memory block where AI coding agents record prompt
     1. Aligned `MIN_GAP_PCT` to `5.0` and `MAX_FLOAT_M` to `500.0` in [live_screener.py](file:///home/jackc/projects/homma-research/backend/services/live_screener.py).
     2. Simplified `_enrich_snapshot_tickers` to compute the live gap percentage directly off the latest trade price and yesterday's close price in the first pass, bypassing dependency on the regular-session change field.
 
+### [2026-06-05] frontend & backend - Live Screener Columns and Pre-Market ATR HOD Fix
+
+* **Struggle 1: Pre-market ATR HOD showing 0.0**
+  * *Context*: In the "Near HOD Radar" screener, the `AtrHoD` column showed all `0.0`s during pre-market.
+  * *Cause*: Schwab Level 1 quote `highPrice` returns `0.0` during pre-market, which defaulted to the latest `last_price`. This made the calculated `hod` equal to `last_price` (`curr_p`), and therefore the ATR distance was `(last_price - last_price) / atr = 0.0`.
+  * *Resolution*: Updated `get_minute_metrics()` in [live_screener.py](file:///home/jackc/projects/homma-research/backend/services/live_screener.py) to calculate the `hod` as the maximum of `high_price` (quote), `candle_high` (derived from the full pre-market 1-minute bars history in `candles`), and `curr_p`. This successfully preserves the pre-market HOD if price pulls back, and updates the gainer's `high_price` in the snapshot dynamically.
+* **Struggle 2: Relative Volume Calculations Audit**
+  * *Context*: Audited Schwab volume mapping for live Relative Volume calculations.
+  * *Cause*: In pre-market, Schwab's Level 1 quote `totalVolume` can sometimes be `0` or `None`.
+  * *Resolution*: Enhanced [schwab_client.py](file:///home/jackc/projects/homma-research/backend/services/schwab_client.py) quote mapping to fall back to the TradingView Amerika scanner's volume if Schwab's `totalVolume` is missing/0. Also added a fallback to `avg1YearVolume` if `avg10DaysVolume` is missing, ensuring a robust baseline for relative volume.
+* **Struggle 3: Duplicate Identifier in API Types**
+  * *Context*: Added `high_price` to `LiveGainerRow` interface in `lib/api.ts` but it caused a compilation error.
+  * *Cause*: The interface already had `high_price?: number | null` declared at the bottom of the property list, which conflicted with the new declaration.
+  * *Resolution*: Removed the duplicate declaration and verified the frontend compiles with zero TypeScript errors.
+
 ---
 
 ## 📜 Central Directives for Future Agents
