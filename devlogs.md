@@ -2,6 +2,17 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-05] Live Screener Filter Alignment & Pre-Market Gap Fix
+
+### Summary
+Fixed an issue where the Live Gainers and Near HOD Radar screeners were not matching other standard screeners. The live screener was hardcoded to only show stocks with a 30%+ gap (whereas the nightly ingest filters for 5%+ gap), and was discarding pre-market gappers in extended hours because it evaluated gap percentage against regular-session net change before re-evaluating it against the live price.
+
+### What Changed
+* **Aligned Gap & Float Thresholds (`live_screener.py`)**: Updated `MIN_GAP_PCT` from `30.0` to `5.0` and `MAX_FLOAT_M` from `200.0` to `500.0` in [live_screener.py](file:///home/jackc/projects/homma-research/backend/services/live_screener.py) to match the standard criteria used in the daily post-close ingestion job.
+* **Pre-Market Gap Logic Simplification**: Refactored `_enrich_snapshot_tickers` to calculate the live gap percentage directly off the latest Schwab trade price (`last_price`) and yesterday's close price (`prev_close`) in the first pass. This avoids mistakenly filtering out tickers in pre-market/after-hours whose `todaysChangePerc` field (mapped to Schwab's `netPercentChange` which only tracks regular sessions) is below the threshold or missing.
+
+---
+
 ## [2026-06-04] Momentum Alerts Implementation & Formatting
 
 ### Summary

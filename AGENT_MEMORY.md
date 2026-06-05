@@ -163,6 +163,18 @@ This file acts as a persistent memory block where AI coding agents record prompt
     2. The mock price used for the breakout test triggered the default HOD_BREAKOUT alert instead of the PREV_DAY_BREAKOUT alert because the high_price mock value was too low.
   * *Resolution*: Refactored tests to use prices inside the valid $1.00 - $30.00 range (e.g. VWAP = $10.00, bounce = $10.15) and set high_price mock values to a high ceiling ($30.00) to isolate tests from HOD_BREAKOUT triggers.
 
+### [2026-06-05] backend - Live Gainer Screener Threshold Alignment & Gap Logic Fix
+
+* **Struggle: Screener data not matching third-party live screeners during pre-market**
+  * *Context*: The live gainers and Near HOD Radar dashboard displayed very few tickers, failing to match the user's reference screener.
+  * *Cause*:
+    1. The live screener's `MIN_GAP_PCT` was hardcoded to `30.0` (30% gap), far more restrictive than the nightly ingest job's `5.0` (5% gap).
+    2. The live screener's `MAX_FLOAT_M` was set to `200.0` rather than the ingestion's `500.0`.
+    3. In `_enrich_snapshot_tickers` (`live_screener.py`), the gap was evaluated against `t.get('todaysChangePerc')` (mapped to Schwab's `netPercentChange` which represents regular session change) *before* re-evaluating it against the live extended-hours price, causing pre-market gappers with low regular-session changes to be discarded prematurely.
+  * *Resolution*:
+    1. Aligned `MIN_GAP_PCT` to `5.0` and `MAX_FLOAT_M` to `500.0` in [live_screener.py](file:///home/jackc/projects/homma-research/backend/services/live_screener.py).
+    2. Simplified `_enrich_snapshot_tickers` to compute the live gap percentage directly off the latest trade price and yesterday's close price in the first pass, bypassing dependency on the regular-session change field.
+
 ---
 
 ## 📜 Central Directives for Future Agents

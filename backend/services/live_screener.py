@@ -36,9 +36,9 @@ PERSIST_HOUR_ET   = 20           # 8:00 PM Eastern — after-hours close
 PERSIST_MINUTE_ET = 0
 
 # Screening thresholds (same as ingest job)
-MIN_GAP_PCT    = 30.0    # Show anything > 30% gap
-MAX_FLOAT_M    = 200.0  # < 200M shares
-MIN_RVOL       = 2.0    # > 2x RVOL
+MIN_GAP_PCT    = 5.0     # Show anything > 5% gap
+MAX_FLOAT_M    = 500.0   # < 500M shares
+MIN_RVOL       = 2.0     # > 2x RVOL
 MIN_PRICE      = 0.10    # >= $0.10
 MAX_PRICE      = 100.00  # <= $100
 MAX_MARKET_CAP = 10_000e6 # < $10B
@@ -455,16 +455,6 @@ def _enrich_snapshot_tickers(raw_tickers: list[dict]) -> list[dict]:
             snap  = t.get('lastQuote', {}) or {}
             last  = t.get('lastTrade', {}) or {}
 
-            # Gap % — use todaysChangePerc which Polygon calculates vs prev close
-            gap_pct = t.get('todaysChangePerc')
-            if gap_pct is None:
-                prev_close = prevd.get('c') or prevd.get('vw')
-                open_price = day.get('o')
-                if prev_close and open_price and prev_close > 0:
-                    gap_pct = ((open_price - prev_close) / prev_close) * 100
-            if gap_pct is None or gap_pct < MIN_GAP_PCT:
-                continue
-
             # Volume & RVOL
             volume     = day.get('v') or 0
             prev_vol   = prevd.get('v') or 0
@@ -484,8 +474,8 @@ def _enrich_snapshot_tickers(raw_tickers: list[dict]) -> list[dict]:
             if not last_price or not prev_close:
                 continue
 
-            # Recompute gap off last vs prev_close so it reflects the current
-            # extended-hours move, not just the gap at open
+            # Gap % — calculate gap off last vs prev_close so it reflects the current
+            # extended-hours move, not just the gap at open or stale regular change
             gap_pct = round(((last_price - prev_close) / prev_close) * 100, 2)
             if gap_pct < MIN_GAP_PCT:
                 continue
