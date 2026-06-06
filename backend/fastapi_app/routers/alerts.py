@@ -57,3 +57,138 @@ async def get_alerts_history(limit: int = 50, db: asyncpg.Connection = Depends(g
         LIMIT $1
     """, limit)
     return rows_to_list(rows)
+
+
+from pydantic import BaseModel
+from typing import Optional
+from fastapi import HTTPException
+from collections import defaultdict
+from datetime import date as date_cls
+
+class FeedbackBody(BaseModel):
+    alert_time: str
+    feedback_score: Optional[str] = None
+    feedback_notes: Optional[str] = None
+
+@router.get("/dates")
+async def get_alert_dates(db: asyncpg.Connection = Depends(get_db)):
+    """
+    Get all unique dates that have logged alerts.
+    """
+    rows = await db.fetch("""
+        SELECT DISTINCT (alert_time AT TIME ZONE 'America/New_York')::date AS alert_date
+        FROM public.screener_alerts
+        ORDER BY alert_date DESC
+    """)
+    return [r['alert_date'].isoformat() for r in rows if r['alert_date']]
+
+@router.get("/daily-summary")
+async def get_alerts_daily_summary(date: Optional[str] = None, db: asyncpg.Connection = Depends(get_db)):
+    """
+    Get all alerts for a specific date (US/Eastern), grouped by ticker symbol,
+    joined with stock fundamentals.
+    """
+    date_str = date
+    if not date_str:
+        row = await db.fetchrow("""
+            SELECT (alert_time AT TIME ZONE 'America/New_York')::date AS last_date
+            FROM public.screener_alerts
+            ORDER BY alert_time DESC
+            LIMIT 1
+        """)
+        if row and row['last_date']:
+            date_str = row['last_date'].isoformat()
+        else:
+            from datetime import datetime
+            import pytz
+            date_str = datetime.now(pytz.timezone('America/New_York')).date().isoformat()
+
+    try:
+        query_date = date_cls.fromisoformat(date_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Must be YYYY-MM-DD.")
+
+    # Query alerts and join fundamentals
+    rows = await db.fetch("""
+        SELECT a.id, a.symbol, a.alert_time, a.trigger_price, a.trigger_volume,
+               a.rel_vol, a.gap_pct, a.float_shares, a.alert_type, a.sent,
+               a.feedback_score, a.feedback_notes,
+               f.company_name, f.float_category, f.market_cap
+        FROM public.screener_alerts a
+        LEFT JOIN public.stock_fundamentals f ON a.symbol = f.symbol
+        WHERE (a.alert_time AT TIME ZONE 'America/New_York')::date = $1
+        ORDER BY a.symbol, a.alert_time ASC
+    """, query_date)
+
+    # Group by symbol
+    ticker_groups = defaultdict(lambda: {
+        "symbol": "",
+        "company_name": None,
+        "float_category": None,
+        "float_shares": None,
+        "market_cap": None,
+        "gap_pct": None,
+        "rvol": None,
+        "alerts": []
+    })
+
+    for r in rows:
+        sym = r['symbol']
+        group = ticker_groups[sym]
+        if not group["symbol"]:
+            group["symbol"] = sym
+            group["company_name"] = r.get("company_name")
+            group["float_category"] = r.get("float_category")
+            group["float_shares"] = r.get("float_shares")
+            group["market_cap"] = r.get("market_cap")
+            group["gap_pct"] = r.get("gap_pct")
+            group["rvol"] = r.get("rel_vol")
+
+        group["alerts"].append({
+            "id": r["id"],
+            "alert_time": r["alert_time"].isoformat(),
+            "trigger_price": r["trigger_price"],
+            "trigger_volume": r["trigger_volume"],
+            "rel_vol": r["rel_vol"],
+            "alert_type": r["alert_type"],
+            "feedback_score": r.get("feedback_score"),
+            "feedback_notes": r.get("feedback_notes")
+        })
+
+    return {
+        "date": date_str,
+        "tickers": list(ticker_groups.values())
+    }
+
+@router.post("/{alert_id}/feedback")
+async def save_alert_feedback(
+    alert_id: int,
+    body: FeedbackBody,
+    db: asyncpg.Connection = Depends(get_db)
+):
+    """
+    Update feedback rating and notes for a specific alert trigger.
+    """
+    try:
+        from datetime import datetime
+        time_str = body.alert_time.replace('Z', '+00:00')
+        alert_time_dt = datetime.fromisoformat(time_str)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid alert_time format: {exc}. Must be ISO.")
+
+    # Update screener_alerts
+    res = await db.execute("""
+        UPDATE public.screener_alerts
+        SET feedback_score = $1, feedback_notes = $2
+        WHERE id = $3 AND alert_time = $4
+    """, body.feedback_score, body.feedback_notes, alert_id, alert_time_dt)
+
+    # Also update archive
+    await db.execute("""
+        UPDATE public.screener_alerts_archive
+        SET feedback_score = $1, feedback_notes = $2
+        WHERE id = $3 AND alert_time = $4
+    """, body.feedback_score, body.feedback_notes, alert_id, alert_time_dt)
+
+    return {"status": "success", "updated": res}
+

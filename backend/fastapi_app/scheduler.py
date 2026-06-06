@@ -62,6 +62,16 @@ def _build_scheduler():
         replace_existing=True,
     )
 
+    # ── Job 5: Nightly alert chart backfill ──────────────────────────────────
+    scheduler.add_job(
+        _nightly_alerts_backfill,
+        CronTrigger(day_of_week="mon-fri", hour=20, minute=10, timezone="US/Eastern"),  # 8:10 PM ET
+        id="nightly_alerts_backfill",
+        name="Nightly Alerts Backfill",
+        replace_existing=True,
+        misfire_grace_time=1800,  # 30 min
+    )
+
     return scheduler
 
 
@@ -211,6 +221,33 @@ async def _premarket_gappers_summary() -> None:
         log.info("[scheduler] premarket_gappers_summary completed successfully")
     except Exception as exc:
         log.exception("[scheduler] premarket_gappers_summary failed: %s", exc)
+
+
+async def _nightly_alerts_backfill() -> None:
+    """Run backfill_alert_candles from jobs/backfill_alert_candles.py off-thread."""
+    import asyncio
+
+    log.info("[scheduler] nightly_alerts_backfill starting")
+    try:
+        import pytz
+        eastern = pytz.timezone("US/Eastern")
+        target_date_obj = datetime.now(eastern).date()
+
+        def _run() -> None:
+            import sys, os
+            _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            _repo = os.path.dirname(_backend)
+            if _repo not in sys.path:
+                sys.path.insert(0, _repo)
+            if _backend not in sys.path:
+                sys.path.insert(0, _backend)
+            from jobs.backfill_alert_candles import backfill_alert_candles
+            backfill_alert_candles(target_date_obj)
+
+        await asyncio.to_thread(_run)
+        log.info("[scheduler] nightly_alerts_backfill done")
+    except Exception as exc:
+        log.exception("[scheduler] nightly_alerts_backfill failed: %s", exc)
 
 
 # ---------------------------------------------------------------------------

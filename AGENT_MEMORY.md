@@ -6,6 +6,17 @@ This file acts as a persistent memory block where AI coding agents record prompt
 
 ## 🏛️ Chronological History of Learnings & Struggles
 
+### [2026-06-05] backend & frontend - Alert Journal: Ingest Backfill & v5 Markers API
+
+* **Struggle 1: SQL Comment-Filtering Bug in Migration Runner**
+  - *Context*: Running the database migration via the custom `run_alerts_feedback_migration.py` script succeeded but left `feedback_score` missing from both tables, while `feedback_notes` was added successfully.
+  - *Cause*: The script split the SQL file by `;` and filtered out statements starting with comments (`s.strip().startswith('--')`). Because the `feedback_score` statements had a comment line immediately preceding the SQL code (e.g., `-- Add feedback columns...`), the stripped string started with `--` and was completely skipped.
+  - *Resolution*: Updated `run_alerts_feedback_migration.py` to strip out SQL comments line-by-line before splitting by `;`. Rerunning it successfully added the columns to the active database.
+* **Struggle 2: Lightweight Charts v5 Markers Compilation Failure**
+  - *Context*: Next.js build failed with: `Property 'setMarkers' does not exist on type 'ISeriesApi<"Candlestick", ...>'`.
+  - *Cause*: In `lightweight-charts` version 5 (used by the frontend), the direct `.setMarkers()` method was removed in favor of the plugin-based primitive architecture.
+  - *Resolution*: Imported the `createSeriesMarkers` plugin helper from `lightweight-charts` and updated the chart creation logic to use `createSeriesMarkers(candles, markers)` to draw the markers. The Next.js production build then compiled cleanly.
+
 ---
 
 ### [2026-05-19] backend/ - FastAPI Migration & Event Loop Issues

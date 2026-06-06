@@ -5,12 +5,13 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   BarChart2, Camera, LayoutDashboard, LayoutGrid,
-  Search, Bookmark, FileText, AreaChart, Sun, Moon, Menu, X
+  Search, Bookmark, FileText, AreaChart, Sun, Moon, Menu, X, Bell
 } from 'lucide-react'
 
 const links = [
   { href: '/',             label: 'Dashboard',      icon: LayoutDashboard },
   { href: '/history',      label: 'Command Center', icon: LayoutGrid },
+  { href: '/alerts',       label: 'Alert Journal',  icon: Bell },
   { href: '/daily-charts', label: 'Daily Charts',   icon: AreaChart },
   { href: '/charts',       label: 'Charts',         icon: Camera },
   { href: '/research',     label: 'Research',       icon: Search },

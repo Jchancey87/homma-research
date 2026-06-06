@@ -556,3 +556,55 @@ export const getMomentumBreadth = (priceFilter = true) =>
   }).then(r => r.data)
 
 
+
+// ── Alert Journal ───────────────────────────────────────────────────────────
+
+export interface AlertInstance {
+  id: number
+  alert_time: string
+  trigger_price: number
+  trigger_volume: number
+  rel_vol: number
+  alert_type: string
+  feedback_score: 'helpful' | 'noise' | 'neutral' | null
+  feedback_notes: string | null
+}
+
+export interface AlertTickerSummary {
+  symbol: string
+  company_name: string | null
+  float_category: string | null
+  float_shares: number | null
+  market_cap: number | null
+  gap_pct: number | null
+  rvol: number | null
+  alerts: AlertInstance[]
+}
+
+export interface AlertDailySummary {
+  date: string
+  tickers: AlertTickerSummary[]
+}
+
+export const getAlertDates = () =>
+  api.get<string[]>('/api/alerts/dates').then(r => r.data)
+
+export const getAlertsDailySummary = (date?: string) =>
+  api.get<AlertDailySummary>('/api/alerts/daily-summary', {
+    params: date ? { date } : undefined
+  }).then(r => r.data)
+
+export const saveAlertFeedback = (
+  alertId: number,
+  alertTime: string,
+  feedbackScore: 'helpful' | 'noise' | 'neutral' | null,
+  feedbackNotes: string | null
+) =>
+  api.post<{ status: string; updated: string }>(`/api/alerts/${alertId}/feedback`, {
+    alert_time: alertTime,
+    feedback_score: feedbackScore,
+    feedback_notes: feedbackNotes
+  }).then(r => r.data)
+
+
+

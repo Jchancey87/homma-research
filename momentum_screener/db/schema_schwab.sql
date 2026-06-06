@@ -118,6 +118,8 @@ CREATE TABLE IF NOT EXISTS screener_alerts (
     float_shares    BIGINT,
     alert_type      VARCHAR(30),
     sent            BOOLEAN      DEFAULT FALSE,
+    feedback_score  VARCHAR(10)  DEFAULT NULL,
+    feedback_notes  TEXT         DEFAULT NULL,
     PRIMARY KEY (id, alert_time)
 );
 
@@ -144,7 +146,9 @@ CREATE TABLE IF NOT EXISTS screener_alerts_archive (
     short_int_float FLOAT,
     float_shares    BIGINT,
     alert_type      VARCHAR(30),
-    archived_at     TIMESTAMPTZ  DEFAULT NOW()
+    archived_at     TIMESTAMPTZ  DEFAULT NOW(),
+    feedback_score  VARCHAR(10)  DEFAULT NULL,
+    feedback_notes  TEXT         DEFAULT NULL
 );
 
 -- Continuous Aggregates for price_history_1min

@@ -2,6 +2,26 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-05] Alert Journal: Interactive Charts & Alert Quality Feedback DB/UI
+
+### Summary
+Designed and implemented the **Alert Journal** feature, enabling historical audit of real-time screener alerts. Backfills missing 1-minute candlestick data nightly for alerted symbols and renders them in the frontend using TradingView Lightweight Charts v5 with overlay trigger markers. Supports labeling alert quality ("Helpful" vs "Noise") and custom notes saved directly to the database.
+
+### What Changed
+* **Database Schema Migration (`alerts_feedback_migration.sql`)**: Added `feedback_score` (VARCHAR) and `feedback_notes` (TEXT) columns to `screener_alerts` and `screener_alerts_archive` tables.
+* **Nightly Alert Candle Backfill (`backfill_alert_candles.py`)**: Implemented a standalone nightly job that queries all symbols that triggered alerts today, checks for missing 1-minute data in the TimescaleDB `price_history_1min` table, and automatically fetches/seeds any missing candle history from the Schwab API.
+* **APScheduler Integration (`scheduler.py`)**: Registered `_nightly_alerts_backfill` job to run automatically at **8:10 PM ET** (Monday-Friday) after the standard gainer ingest completes.
+* **FastAPI Backend Router (`alerts.py`)**: Added three new REST endpoints:
+  * `GET /api/alerts/dates`: Returns a unique list of dates containing alert records.
+  * `GET /api/alerts/daily-summary`: Returns all alerts for a given date, grouped by ticker, joined with `stock_fundamentals` (company name, float category, market cap).
+  * `POST /api/alerts/{alert_id}/feedback`: Updates feedback score and trader notes for a specific alert instance in both active and archive tables.
+* **Frontend Client & Router (`api.ts`, `NavBar.tsx`)**: Created TypeScript interfaces and API client calls (`getAlertDates`, `getAlertsDailySummary`, `saveAlertFeedback`), and added the "Alert Journal" link (with `Bell` icon) to the top navigation bar.
+* **Alert Journal Dashboard (`alerts/page.tsx`)**: Built a split-pane layout with:
+  * Left-hand Sidebar: List of alerted tickers on the selected date showing symbols, names, and rating summary badges.
+  * Right-hand Panel: Fundamental metrics cards, full-size interactive `Lightweight Charts` 1-minute candlestick plot with overlay alert markers (utilizing v5 plugin-based `createSeriesMarkers` API), and a detailed feedback rating card for submitting votes and notes for individual alert triggers.
+
+---
+
 ## [2026-06-05] Live Screener UI Column Replacements & ATR HOD Pre-Market Fix
 
 ### Summary
