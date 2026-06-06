@@ -1,17 +1,17 @@
 import os
 import logging
+import threading
 from .auth import get_client
 from schwab.client import Client
 
 logger = logging.getLogger(__name__)
 
-_client = None
+_thread_local = threading.local()
 
 def get_http_client():
-    global _client
-    if _client is None:
-        _client = get_client()
-    return _client
+    if not hasattr(_thread_local, 'client') or _thread_local.client is None:
+        _thread_local.client = get_client()
+    return _thread_local.client
 
 def get_quote(symbol):
     client = get_http_client()
