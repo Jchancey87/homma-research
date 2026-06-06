@@ -6,6 +6,19 @@ This file acts as a persistent memory block where AI coding agents record prompt
 
 ## 🏛️ Chronological History of Learnings & Struggles
 
+### [2026-06-06] backend - Concurrency Error Resilience & System Telegram Alerts
+
+* **Struggle 1: Silent Background Failures**
+  - *Context*: The background cache refresh thread previously froze silently because it had no timeout on `as_completed()` and lacked log traceback capturing and active alerting.
+  - *Cause*: Swallowed exception tracebacks (`log.error(f"...: {e}")` without `exc_info=True`) made debugging difficult, and lack of real-time alerting meant the user was unaware the live screener stopped updating until hours later.
+  - *Resolution*: Upgraded logs to use `log.exception(...)` to preserve full tracebacks. Added a synchronous Telegram messaging helper `send_telegram_message` to dispatch system warnings. Implemented rate-limited auth error notifications (once per hour) and consecutive failure tracking (alerting after 3 consecutive failures, sending recovery updates on success) in `_background_refresh_loop`.
+* **Struggle 2: Redundant Concurrency Overhead on Authentication Failure**
+  - *Context*: If Schwab auth fails (e.g. expired refresh token), the live screener was submitting 25 concurrent enrichment requests, all of which would individually attempt to load the client and throw exceptions.
+  - *Cause*: `enrich_gainers_with_sparklines_and_history` was submitting tasks to the thread pool before checking if the Schwab client could be successfully initialized.
+  - *Resolution*: Added a check to fail-early on Schwab client initialization failures, logging the issue once, sending a rate-limited system notification, and populating gainers with schema-compliant defaults immediately without overhead.
+
+---
+
 ### [2026-06-05] backend & frontend - Alert Journal: Ingest Backfill & v5 Markers API
 
 * **Struggle 1: SQL Comment-Filtering Bug in Migration Runner**

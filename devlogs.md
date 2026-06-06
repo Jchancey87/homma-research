@@ -2,6 +2,20 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-06] Live Screener: Concurrency Error Resilience & System Telegram Alerts
+
+### Summary
+Added robust error logging, consecutive failure tracking, and Telegram notification alerts to the background live cache refresh and auto-persist threads to prevent silent failures and ensure high system availability.
+
+### What Changed
+* **Telegram System Alerting Utility (`alerts.py`)**: Added a synchronous `send_telegram_message` helper function and a Celery task wrapper `send_telegram_message_task` in [backend/fastapi_app/tasks/alerts.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/tasks/alerts.py) to dynamically dispatch raw markdown alerts to the user.
+* **Fail-Early Schwab client validation (`live_screener.py`)**: Refactored `enrich_gainers_with_sparklines_and_history` in [backend/services/live_screener.py](file:///home/jackc/projects/homma-research/backend/services/live_screener.py) to check Schwab HTTP client authentication on execution, failing early and returning default placeholders if Schwab credentials are down. This prevents wasted background task queues and socket pool congestion.
+* **Rate-Limited Auth Warnings**: Added a thread-safe rate-limiting lock that triggers a Telegram alert once every hour on Schwab API initialization failures, directing the user to run `schwab_auth_setup.py`.
+* **Consecutive Failure Alerts & Recovery (`live_screener.py`)**: Enhanced `_background_refresh_loop` to log full stack traces (`exc_info=True`) on error and track consecutive failed cache refreshes. Triggers an automated system alert after 3 consecutive failures, and sends a system recovery update once cache refreshes succeed again.
+* **Job Watchdog Logging (`job_watchdog.py`)**: Upgraded [backend/jobs/job_watchdog.py](file:///home/jackc/projects/homma-research/backend/jobs/job_watchdog.py) to use standard Python `logging` instead of `print` and capture full tracebacks on startup/polling failures.
+
+---
+
 ## [2026-06-05] Alert Journal: Interactive Charts & Alert Quality Feedback DB/UI
 
 ### Summary
