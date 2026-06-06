@@ -4,7 +4,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import {
   createChart, IChartApi,
   CandlestickSeries, LineSeries, HistogramSeries,
-  CrosshairMode, UTCTimestamp, createSeriesMarkers
+  CrosshairMode, UTCTimestamp, createSeriesMarkers,
+  LineStyle, ISeriesApi, IPriceLine
 } from 'lightweight-charts'
 import {
   getAlertDates, getAlertsDailySummary, saveAlertFeedback,
@@ -74,16 +75,78 @@ function formatFloat(n: number | null) {
   return m >= 1000 ? `${(m / 1000).toFixed(1)}B` : `${m.toFixed(1)}M`
 }
 
+function updateChartDecorations(
+  chart: IChartApi,
+  candles: ISeriesApi<'Candlestick'>,
+  alerts: AlertInstance[],
+  selectedAlertId: number | null,
+  priceLineRef: React.MutableRefObject<IPriceLine | null>
+) {
+  const localOffset = -new Date().getTimezoneOffset() * 60
+
+  // 1. Update markers (highlight selected alert)
+  const markers = alerts.map(alt => {
+    const timeSec = Math.floor(new Date(alt.alert_time).getTime() / 1000) + localOffset
+    const config = getMarkerConfig(alt.alert_type)
+    const isSelected = alt.id === selectedAlertId
+    return {
+      time: timeSec as UTCTimestamp,
+      position: 'aboveBar' as const,
+      shape: config.shape,
+      color: config.color,
+      text: isSelected ? `🎯 ${alt.alert_type.replace('_', ' ')}` : alt.alert_type.replace('_', ' '),
+      size: isSelected ? 2.2 : 1.2
+    }
+  })
+
+  createSeriesMarkers(candles, markers)
+
+  // 2. Clear old price line and draw new one if selected
+  if (priceLineRef.current) {
+    try {
+      candles.removePriceLine(priceLineRef.current)
+    } catch (e) {
+      console.error("Error removing price line:", e)
+    }
+    priceLineRef.current = null
+  }
+
+  const selectedAlt = alerts.find(a => a.id === selectedAlertId)
+  if (selectedAlt) {
+    priceLineRef.current = candles.createPriceLine({
+      price: selectedAlt.trigger_price,
+      color: '#f59e0b', // Amber highlight
+      lineWidth: 2,
+      lineStyle: LineStyle.Dashed,
+      axisLabelVisible: true,
+      title: `${selectedAlt.alert_type.replace('_', ' ')}: $${selectedAlt.trigger_price.toFixed(2)}`,
+    })
+
+    // 3. Scroll/zoom timescale to the selected alert (35 mins before, 35 mins after)
+    const timeSec = Math.floor(new Date(selectedAlt.alert_time).getTime() / 1000) + localOffset
+    chart.timeScale().setVisibleRange({
+      from: (timeSec - 35 * 60) as UTCTimestamp,
+      to: (timeSec + 35 * 60) as UTCTimestamp,
+    })
+  } else {
+    chart.timeScale().fitContent()
+  }
+}
+
 // ── Interactive Chart Component ──────────────────────────────────────────────
 interface ChartProps {
   ticker: string
   date: string
   alerts: AlertInstance[]
+  selectedAlertId: number | null
 }
 
-function AlertSessionChart({ ticker, date, alerts }: ChartProps) {
+function AlertSessionChart({ ticker, date, alerts, selectedAlertId }: ChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
+  const candlesSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
+  const priceLineRef = useRef<IPriceLine | null>(null)
+
   const [data, setData] = useState<ChartData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -113,6 +176,7 @@ function AlertSessionChart({ ticker, date, alerts }: ChartProps) {
     return () => { active = false }
   }, [ticker, date])
 
+  // 1. Chart creation effect
   useEffect(() => {
     if (!data || !containerRef.current) return
 
@@ -143,6 +207,7 @@ function AlertSessionChart({ ticker, date, alerts }: ChartProps) {
       wickUpColor: UP_COLOR, wickDownColor: DOWN_COLOR,
     })
     candles.setData(dedupSort(data.ohlcv))
+    candlesSeriesRef.current = candles
 
     const vol = chart.addSeries(HistogramSeries, {
       color: 'rgba(100,116,139,0.3)',
@@ -163,34 +228,30 @@ function AlertSessionChart({ ticker, date, alerts }: ChartProps) {
       ema.setData(dedupSort(data.ema_21))
     }
 
-    // Map alerts to markers
-    const localOffset = -new Date().getTimezoneOffset() * 60
-    const markers = alerts.map(alt => {
-      const timeSec = Math.floor(new Date(alt.alert_time).getTime() / 1000) + localOffset
-      const config = getMarkerConfig(alt.alert_type)
-      return {
-        time: timeSec as UTCTimestamp,
-        position: 'aboveBar' as const,
-        shape: config.shape,
-        color: config.color,
-        text: alt.alert_type.replace('_', ' '),
-        size: 1.2
-      }
-    })
-
-    if (markers.length > 0) {
-      createSeriesMarkers(candles, markers)
-    }
-
-    chart.timeScale().fitContent()
+    // Apply decorations immediately on mount / data load
+    updateChartDecorations(chart, candles, alerts, selectedAlertId, priceLineRef)
 
     const ro = new ResizeObserver(() => {
       if (containerRef.current) chart.applyOptions({ width: containerRef.current.clientWidth })
     })
     ro.observe(containerRef.current)
 
-    return () => { ro.disconnect(); chart.remove() }
-  }, [data, alerts])
+    return () => {
+      ro.disconnect()
+      chart.remove()
+      chartRef.current = null
+      candlesSeriesRef.current = null
+      priceLineRef.current = null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data])
+
+  // 2. Decorations update effect (runs when active alerts or selected alert changes)
+  useEffect(() => {
+    if (chartRef.current && candlesSeriesRef.current && data) {
+      updateChartDecorations(chartRef.current, candlesSeriesRef.current, alerts, selectedAlertId, priceLineRef)
+    }
+  }, [alerts, selectedAlertId, data])
 
   if (loading) {
     return (
@@ -211,7 +272,17 @@ function AlertSessionChart({ ticker, date, alerts }: ChartProps) {
   }
 
   return (
-    <div ref={containerRef} className="w-full bg-gray-950 rounded-xl border border-gray-800/80 overflow-hidden relative" style={{ height: '350px' }} />
+    <div className="relative w-full h-[350px]">
+      <div ref={containerRef} className="w-full h-full bg-gray-950 rounded-xl border border-gray-800/80 overflow-hidden" />
+      {data && (
+        <button
+          onClick={() => chartRef.current?.timeScale().fitContent()}
+          className="absolute top-3 right-3 z-10 px-2.5 py-1 bg-gray-900/80 hover:bg-gray-800 text-gray-400 hover:text-white text-xs font-semibold rounded-lg border border-gray-800 transition-colors shadow-md"
+        >
+          Fit Chart
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -534,6 +605,7 @@ function AlertJournalContent() {
                 ticker={selectedTicker.symbol}
                 date={activeDate}
                 alerts={selectedTicker.alerts}
+                selectedAlertId={selectedAlert?.id ?? null}
               />
 
               {/* Alerts & feedback rating area */}

@@ -2,6 +2,24 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-06] Alert Journal: Selected Alert Highlighting & Auto-Zoom
+
+### Summary
+Enhanced the Alert Journal dashboard to highlight the selected alert trigger visually on the interactive chart, automatically center/zoom the chart timescale around the alert's timestamp, draw a dashed horizontal line at the trigger price, and provide a 'Fit Chart' button to reset the view.
+
+### What Changed
+* **Interactive Chart Component (`alerts/page.tsx`)**:
+  * Added `selectedAlertId` prop to `AlertSessionChart`.
+  * Implemented an off-thread update helper `updateChartDecorations` to apply markers, price lines, and timescale centering dynamically without destroying the chart instance.
+  * Added a visual emoji indicator (`🎯`) and scaled up the marker size (from `1.2` to `2.2`) for the selected alert.
+  * Added a dashed horizontal line at the alert's `trigger_price` using Lightweight Charts' `createPriceLine` API, styled in amber (`#f59e0b`).
+  * Automated chart timescale scroll/zoom (`setVisibleRange`) around the alert's timestamp (35 minutes buffer on both sides).
+  * Added a floating overlay `Fit Chart` button to easily reset the chart view (`fitContent`).
+  * Resolved all TypeScript and ESLint type warnings by replacing `any` definitions with standard `ISeriesApi` and `IPriceLine` types from the `lightweight-charts` package.
+* **Parent Dashboard Component (`alerts/page.tsx`)**: Passed `selectedAlert?.id` into the chart component.
+
+---
+
 ## [2026-06-06] Live Screener: Concurrency Error Resilience & System Telegram Alerts
 
 ### Summary

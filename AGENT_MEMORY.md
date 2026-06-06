@@ -6,6 +6,18 @@ This file acts as a persistent memory block where AI coding agents record prompt
 
 ## 🏛️ Chronological History of Learnings & Struggles
 
+### [2026-06-06] frontend - Alert Journal: Selected Alert Highlighting & Auto-Zoom
+
+* **Struggle: React Hook re-renders and Chart instance recreation**
+  - *Context*: Updating the chart decorations (markers, trigger price lines, and zoom range) when a new alert is clicked must not cause the entire TradingView Lightweight Chart to destroy and recreate itself.
+  - *Cause*: Placed in a single `useEffect` with dependencies `[data, alerts, selectedAlertId]`, any click on an alert trigger row would call `chart.remove()` and re-instantiate lightweight-charts, resulting in a noticeable UI flash and losing user's custom zoom/scroll.
+  - *Resolution*: Split chart logic into two hooks: one for core chart initialization (`[data]` dependencies) and a second for updating transient indicators (`[alerts, selectedAlertId, data]` dependencies). Stored chart, candle, and price line instances in React refs to facilitate dynamic updates.
+* **Struggle: TypeScript explicit-any compile blocks**
+  - *Context*: Next.js build failed or complained on custom refs (`any` type definition warnings).
+  - *Resolution*: Imported and leveraged strict types `ISeriesApi<'Candlestick'>` and `IPriceLine` directly from `lightweight-charts` to provide full type safety.
+
+---
+
 ### [2026-06-06] backend - Concurrency Error Resilience & System Telegram Alerts
 
 * **Struggle 1: Silent Background Failures**
