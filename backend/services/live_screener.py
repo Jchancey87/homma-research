@@ -328,18 +328,59 @@ def enrich_single_gainer(g: dict) -> dict:
         'min': min_metrics
     }
 
+_last_auth_alert_time = 0.0
+_auth_alert_lock = threading.Lock()
+
 def enrich_gainers_with_sparklines_and_history(gainers: list[dict]) -> list[dict]:
     if not gainers:
         return gainers
         
+    schwab_available = True
     try:
         from momentum_screener.schwab.http_client import get_http_client
         get_http_client()
     except Exception as e:
-        log.warning(f"Failed to pre-initialize Schwab HTTP client: {e}")
+        log.error(f"[LiveScreener] Schwab HTTP client initialization failed: {e}", exc_info=True)
+        schwab_available = False
+
+        # Rate-limit Telegram alert to once every 1 hour to avoid spamming
+        global _last_auth_alert_time
+        now = time.time()
+        with _auth_alert_lock:
+            should_alert = (now - _last_auth_alert_time) > 3600
+            if should_alert:
+                _last_auth_alert_time = now
+
+        if should_alert:
+            try:
+                from fastapi_app.tasks.alerts import send_telegram_message
+                send_telegram_message(
+                    "🚨 *[Schwab Auth Failure]* 🚨\n\n"
+                    "Schwab HTTP client failed to initialize! The live screener will run in fallback mode.\n"
+                    f"- *Error:* {e}\n"
+                    "- *Action:* Please run `python schwab_auth_setup.py` on the host to refresh the token."
+                )
+            except Exception as alert_err:
+                log.error(f"Failed to send Telegram auth alert: {alert_err}")
 
     tickers = [g['ticker'] for g in gainers]
     history = check_tickers_history(tickers)
+    
+    if not schwab_available:
+        # Populate remaining un-enriched tickers with fallbacks so schema remains consistent
+        for g in gainers:
+            g.update({
+                'sparkline_5d': [],
+                'sparkline_intraday': [],
+                'above_sma20': False, 'above_sma50': False, 'above_sma100': False,
+                'sma20': None, 'sma50': None, 'sma100': None,
+                'mom_2m': None, 'atr_hod': None, 'atr_sprd': None, 'atr_vwap': None, 'zen_v': None
+            })
+            ticker = g['ticker']
+            hist = history.get(ticker, {})
+            g['is_repeat_runner'] = hist.get('is_repeat_runner', False)
+            g['is_follow_through'] = hist.get('is_follow_through', False)
+        return gainers
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         futures = {executor.submit(enrich_single_gainer, g): g for g in gainers}
@@ -735,7 +776,7 @@ def _auto_persist_loop():
             # Sleep until next check (every 60 seconds is fine — we only trigger once)
             time.sleep(60)
         except Exception as e:
-            log.error(f"[LiveScreener] Auto-persist loop error: {e}")
+            log.exception(f"[LiveScreener] Auto-persist loop error: {e}")
             time.sleep(60)
 
 
@@ -746,12 +787,36 @@ def _background_refresh_loop():
     # Wait 2 seconds before the first refresh to let the app start up cleanly
     time.sleep(2)
     
+    consecutive_failures = 0
+    alerted_failure_state = False
+
+    def handle_loop_failure(error_msg: str):
+        nonlocal consecutive_failures, alerted_failure_state
+        consecutive_failures += 1
+        log.exception(f"[LiveScreener] Background cache refresh failed (consecutive: {consecutive_failures})")
+        if consecutive_failures >= 3 and not alerted_failure_state:
+            try:
+                from fastapi_app.tasks.alerts import send_telegram_message
+                alert_text = (
+                    "⚠️ *[System Warning]* ⚠️\n\n"
+                    "Live Screener cache refresh loop is failing consecutively!\n"
+                    f"- *Consecutive Failures:* {consecutive_failures}\n"
+                    f"- *Last Error:* {error_msg}\n"
+                    "- *Action:* Check logs at `/var/log/trading-journal/fastapi-err.log`."
+                )
+                send_telegram_message(alert_text)
+                alerted_failure_state = True
+            except Exception as alert_err:
+                log.error(f"Failed to send Telegram alert: {alert_err}")
+
     # Run initial cache refresh on startup so cache is populated immediately
     try:
         log.info("[LiveScreener] Running initial cache refresh on startup...")
         refresh_cache(force=True)
+        consecutive_failures = 0
+        alerted_failure_state = False
     except Exception as e:
-        log.error(f"[LiveScreener] Initial cache refresh failed: {e}")
+        handle_loop_failure(str(e))
 
     while True:
         try:
@@ -764,8 +829,20 @@ def _background_refresh_loop():
             if session != 'closed':
                 log.info(f"[LiveScreener] Auto-refreshing live cache (session: {session})...")
                 refresh_cache(force=True)
+                
+                # Successful refresh! Reset failure states.
+                if consecutive_failures > 0:
+                    log.info(f"[LiveScreener] Cache refresh loop recovered after {consecutive_failures} failures.")
+                    if alerted_failure_state:
+                        try:
+                            from fastapi_app.tasks.alerts import send_telegram_message
+                            send_telegram_message("✅ *[System Recovery]*\n\nLive Screener cache refresh loop has recovered and is now running normally.")
+                        except Exception:
+                            pass
+                    consecutive_failures = 0
+                    alerted_failure_state = False
         except Exception as e:
-            log.error(f"[LiveScreener] Background cache refresh loop error: {e}")
+            handle_loop_failure(str(e))
 
 
 def start_auto_persist():

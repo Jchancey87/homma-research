@@ -14,6 +14,44 @@ from fastapi_app.config import settings
 logger = get_task_logger(__name__)
 
 
+def send_telegram_message(message: str) -> bool:
+    """
+    Directly sends a raw markdown message to Telegram (synchronous helper).
+    """
+    token = settings.telegram_bot_token
+    chat_id = settings.telegram_chat_id
+
+    if not token or not chat_id:
+        logger.warning("Telegram bot settings not configured. Skipping raw message dispatch.")
+        return False
+
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": message,
+        "parse_mode": "Markdown"
+    }
+
+    try:
+        logger.info("Sending Telegram system message...")
+        response = httpx.post(url, json=payload, timeout=10.0)
+        response.raise_for_status()
+        logger.info("Successfully sent Telegram system message.")
+        return True
+    except Exception as e:
+        logger.error("Failed to send raw Telegram message: %s", e)
+        return False
+
+
+@celery_app.task(name="fastapi_app.tasks.alerts.send_telegram_message_task")
+def send_telegram_message_task(message: str) -> dict:
+    """
+    Celery task wrapper to send a raw markdown message to Telegram.
+    """
+    success = send_telegram_message(message)
+    return {"status": "success" if success else "failed"}
+
+
 @celery_app.task(name="fastapi_app.tasks.alerts.send_telegram_alert_task")
 def send_telegram_alert_task(alert_data: dict) -> dict:
     """
