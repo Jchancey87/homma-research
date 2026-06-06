@@ -201,6 +201,25 @@ This file acts as a persistent memory block where AI coding agents record prompt
   * *Cause*: The interface already had `high_price?: number | null` declared at the bottom of the property list, which conflicted with the new declaration.
   * *Resolution*: Removed the duplicate declaration and verified the frontend compiles with zero TypeScript errors.
 
+### [2026-06-05] backend - SMTP, Celery, and Schwab Client Thread-Safety
+
+* **Struggle 1: Gmail SMTP Bad Credentials Failure**
+  - *Context*: Nightly AI analysis reports failed to send by email.
+  - *Cause*: The App Password specified in `.env` for `SMTP_PASSWORD` expired or was revoked, throwing `535 5.7.8 BadCredentials`.
+  - *Resolution*: Audited credentials using `debug_email_status.py`, confirming failure in both development and production configs. Advised the user to generate a new Gmail App Password.
+* **Struggle 2: Digital Garden Private IP Access Failure (SSRF)**
+  - *Context*: Digital garden compilation failed with a security error when attempting to fetch from `192.168.0.202:5000`.
+  - *Cause*: Cloud environment build runners block HTTP requests to RFC 1918 private IPs as an SSRF prevention measure.
+  - *Resolution*: Identified Next.js proxy rewrite configuration `/api/*` forwarding to localhost. Advised the user to change the digital garden API target to `https://homma-research.homma.casa`.
+* **Struggle 3: Celery worker ModuleNotFoundError**
+  - *Context*: Async LLM tasks (`deep_context`, `catalyst_analysis`, etc.) failed with status `error`.
+  - *Cause*: A dead import `from backend.routes.analysis import _CACHE_TTL` inside `llm_tasks.py` threw `ModuleNotFoundError` since the folder was renamed/refactored.
+  - *Resolution*: Removed the obsolete import (since `_CACHE_TTL` is redefined locally on the next line). Verified by executing dry-run tests.
+* **Struggle 4: Live Screener Thread Concurrency Socket Deadlock**
+  - *Context*: During active market sessions, the live screener background refresh loop was supposed to update the cache every 60 seconds. However, it stopped updating completely and served stale morning data to the UI, causing the Schwab streamer to miss active after-hours runners (e.g. SCAG, GMHS, ELOG, BGMS, STI, etc.).
+  - *Cause*: `live_screener.py` uses `ThreadPoolExecutor(max_workers=10)` to enrich multiple gainers in parallel. Each worker thread called `get_http_client()`, which returned a single shared `schwab.client.Client` instance wrapping a single `httpx.Client`. Since `httpx.Client` is *not thread-safe* for concurrent execution, concurrent requests from 10 threads corrupted the socket connection pool, leading to read operation timeouts and eventually deadlocking the sockets. All workers blocked indefinitely, freezing the background cache refresh loop.
+  - *Resolution*: Modified `http_client.py`'s `get_http_client` to store and reuse Schwab Client instances inside `threading.local()`, ensuring thread-safety by providing a separate Client instance for each thread in the executor. Tested successfully with concurrent lookups.
+
 ---
 
 ## 📜 Central Directives for Future Agents
@@ -222,17 +241,4 @@ This file acts as a persistent memory block where AI coding agents record prompt
 * **Watchlist-Restricted VWAP Crossover Alerts**: `VWAP_CROSSOVER` alerts in [stream_client.py](file:///home/jackc/projects/homma-research/momentum_screener/schwab/stream_client.py) must only trigger for ticker symbols that are currently present in the user's watchlist (`self.watchlist_symbols` set).
 * **TradingView Ticker Hyperlinks**: All stock tickers in Telegram alert messages must be formatted as TradingView hyperlinks matching the format `[$TICKER](https://www.tradingview.com/chart/?symbol=TICKER)`.
 * **Momentum Alert Types**: Keep in mind the new alert types: `VOLATILITY_HALT`, `VOLATILITY_RESUME`, `VOLUME_SPIKE`, `PREV_DAY_BREAKOUT`, and `VWAP_BOUNCE`. Make sure they follow the standard filters ($1-$30 price, <100M float) where applicable and trigger Telegram alerts.
-### [2026-06-05] backend - SMTP App Password & Celery Import Fixes
-
-* **Struggle 1: Gmail SMTP Bad Credentials Failure**
-  * *Context*: Nightly AI analysis reports failed to send by email.
-  * *Cause*: The App Password specified in `.env` for `SMTP_PASSWORD` expired or was revoked, throwing `535 5.7.8 BadCredentials`.
-  * *Resolution*: Audited credentials using `debug_email_status.py`, confirming failure in both development and production configs. Advised the user to generate a new Gmail App Password.
-* **Struggle 2: Digital Garden Private IP Access Failure (SSRF)**
-  * *Context*: Digital garden compilation failed with a security error when attempting to fetch from `192.168.0.202:5000`.
-  * *Cause*: Cloud environment build runners block HTTP requests to RFC 1918 private IPs as an SSRF prevention measure.
-  * *Resolution*: Identified public Next.js proxy rewrite configuration `/api/*` forwarding to localhost. Advised the user to change the digital garden API target to `https://homma-research.homma.casa`.
-* **Struggle 3: Celery worker ModuleNotFoundError**
-  * *Context*: Async LLM tasks (`deep_context`, `catalyst_analysis`, etc.) failed with status `error`.
-  * *Cause*: A dead import `from backend.routes.analysis import _CACHE_TTL` inside `llm_tasks.py` threw `ModuleNotFoundError` since the folder was renamed/refactored.
-  * *Resolution*: Removed the obsolete import (since `_CACHE_TTL` is redefined locally on the next line). Verified by executing dry-run tests.
+* **Schwab HTTP Client Thread-Safety**: The Schwab HTTP client (`get_http_client()`) is stored in `threading.local()` to prevent concurrent HTTP requests on the same `httpx.Client` from deadlocking. Always use `get_http_client()` to obtain a thread-safe client instance. Do not store the client in global variables shared across concurrent threads.
