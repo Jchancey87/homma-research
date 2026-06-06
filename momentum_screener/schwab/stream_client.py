@@ -310,6 +310,11 @@ class SchwabStreamer:
         if not fund:
             return False
 
+        # Only trigger alerts if stock is in the user's watchlist
+        if symbol not in self.watchlist_symbols:
+            logger.debug(f"Skipping {alert_type} for {symbol} because it is not in watchlist")
+            return False
+
         # Apply momentum filters (price $1.00 - $30.00, float < 100M shares to match dashboard scanner)
         price_ok = 1.00 <= last_price <= 30.00
         float_ok = fund['shares_outstanding'] < 100_000_000 # Using shares out as float proxy
@@ -488,10 +493,7 @@ class SchwabStreamer:
             else:
                 if v_state['status'] == 'below' and last_price >= vwap * (1.0 + buffer):
                     if rvol >= 2.0:
-                        if symbol in self.watchlist_symbols:
-                            await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "VWAP_CROSSOVER")
-                        else:
-                            logger.debug(f"Skipping VWAP_CROSSOVER alert for {symbol} because it is not in watchlist")
+                        await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "VWAP_CROSSOVER")
                     v_state['status'] = 'above'
                 elif v_state['status'] == 'above' and last_price <= vwap * (1.0 - buffer):
                     v_state['status'] = 'below'
@@ -503,38 +505,38 @@ class SchwabStreamer:
             if fired:
                 self.prev_day_breakout_fired.add(symbol)
 
-        # Trigger 4: VWAP Support Hold & Bounce
-        if vwap > 0:
-            completed_bars = self.completed_bars_1m.get(symbol, [])
-            
-            declining_volume = True
-            expanding_volume = True
-            if len(completed_bars) >= 2:
-                declining_volume = completed_bars[-1]['volume'] <= completed_bars[-2]['volume']
-                expanding_volume = completed_bars[-1]['volume'] > completed_bars[-2]['volume']
-
-            v_state.setdefault('vwap_test', False)
-            v_state.setdefault('vwap_low', None)
-
-            if last_price < vwap:
-                v_state['vwap_test'] = False
-                v_state['vwap_low'] = None
-            else:
-                if vwap < last_price <= vwap * 1.005:
-                    if declining_volume:
-                        if not v_state.get('vwap_test'):
-                            v_state['vwap_test'] = True
-                            v_state['vwap_low'] = last_price
-                            logger.info(f"VWAP test activated for {symbol} at low {last_price}")
-                        else:
-                            v_state['vwap_low'] = min(v_state['vwap_low'], last_price)
-                
-                if v_state.get('vwap_test') and v_state.get('vwap_low') is not None:
-                    if last_price >= v_state['vwap_low'] * 1.01:
-                        if expanding_volume:
-                            await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "VWAP_BOUNCE")
-                            v_state['vwap_test'] = False
-                            v_state['vwap_low'] = None
+        # Trigger 4: VWAP Support Hold & Bounce (Disabled: vwap bounces are noise)
+        # if vwap > 0:
+        #     completed_bars = self.completed_bars_1m.get(symbol, [])
+        #     
+        #     declining_volume = True
+        #     expanding_volume = True
+        #     if len(completed_bars) >= 2:
+        #         declining_volume = completed_bars[-1]['volume'] <= completed_bars[-2]['volume']
+        #         expanding_volume = completed_bars[-1]['volume'] > completed_bars[-2]['volume']
+        # 
+        #     v_state.setdefault('vwap_test', False)
+        #     v_state.setdefault('vwap_low', None)
+        # 
+        #     if last_price < vwap:
+        #         v_state['vwap_test'] = False
+        #         v_state['vwap_low'] = None
+        #     else:
+        #         if vwap < last_price <= vwap * 1.005:
+        #             if declining_volume:
+        #                 if not v_state.get('vwap_test'):
+        #                     v_state['vwap_test'] = True
+        #                     v_state['vwap_low'] = last_price
+        #                     logger.info(f"VWAP test activated for {symbol} at low {last_price}")
+        #                 else:
+        #                     v_state['vwap_low'] = min(v_state['vwap_low'], last_price)
+        #         
+        #         if v_state.get('vwap_test') and v_state.get('vwap_low') is not None:
+        #             if last_price >= v_state['vwap_low'] * 1.01:
+        #                 if expanding_volume:
+        #                     await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "VWAP_BOUNCE")
+        #                     v_state['vwap_test'] = False
+        #                     v_state['vwap_low'] = None
 
     async def save_alert_to_db(self, symbol, price, volume, rvol, gap_pct, float_shares, alert_type):
         try:

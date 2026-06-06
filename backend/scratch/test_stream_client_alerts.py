@@ -20,6 +20,7 @@ class TestStreamClientAlerts(unittest.IsolatedAsyncioTestCase):
     async def test_evaluate_and_fire_alert_triggers_correctly(self, mock_celery, mock_redis):
         # Instantiate SchwabStreamer
         streamer = SchwabStreamer()
+        streamer.watchlist_symbols = {'AAPL'}
         
         # Mock fundamentals cache with low average volume to ensure high RVOL
         streamer.fundamentals_cache['AAPL'] = {
@@ -210,6 +211,7 @@ class TestStreamClientAlerts(unittest.IsolatedAsyncioTestCase):
     @patch('momentum_screener.schwab.stream_client.celery_app')
     async def test_volume_spike(self, mock_celery, mock_redis):
         streamer = SchwabStreamer()
+        streamer.watchlist_symbols = {'AAPL'}
         streamer.fundamentals_cache['AAPL'] = {
             'shares_outstanding': 10_000_000,
             'vol_10d_avg': 100_000,
@@ -263,6 +265,7 @@ class TestStreamClientAlerts(unittest.IsolatedAsyncioTestCase):
     @patch('momentum_screener.schwab.stream_client.celery_app')
     async def test_prev_day_breakout(self, mock_celery, mock_redis):
         streamer = SchwabStreamer()
+        streamer.watchlist_symbols = {'AAPL'}
         streamer.fundamentals_cache['AAPL'] = {
             'shares_outstanding': 10_000_000,
             'vol_10d_avg': 100_000,
@@ -317,6 +320,7 @@ class TestStreamClientAlerts(unittest.IsolatedAsyncioTestCase):
         streamer.save_alert_to_db.assert_not_called()
         print("Previous day high breakout test passed successfully!")
 
+    @unittest.skip("VWAP bounces disabled by user request")
     @patch('momentum_screener.schwab.stream_client.redis_client')
     @patch('momentum_screener.schwab.stream_client.celery_app')
     async def test_vwap_bounce(self, mock_celery, mock_redis):

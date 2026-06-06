@@ -2,6 +2,22 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-06] Schwab Streamer: Watchlist-Only Alerts & Disabled VWAP Bounces
+
+### Summary
+Restricted all screener and momentum alerts (HOD Breakout, VWAP Crossover, Previous Day High Breakout, Volume Spike) to only trigger for stocks that are actively on the user's watchlist. Disabled the `VWAP_BOUNCE` trigger entirely.
+
+### What Changed
+* **Schwab Stream Client (`momentum_screener/schwab/stream_client.py`)**:
+  * Centrally enforced the watchlist restriction in `check_and_fire_alert` to ensure no breakout alerts fire for general candidates not on the user's watchlist.
+  * Cleaned up the redundant watchlist filter from the `VWAP_CROSSOVER` trigger block.
+  * Disabled and commented out the entire `VWAP_BOUNCE` trigger logic (support hold and bounce checks) to eliminate signal noise and save processing overhead.
+* **Unit Tests (`backend/scratch/test_stream_client_alerts.py`)**:
+  * Configured `streamer.watchlist_symbols = {'AAPL'}` in the remaining active alert tests to satisfy the new centralized watchlist-only constraint.
+  * Added `@unittest.skip("VWAP bounces disabled by user request")` to the `test_vwap_bounce` test case to prevent test suite failures while preserving test code.
+
+---
+
 ## [2026-06-06] Alert Journal: Selected Alert Highlighting & Auto-Zoom
 
 ### Summary

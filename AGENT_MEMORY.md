@@ -6,6 +6,17 @@ This file acts as a persistent memory block where AI coding agents record prompt
 
 ## 🏛️ Chronological History of Learnings & Struggles
 
+### [2026-06-06] backend - Schwab Streamer: Watchlist-Only Alerts & Disabled VWAP Bounces
+
+* **Struggle: Centralizing Watchlist Filters Breaks Existing Unit Tests**
+  - *Context*: Enforcing watchlist-only breakout alerts by checking `if symbol not in self.watchlist_symbols:` in the centralized `check_and_fire_alert` method caused all individual alert tests to fail since they did not populate the streamer's watchlist state.
+  - *Resolution*: Updated the active unit tests in `test_stream_client_alerts.py` to seed `streamer.watchlist_symbols = {'AAPL'}` before evaluating price events.
+* **Struggle: Safely Disabling Deprecated Alerts**
+  - *Context*: Disabling `VWAP_BOUNCE` alerts because they are considered noise requires ensuring that we do not delete historical handlers or formatting pipelines in other frontend/tasks files, as historical database records still reference them.
+  - *Resolution*: Commented out the trigger loop inside `stream_client.py`'s `evaluate_and_fire_alert` rather than deleting the alert type definition. Utilized `@unittest.skip("VWAP bounces disabled by user request")` in `test_stream_client_alerts.py` to cleanly exclude the deprecated unit tests.
+
+---
+
 ### [2026-06-06] frontend - Alert Journal: Selected Alert Highlighting & Auto-Zoom
 
 * **Struggle: React Hook re-renders and Chart instance recreation**
