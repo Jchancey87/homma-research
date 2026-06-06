@@ -322,18 +322,29 @@ class SchwabStreamer:
         if not (price_ok and float_ok):
             return False
 
+        # Determine adaptive price increase threshold based on price buckets
+        if last_price < 2.0:
+            min_pct = 0.08  # 8%
+        elif last_price < 5.0:
+            min_pct = 0.05  # 5%
+        elif last_price < 15.0:
+            min_pct = 0.03  # 3%
+        else:
+            min_pct = 0.02  # 2%
+
         try:
             async with self.db_pool.acquire() as conn:
-                should_fire = await conn.fetchval(
-                    "SELECT alerts.should_fire_alert($1, $2, $3, $4, $5, $6, $7)",
-                    symbol, last_price, timedelta(minutes=10), timedelta(seconds=10), 5,
-                    Config.ALERT_MIN_PCT_INCREASE, timedelta(minutes=Config.ALERT_MIN_TIME_COOLDOWN_MINS)
+                # Signature: should_fire_alert(p_ticker, p_alert_type, p_price, p_cooldown_interval, p_macro_window, p_macro_threshold, p_min_price_increase, p_min_time_cooldown, p_threshold_mode)
+                result = await conn.fetchval(
+                    "SELECT alerts.should_fire_alert($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+                    symbol, alert_type, last_price, timedelta(minutes=10), timedelta(seconds=10), 5,
+                    min_pct, timedelta(minutes=Config.ALERT_MIN_TIME_COOLDOWN_MINS), 'percent'
                 )
         except Exception as e:
             logger.error(f"Error querying should_fire_alert for {symbol}: {e}")
-            should_fire = False
+            result = 'ERROR'
 
-        if should_fire:
+        if result == 'OK':
             now = datetime.utcnow()
             # 1. Save alert in DB
             await self.save_alert_to_db(
@@ -364,7 +375,10 @@ class SchwabStreamer:
             except Exception as e:
                 logger.error(f"Failed to dispatch Telegram Celery task for {symbol}: {e}")
             return True
-        return False
+        else:
+            if result != 'ERROR':
+                logger.info(f"🔇 Alert {alert_type} for {symbol} suppressed: {result}")
+            return False
 
     async def evaluate_and_fire_alert(self, symbol, last_price, total_volume, high_price, low_price, open_price):
         """Evaluate hybrid momentum filters and fire alerts via Postgres and Redis Pub/Sub."""

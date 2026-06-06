@@ -2,6 +2,24 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-06] Schwab Streamer: Multi-Type Cooldown & Adaptive Suppression Engine
+
+### Summary
+Redesigned the alert suppression and cooldown engine (Option 1) to support compound lockouts (cooldown per symbol + alert type) and adaptive percentage-based thresholds depending on price buckets. Configured triggers to return descriptive reason codes on suppression, logged directly to the streaming debug log.
+
+### What Changed
+* **Database Migration (`backend/sql/alerts_cooldown_multi_type.sql`, `backend/scratch/run_alerts_cooldown_multi_type_migration.py`)**:
+  * Dropped the old single-type ticker cooldown table and recreated `alerts.ticker_cooldowns` with a compound primary key on `(ticker, alert_type)` to isolate lockouts.
+  * Updated `alerts.should_fire_alert` to accept `alert_type` and threshold mode ('percent' vs 'absolute'), returning descriptive VARCHAR codes: `'OK'`, `'MACRO_THROTTLED'`, `'COOLDOWN_ACTIVE'`, or `'PRICE_INCREASE_INSUFFICIENT'`.
+* **Schwab Stream Client (`momentum_screener/schwab/stream_client.py`)**:
+  * Calculated dynamic adaptive price thresholds based on price buckets: $1.00-$2.00 (8%), $2.00-$5.00 (5%), $5.00-$15.00 (3%), and $15.00+ (2%).
+  * Updated `check_and_fire_alert` to pass `alert_type`, dynamic `min_pct`, and check for `'OK'` response.
+  * Added reason code logging on alert suppression (e.g., `"🔇 Alert HOD_BREAKOUT for XYZ suppressed: COOLDOWN_ACTIVE"`).
+* **Unit Tests (`backend/scratch/test_stream_client_alerts.py`)**:
+  * Updated mock test assertions and return values to verify parameters and check against the new reason code structure.
+
+---
+
 ## [2026-06-06] Schwab Streamer: Watchlist-Only Alerts & Disabled VWAP Bounces
 
 ### Summary

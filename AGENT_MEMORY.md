@@ -6,6 +6,17 @@ This file acts as a persistent memory block where AI coding agents record prompt
 
 ## 🏛️ Chronological History of Learnings & Struggles
 
+### [2026-06-06] backend - Schwab Streamer: Multi-Type Cooldown & Adaptive Suppression Engine
+
+* **Struggle: PL/pgSQL function syntax splitting in migration scripts**
+  - *Context*: Running a migration script that parses and splits a SQL file by semicolons (`clean_sql.split(';')`) breaks SQL function definitions (which internally contain semicolons in declare/begin/end blocks), resulting in `Unterminated dollar-quoted string` syntax errors.
+  - *Resolution*: Modified the python migration runner to execute the raw migration text block directly in a single transaction execute call, leveraging PostgreSQL's native support for executing multi-statement blocks.
+* **Struggle: Updating database mock tests for status reason codes**
+  - *Context*: Changing the database stored procedure return type from `BOOLEAN` to a descriptive `VARCHAR` reason code broke all unit tests that expected `True` or `False`.
+  - *Resolution*: Updated test definitions to set `mock_conn.fetchval.return_value = 'OK'` and aligned the assertion arguments to cover the new `alert_type`, dynamic bucket percentages, and threshold mode parameters.
+
+---
+
 ### [2026-06-06] backend - Schwab Streamer: Watchlist-Only Alerts & Disabled VWAP Bounces
 
 * **Struggle: Centralizing Watchlist Filters Breaks Existing Unit Tests**

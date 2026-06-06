@@ -33,8 +33,8 @@ class TestStreamClientAlerts(unittest.IsolatedAsyncioTestCase):
         mock_db_pool = MagicMock()
         mock_conn = AsyncMock()
         
-        # Set return value for should_fire_alert (TRUE)
-        mock_conn.fetchval.return_value = True
+        # Set return value for should_fire_alert ('OK')
+        mock_conn.fetchval.return_value = 'OK'
         mock_db_pool.acquire.return_value.__aenter__.return_value = mock_conn
         streamer.db_pool = mock_db_pool
         
@@ -57,13 +57,15 @@ class TestStreamClientAlerts(unittest.IsolatedAsyncioTestCase):
         args = mock_conn.fetchval.call_args[0][1:]
         self.assertIn("alerts.should_fire_alert", query)
         self.assertEqual(args[0], 'AAPL')
-        self.assertEqual(args[1], 15.0)
-        self.assertEqual(args[2], timedelta(minutes=10))
-        self.assertEqual(args[3], timedelta(seconds=10))
-        self.assertEqual(args[4], 5)
+        self.assertEqual(args[1], 'HOD_BREAKOUT')
+        self.assertEqual(args[2], 15.0)
+        self.assertEqual(args[3], timedelta(minutes=10))
+        self.assertEqual(args[4], timedelta(seconds=10))
+        self.assertEqual(args[5], 5)
+        self.assertEqual(args[6], 0.02)  # Adaptive pct for $15.0
         from config import Config
-        self.assertEqual(args[5], Config.ALERT_MIN_PCT_INCREASE)
-        self.assertEqual(args[6], timedelta(minutes=Config.ALERT_MIN_TIME_COOLDOWN_MINS))
+        self.assertEqual(args[7], timedelta(minutes=Config.ALERT_MIN_TIME_COOLDOWN_MINS))
+        self.assertEqual(args[8], 'percent')
         
         # Verify save_alert_to_db was called
         streamer.save_alert_to_db.assert_called_once_with(
@@ -102,7 +104,7 @@ class TestStreamClientAlerts(unittest.IsolatedAsyncioTestCase):
         # Mock db pool
         mock_db_pool = MagicMock()
         mock_conn = AsyncMock()
-        mock_conn.fetchval.return_value = True
+        mock_conn.fetchval.return_value = 'OK'
         mock_db_pool.acquire.return_value.__aenter__.return_value = mock_conn
         streamer.db_pool = mock_db_pool
         streamer.save_alert_to_db = AsyncMock()
@@ -220,7 +222,7 @@ class TestStreamClientAlerts(unittest.IsolatedAsyncioTestCase):
         
         mock_db_pool = MagicMock()
         mock_conn = AsyncMock()
-        mock_conn.fetchval.return_value = True
+        mock_conn.fetchval.return_value = 'OK'
         mock_db_pool.acquire.return_value.__aenter__.return_value = mock_conn
         streamer.db_pool = mock_db_pool
         streamer.save_alert_to_db = AsyncMock()
@@ -275,7 +277,7 @@ class TestStreamClientAlerts(unittest.IsolatedAsyncioTestCase):
         
         mock_db_pool = MagicMock()
         mock_conn = AsyncMock()
-        mock_conn.fetchval.return_value = True
+        mock_conn.fetchval.return_value = 'OK'
         mock_db_pool.acquire.return_value.__aenter__.return_value = mock_conn
         streamer.db_pool = mock_db_pool
         streamer.save_alert_to_db = AsyncMock()
@@ -333,7 +335,7 @@ class TestStreamClientAlerts(unittest.IsolatedAsyncioTestCase):
         
         mock_db_pool = MagicMock()
         mock_conn = AsyncMock()
-        mock_conn.fetchval.return_value = True
+        mock_conn.fetchval.return_value = 'OK'
         mock_db_pool.acquire.return_value.__aenter__.return_value = mock_conn
         streamer.db_pool = mock_db_pool
         streamer.save_alert_to_db = AsyncMock()
