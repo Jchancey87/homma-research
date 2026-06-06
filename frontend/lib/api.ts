@@ -568,6 +568,13 @@ export interface AlertInstance {
   alert_type: string
   feedback_score: 'helpful' | 'noise' | 'neutral' | null
   feedback_notes: string | null
+  // Forward returns (null when 1-min candle data is not available for the symbol)
+  fwd_1m: number | null
+  fwd_3m: number | null
+  fwd_5m: number | null
+  fwd_15m: number | null
+  mfe: number | null
+  mae: number | null
 }
 
 export interface AlertTickerSummary {
@@ -606,5 +613,24 @@ export const saveAlertFeedback = (
     feedback_notes: feedbackNotes
   }).then(r => r.data)
 
+export interface ScorecardRow {
+  alert_type: string
+  price_bucket: string
+  float_category: string | null
+  sample_count: number
+  avg_fwd_5m: number | null
+  avg_fwd_15m: number | null
+  win_rate_5m_pct: number | null
+  avg_mfe_pct: number | null
+  avg_mae_pct: number | null
+}
 
+export interface AlertsPerformance {
+  days: number
+  scorecard: ScorecardRow[]
+}
 
+export const getAlertsPerformance = (days = 30) =>
+  api.get<AlertsPerformance>('/api/alerts/performance', {
+    params: { days }
+  }).then(r => r.data)

@@ -120,6 +120,58 @@ async def get_alerts_daily_summary(date: Optional[str] = None, db: asyncpg.Conne
         ORDER BY a.symbol, a.alert_time ASC
     """, query_date)
 
+    # ── Compute forward returns & excursions for each alert ─────────────────────
+    # Uses 1-minute candle data from price_history_1min (TimescaleDB hypertable)
+    async def get_forward_returns(alert_id: int, symbol: str, alert_time, trigger_price: float) -> dict:
+        """Calculate 1m/3m/5m/15m forward returns, MFE, and MAE from 1-min candle data."""
+        try:
+            candles = await db.fetch("""
+                SELECT timestamp, open, high, low, close
+                FROM price_history_1min
+                WHERE symbol = $1
+                  AND timestamp >= $2
+                  AND timestamp <= $2 + INTERVAL '16 minutes'
+                ORDER BY timestamp ASC
+            """, symbol, alert_time)
+
+            if not candles or trigger_price <= 0:
+                return {}
+
+            results = {}
+            highs, lows = [], []
+            for i, c in enumerate(candles):
+                highs.append(float(c['high']))
+                lows.append(float(c['low']))
+                close = float(c['close'])
+                ret = (close - trigger_price) / trigger_price * 100.0
+                minute = i + 1
+                if minute == 1:
+                    results['fwd_1m'] = round(ret, 2)
+                elif minute == 3:
+                    results['fwd_3m'] = round(ret, 2)
+                elif minute == 5:
+                    results['fwd_5m'] = round(ret, 2)
+                elif minute == 15:
+                    results['fwd_15m'] = round(ret, 2)
+
+            if highs:
+                results['mfe'] = round((max(highs) - trigger_price) / trigger_price * 100.0, 2)
+            if lows:
+                results['mae'] = round((min(lows) - trigger_price) / trigger_price * 100.0, 2)
+
+            return results
+        except Exception as exc:
+            logger.warning("Forward return calc failed for alert %s: %s", alert_id, exc)
+            return {}
+
+    import asyncio as _asyncio
+    fwd_tasks = [
+        get_forward_returns(r["id"], r["symbol"], r["alert_time"], float(r["trigger_price"] or 0))
+        for r in rows
+    ]
+    fwd_results = await _asyncio.gather(*fwd_tasks)
+    fwd_by_id = {rows[i]["id"]: fwd_results[i] for i in range(len(rows))}
+
     # Group by symbol
     ticker_groups = defaultdict(lambda: {
         "symbol": "",
@@ -144,6 +196,7 @@ async def get_alerts_daily_summary(date: Optional[str] = None, db: asyncpg.Conne
             group["gap_pct"] = r.get("gap_pct")
             group["rvol"] = r.get("rel_vol")
 
+        fwd = fwd_by_id.get(r["id"], {})
         group["alerts"].append({
             "id": r["id"],
             "alert_time": r["alert_time"].isoformat(),
@@ -152,7 +205,13 @@ async def get_alerts_daily_summary(date: Optional[str] = None, db: asyncpg.Conne
             "rel_vol": r["rel_vol"],
             "alert_type": r["alert_type"],
             "feedback_score": r.get("feedback_score"),
-            "feedback_notes": r.get("feedback_notes")
+            "feedback_notes": r.get("feedback_notes"),
+            "fwd_1m": fwd.get("fwd_1m"),
+            "fwd_3m": fwd.get("fwd_3m"),
+            "fwd_5m": fwd.get("fwd_5m"),
+            "fwd_15m": fwd.get("fwd_15m"),
+            "mfe": fwd.get("mfe"),
+            "mae": fwd.get("mae"),
         })
 
     return {
@@ -192,3 +251,120 @@ async def save_alert_feedback(
 
     return {"status": "success", "updated": res}
 
+
+@router.get("/performance")
+async def get_alerts_performance(
+    days: int = 30,
+    db: asyncpg.Connection = Depends(get_db)
+):
+    """
+    Statistical performance scorecard for screener alerts.
+    Returns win rates, expectancy, and average forward returns grouped by:
+      - alert_type
+      - price_bucket ($1-2, $2-5, $5-15, $15+)
+      - float_category
+    Only alerts where 5-minute forward return data exists in price_history_1min
+    are counted (others are excluded from stats to avoid survivor bias).
+    """
+    rows = await db.fetch("""
+        WITH alert_fwd AS (
+            SELECT
+                a.id,
+                a.alert_type,
+                a.trigger_price,
+                f.float_category,
+                CASE
+                    WHEN a.trigger_price < 2   THEN '$1-2'
+                    WHEN a.trigger_price < 5   THEN '$2-5'
+                    WHEN a.trigger_price < 15  THEN '$5-15'
+                    ELSE '$15+'
+                END AS price_bucket,
+                -- 5-minute forward return from 1-min candle data
+                (
+                    SELECT (ph.close - a.trigger_price) / a.trigger_price * 100.0
+                    FROM price_history_1min ph
+                    WHERE ph.symbol = a.symbol
+                      AND ph.timestamp >= a.alert_time + INTERVAL '4 minutes 30 seconds'
+                      AND ph.timestamp <= a.alert_time + INTERVAL '5 minutes 30 seconds'
+                    ORDER BY ph.timestamp ASC
+                    LIMIT 1
+                ) AS fwd_5m,
+                -- 15-minute forward return
+                (
+                    SELECT (ph.close - a.trigger_price) / a.trigger_price * 100.0
+                    FROM price_history_1min ph
+                    WHERE ph.symbol = a.symbol
+                      AND ph.timestamp >= a.alert_time + INTERVAL '14 minutes 30 seconds'
+                      AND ph.timestamp <= a.alert_time + INTERVAL '15 minutes 30 seconds'
+                    ORDER BY ph.timestamp ASC
+                    LIMIT 1
+                ) AS fwd_15m,
+                -- MFE (max favorable excursion, 15m window)
+                (
+                    SELECT MAX(ph.high)
+                    FROM price_history_1min ph
+                    WHERE ph.symbol = a.symbol
+                      AND ph.timestamp >= a.alert_time
+                      AND ph.timestamp <= a.alert_time + INTERVAL '15 minutes'
+                ) AS mfe_high,
+                -- MAE (max adverse excursion, 15m window)
+                (
+                    SELECT MIN(ph.low)
+                    FROM price_history_1min ph
+                    WHERE ph.symbol = a.symbol
+                      AND ph.timestamp >= a.alert_time
+                      AND ph.timestamp <= a.alert_time + INTERVAL '15 minutes'
+                ) AS mae_low
+            FROM public.screener_alerts a
+            LEFT JOIN public.stock_fundamentals f ON a.symbol = f.symbol
+            WHERE a.alert_time >= NOW() - ($1 || ' days')::INTERVAL
+              AND a.trigger_price > 0
+        )
+        SELECT
+            alert_type,
+            price_bucket,
+            float_category,
+            COUNT(*) FILTER (WHERE fwd_5m IS NOT NULL) AS sample_count,
+            ROUND(AVG(fwd_5m) FILTER (WHERE fwd_5m IS NOT NULL)::numeric, 2) AS avg_fwd_5m,
+            ROUND(AVG(fwd_15m) FILTER (WHERE fwd_15m IS NOT NULL)::numeric, 2) AS avg_fwd_15m,
+            ROUND(
+                100.0 * COUNT(*) FILTER (WHERE fwd_5m IS NOT NULL AND fwd_5m > 0)
+                / NULLIF(COUNT(*) FILTER (WHERE fwd_5m IS NOT NULL), 0),
+                1
+            ) AS win_rate_5m_pct,
+            ROUND(
+                AVG(
+                    CASE WHEN mfe_high IS NOT NULL AND trigger_price > 0
+                         THEN (mfe_high - trigger_price) / trigger_price * 100.0
+                    END
+                )::numeric, 2
+            ) AS avg_mfe_pct,
+            ROUND(
+                AVG(
+                    CASE WHEN mae_low IS NOT NULL AND trigger_price > 0
+                         THEN (mae_low - trigger_price) / trigger_price * 100.0
+                    END
+                )::numeric, 2
+            ) AS avg_mae_pct
+        FROM alert_fwd
+        GROUP BY alert_type, price_bucket, float_category
+        ORDER BY alert_type, price_bucket, float_category
+    """, days)
+
+    return {
+        "days": days,
+        "scorecard": [
+            {
+                "alert_type": r["alert_type"],
+                "price_bucket": r["price_bucket"],
+                "float_category": r["float_category"],
+                "sample_count": r["sample_count"],
+                "avg_fwd_5m": float(r["avg_fwd_5m"]) if r["avg_fwd_5m"] is not None else None,
+                "avg_fwd_15m": float(r["avg_fwd_15m"]) if r["avg_fwd_15m"] is not None else None,
+                "win_rate_5m_pct": float(r["win_rate_5m_pct"]) if r["win_rate_5m_pct"] is not None else None,
+                "avg_mfe_pct": float(r["avg_mfe_pct"]) if r["avg_mfe_pct"] is not None else None,
+                "avg_mae_pct": float(r["avg_mae_pct"]) if r["avg_mae_pct"] is not None else None,
+            }
+            for r in rows
+        ]
+    }

@@ -56,6 +56,8 @@ def send_telegram_message_task(message: str) -> dict:
 def send_telegram_alert_task(alert_data: dict) -> dict:
     """
     Sends a real-time breakout alert notification to Telegram via Bot API.
+    Includes enriched decision context: price, daily %, candle RVOL, float, cap,
+    VWAP relationship, and PDH distance.
     """
     token = settings.telegram_bot_token
     chat_id = settings.telegram_chat_id
@@ -68,21 +70,30 @@ def send_telegram_alert_task(alert_data: dict) -> dict:
         )
         return {"status": "skipped", "reason": "not_configured"}
 
-    # Extract alert parameters
-    symbol = alert_data.get("symbol", "UNKNOWN")
-    price = alert_data.get("price", 0.0)
-    alert_type = alert_data.get("alert_type", "Breakout")
-    rvol = alert_data.get("rvol", 0.0)
+    # ── Extract alert parameters ──────────────────────────────────────────────
+    symbol       = alert_data.get("symbol", "UNKNOWN")
+    price        = alert_data.get("price", 0.0)
+    alert_type   = alert_data.get("alert_type", "Breakout")
+    rvol         = alert_data.get("rvol", 0.0)
     timestamp_str = alert_data.get("time", "")
 
-    # Clean up and format timestamp
+    # Enriched fields (may be absent on older payloads — use safe defaults)
+    daily_pct     = alert_data.get("daily_pct", 0.0)
+    candle_vol    = alert_data.get("candle_vol", 0)
+    avg_candle_vol = alert_data.get("avg_candle_vol", 0)
+    vwap          = alert_data.get("vwap", 0.0)
+    yesterday_high = alert_data.get("yesterday_high", 0.0)
+    float_category = alert_data.get("float_category", "")
+    market_cap    = alert_data.get("market_cap", 0)
+    float_shares  = alert_data.get("float_shares", 0)
+
+    # ── Format helpers ────────────────────────────────────────────────────────
     try:
         dt = datetime.fromisoformat(timestamp_str)
         timestamp = dt.strftime("%Y-%m-%d %H:%M:%S")
     except Exception:
         timestamp = timestamp_str
 
-    # Escape Telegram MarkdownV1 special characters
     def escape_markdown(text: str) -> str:
         if not isinstance(text, str):
             return str(text)
@@ -90,60 +101,144 @@ def send_telegram_alert_task(alert_data: dict) -> dict:
             text = text.replace(char, f"\\{char}")
         return text
 
-    escaped_symbol = escape_markdown(symbol)
-    escaped_alert_type = escape_markdown(alert_type)
+    def fmt_volume(v: int) -> str:
+        """Format volume as K/M abbreviation."""
+        if v >= 1_000_000:
+            return f"{v / 1_000_000:.1f}M"
+        if v >= 1_000:
+            return f"{v / 1_000:.0f}K"
+        return str(v)
 
-    # Construct the Markdown payload
+    def fmt_cap(cap: float) -> str:
+        """Format market cap as M/B."""
+        if cap >= 1_000_000_000:
+            return f"${cap / 1_000_000_000:.1f}B"
+        if cap >= 1_000_000:
+            return f"${cap / 1_000_000:.0f}M"
+        return f"${cap:,.0f}"
+
+    def fmt_float(shares: int) -> str:
+        """Format float shares as M."""
+        if shares >= 1_000_000:
+            return f"{shares / 1_000_000:.1f}M"
+        return f"{shares:,}"
+
+    escaped_symbol = escape_markdown(symbol)
+    tv_link = f"https://www.tradingview.com/chart/?symbol={symbol}"
+    daily_sign = "+" if daily_pct >= 0 else ""
+
+    # ── VWAP and PDH distance lines (shared context block) ───────────────────
+    vwap_line = ""
+    if vwap > 0:
+        vwap_pct = ((price - vwap) / vwap) * 100.0
+        vwap_sign = "+" if vwap_pct >= 0 else ""
+        vwap_line = f"- *VWAP dist:* {vwap_sign}{vwap_pct:.1f}% (VWAP ${vwap:.2f})\n"
+
+    pdh_line = ""
+    if yesterday_high > 0:
+        pdh_pct = ((price - yesterday_high) / yesterday_high) * 100.0
+        pdh_sign = "+" if pdh_pct >= 0 else ""
+        pdh_line = f"- *PDH dist:* {pdh_sign}{pdh_pct:.1f}% (PDH ${yesterday_high:.2f})\n"
+
+    # ── Candle volume line ────────────────────────────────────────────────────
+    candle_vol_line = ""
+    if candle_vol and avg_candle_vol:
+        cvol_ratio = candle_vol / avg_candle_vol if avg_candle_vol > 0 else 0
+        candle_vol_line = f"- *Candle vol:* {fmt_volume(candle_vol)} ({cvol_ratio:.1f}x avg {fmt_volume(avg_candle_vol)})\n"
+
+    # ── Float / Cap line ──────────────────────────────────────────────────────
+    float_line = ""
+    if float_shares or float_category:
+        float_str = fmt_float(float_shares) if float_shares else "N/A"
+        cat_str = f" [{float_category}]" if float_category else ""
+        cap_str = f" | Cap: {fmt_cap(market_cap)}" if market_cap else ""
+        float_line = f"- *Float:* {float_str}{cat_str}{cap_str}\n"
+
+    # ── Build message per alert type ──────────────────────────────────────────
     if alert_type == "VOLATILITY_HALT":
         message = (
             "⏸️ *VOLATILITY HALT* ⏸️\n\n"
-            f"- *Ticker:* [${escaped_symbol}](https://www.tradingview.com/chart/?symbol={symbol})\n"
-            f"- *Price:* ${price:,.2f}\n"
+            f"- *Ticker:* [${escaped_symbol}]({tv_link})\n"
+            f"- *Price:* ${price:,.2f} ({daily_sign}{daily_pct:.1f}% day)\n"
             f"- *Signal:* Volatility Halt (Status H)\n"
             f"- *Time:* {timestamp}"
         )
     elif alert_type == "VOLATILITY_RESUME":
         message = (
             "▶️ *VOLATILITY RESUME* ▶️\n\n"
-            f"- *Ticker:* [${escaped_symbol}](https://www.tradingview.com/chart/?symbol={symbol})\n"
-            f"- *Price:* ${price:,.2f}\n"
+            f"- *Ticker:* [${escaped_symbol}]({tv_link})\n"
+            f"- *Price:* ${price:,.2f} ({daily_sign}{daily_pct:.1f}% day)\n"
             f"- *Signal:* Volatility Resume (Status Active)\n"
+            f"- *Time:* {timestamp}"
+        )
+    elif alert_type == "HOD_BREAKOUT":
+        message = (
+            "🏔️ *HOD BREAKOUT* 🏔️\n\n"
+            f"- *Ticker:* [${escaped_symbol}]({tv_link})\n"
+            f"- *Price:* ${price:,.2f} ({daily_sign}{daily_pct:.1f}% day)\n"
+            f"- *RVOL:* {rvol:.1f}x\n"
+            f"{candle_vol_line}"
+            f"{vwap_line}"
+            f"{pdh_line}"
+            f"{float_line}"
             f"- *Time:* {timestamp}"
         )
     elif alert_type == "VOLUME_SPIKE":
         message = (
             "🔊 *VOLUME SPIKE* 🔊\n\n"
-            f"- *Ticker:* [${escaped_symbol}](https://www.tradingview.com/chart/?symbol={symbol})\n"
-            f"- *Price:* ${price:,.2f}\n"
-            f"- *Signal:* 1-Min Volume Spike (>= 5x Avg)\n"
-            f"- *Volume ratio:* {rvol}x\n"
+            f"- *Ticker:* [${escaped_symbol}]({tv_link})\n"
+            f"- *Price:* ${price:,.2f} ({daily_sign}{daily_pct:.1f}% day)\n"
+            f"- *RVOL:* {rvol:.1f}x\n"
+            f"{candle_vol_line}"
+            f"{vwap_line}"
+            f"{float_line}"
             f"- *Time:* {timestamp}"
         )
     elif alert_type == "PREV_DAY_BREAKOUT":
         message = (
             "🚀 *PREV DAY HIGH BREAKOUT* 🚀\n\n"
-            f"- *Ticker:* [${escaped_symbol}](https://www.tradingview.com/chart/?symbol={symbol})\n"
-            f"- *Price:* ${price:,.2f}\n"
-            f"- *Signal:* Previous Day High Breakout\n"
-            f"- *Volume ratio:* {rvol}x\n"
+            f"- *Ticker:* [${escaped_symbol}]({tv_link})\n"
+            f"- *Price:* ${price:,.2f} ({daily_sign}{daily_pct:.1f}% day)\n"
+            f"- *RVOL:* {rvol:.1f}x\n"
+            f"{candle_vol_line}"
+            f"{pdh_line}"
+            f"{vwap_line}"
+            f"{float_line}"
+            f"- *Time:* {timestamp}"
+        )
+    elif alert_type == "VWAP_CROSSOVER":
+        message = (
+            "🌊 *VWAP CROSSOVER* 🌊\n\n"
+            f"- *Ticker:* [${escaped_symbol}]({tv_link})\n"
+            f"- *Price:* ${price:,.2f} ({daily_sign}{daily_pct:.1f}% day)\n"
+            f"- *RVOL:* {rvol:.1f}x\n"
+            f"{candle_vol_line}"
+            f"{vwap_line}"
+            f"{float_line}"
             f"- *Time:* {timestamp}"
         )
     elif alert_type == "VWAP_BOUNCE":
         message = (
             "📈 *VWAP SUPPORT BOUNCE* 📈\n\n"
-            f"- *Ticker:* [${escaped_symbol}](https://www.tradingview.com/chart/?symbol={symbol})\n"
-            f"- *Price:* ${price:,.2f}\n"
-            f"- *Signal:* VWAP Support Hold & Bounce\n"
-            f"- *Volume ratio:* {rvol}x\n"
+            f"- *Ticker:* [${escaped_symbol}]({tv_link})\n"
+            f"- *Price:* ${price:,.2f} ({daily_sign}{daily_pct:.1f}% day)\n"
+            f"- *RVOL:* {rvol:.1f}x\n"
+            f"{candle_vol_line}"
+            f"{vwap_line}"
+            f"{float_line}"
             f"- *Time:* {timestamp}"
         )
     else:
+        escaped_alert_type = escape_markdown(alert_type)
         message = (
             "🚨 *BREAKOUT DETECTED* 🚨\n\n"
-            f"- *Ticker:* [${escaped_symbol}](https://www.tradingview.com/chart/?symbol={symbol})\n"
-            f"- *Price:* ${price:,.2f}\n"
+            f"- *Ticker:* [${escaped_symbol}]({tv_link})\n"
+            f"- *Price:* ${price:,.2f} ({daily_sign}{daily_pct:.1f}% day)\n"
             f"- *Signal:* {escaped_alert_type}\n"
-            f"- *Volume ratio:* {rvol}x\n"
+            f"- *RVOL:* {rvol:.1f}x\n"
+            f"{candle_vol_line}"
+            f"{vwap_line}"
+            f"{float_line}"
             f"- *Time:* {timestamp}"
         )
 

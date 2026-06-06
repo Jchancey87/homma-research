@@ -8,12 +8,12 @@ import {
   LineStyle, ISeriesApi, IPriceLine
 } from 'lightweight-charts'
 import {
-  getAlertDates, getAlertsDailySummary, saveAlertFeedback,
-  AlertDailySummary, AlertTickerSummary, AlertInstance
+  getAlertDates, getAlertsDailySummary, saveAlertFeedback, getAlertsPerformance,
+  AlertDailySummary, AlertTickerSummary, AlertInstance, ScorecardRow
 } from '@/lib/api'
 import {
   Bell, ChevronLeft, ChevronRight, Loader2,
-  AlertCircle, ThumbsUp, ThumbsDown, Save, CheckCircle, Info
+  AlertCircle, ThumbsUp, ThumbsDown, Save, CheckCircle, Info, BarChart2
 } from 'lucide-react'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000'
@@ -295,7 +295,10 @@ function AlertJournalContent() {
   const [activeDate, setActiveDate] = useState<string>('')
   const [summary, setSummary] = useState<AlertDailySummary | null>(null)
   const [selectedTicker, setSelectedTicker] = useState<AlertTickerSummary | null>(null)
-  
+  const [activeTab, setActiveTab] = useState<'journal' | 'scorecard'>('journal')
+  const [scorecard, setScorecard] = useState<ScorecardRow[] | null>(null)
+  const [scorecardLoading, setScorecardLoading] = useState(false)
+
   // Feedback states
   const [selectedAlert, setSelectedAlert] = useState<AlertInstance | null>(null)
   const [feedbackScore, setFeedbackScore] = useState<'helpful' | 'noise' | 'neutral' | null>(null)
@@ -420,6 +423,17 @@ function AlertJournalContent() {
 
   const totalAlerts = summary?.tickers.reduce((acc, t) => acc + t.alerts.length, 0) ?? 0
 
+  // Load performance scorecard when tab switches
+  useEffect(() => {
+    if (activeTab === 'scorecard' && scorecard === null) {
+      setScorecardLoading(true)
+      getAlertsPerformance(30)
+        .then(res => setScorecard(res.scorecard))
+        .catch(() => setScorecard([]))
+        .finally(() => setScorecardLoading(false))
+    }
+  }, [activeTab, scorecard])
+
   return (
     <div className="space-y-6">
       {/* Header bar */}
@@ -434,8 +448,28 @@ function AlertJournalContent() {
           </p>
         </div>
 
-        {/* Date navigations */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* Tab switcher */}
+          <div className="flex bg-gray-900 border border-gray-800 rounded-lg p-1 gap-1">
+            <button
+              onClick={() => setActiveTab('journal')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                activeTab === 'journal' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <Bell size={12} />
+              Journal
+            </button>
+            <button
+              onClick={() => setActiveTab('scorecard')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                activeTab === 'scorecard' ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              <BarChart2 size={12} />
+              Performance
+            </button>
+          </div>
           <button
             onClick={() => navigateDate(-1)}
             disabled={dates.indexOf(activeDate) >= dates.length - 1}
@@ -618,35 +652,64 @@ function AlertJournalContent() {
                       hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
                     })
                     const isSelected = selectedAlert?.id === alt.id
-                    
+                    // Forward return colour helper
+                    const fwdColor = (v: number | null) => {
+                      if (v == null) return 'text-gray-600'
+                      return v > 0 ? 'text-emerald-400' : v < 0 ? 'text-rose-400' : 'text-gray-500'
+                    }
+                    const fwdLabel = (v: number | null) => v == null ? '–' : `${v > 0 ? '+' : ''}${v.toFixed(1)}%`
+
                     return (
                       <div
                         key={alt.id}
                         onClick={() => setSelectedAlert(alt)}
-                        className={`p-2.5 rounded-xl cursor-pointer transition-all border flex items-center justify-between text-xs ${
+                        className={`p-2.5 rounded-xl cursor-pointer transition-all border text-xs ${
                           isSelected
                             ? 'bg-amber-500/10 border-amber-500/50 hover:bg-amber-500/15 text-white'
                             : 'bg-gray-950/40 border-gray-800 hover:bg-gray-800/40 hover:border-gray-700 text-gray-300'
                         }`}
                       >
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-semibold">{alt.alert_type.replace('_', ' ')}</span>
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-semibold">{alt.alert_type.replace('_', ' ')}</span>
+                            </div>
+                            <div className="text-[10px] text-gray-500 font-mono">
+                              {localTime} · ${alt.trigger_price.toFixed(2)}
+                            </div>
                           </div>
-                          <div className="text-[10px] text-gray-500 font-mono">
-                            {localTime} · ${alt.trigger_price.toFixed(2)}
-                          </div>
+
+                          {/* rating badge indicator */}
+                          {alt.feedback_score === 'helpful' ? (
+                            <ThumbsUp size={12} className="text-emerald-400 fill-emerald-400/20" />
+                          ) : alt.feedback_score === 'noise' ? (
+                            <ThumbsDown size={12} className="text-rose-400 fill-rose-400/20" />
+                          ) : alt.feedback_score === 'neutral' ? (
+                            <span className="text-[9px] bg-gray-800 text-gray-400 px-1 rounded">Neutral</span>
+                          ) : (
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" title="Unrated" />
+                          )}
                         </div>
 
-                        {/* rating badge indicator */}
-                        {alt.feedback_score === 'helpful' ? (
-                          <ThumbsUp size={12} className="text-emerald-400 fill-emerald-400/20" />
-                        ) : alt.feedback_score === 'noise' ? (
-                          <ThumbsDown size={12} className="text-rose-400 fill-rose-400/20" />
-                        ) : alt.feedback_score === 'neutral' ? (
-                          <span className="text-[9px] bg-gray-800 text-gray-400 px-1 rounded">Neutral</span>
-                        ) : (
-                          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" title="Unrated" />
+                        {/* Forward returns mini-row */}
+                        {(alt.fwd_1m != null || alt.fwd_5m != null || alt.fwd_15m != null) && (
+                          <div className="mt-1.5 pt-1.5 border-t border-gray-800/60 flex items-center gap-3 font-mono text-[9px]">
+                            {alt.fwd_1m != null && (
+                              <span><span className="text-gray-600">1m </span><span className={fwdColor(alt.fwd_1m)}>{fwdLabel(alt.fwd_1m)}</span></span>
+                            )}
+                            {alt.fwd_5m != null && (
+                              <span><span className="text-gray-600">5m </span><span className={fwdColor(alt.fwd_5m)}>{fwdLabel(alt.fwd_5m)}</span></span>
+                            )}
+                            {alt.fwd_15m != null && (
+                              <span><span className="text-gray-600">15m </span><span className={fwdColor(alt.fwd_15m)}>{fwdLabel(alt.fwd_15m)}</span></span>
+                            )}
+                            {alt.mfe != null && (
+                              <span title="Max Favorable Excursion"><span className="text-gray-600">↑</span><span className="text-emerald-500">{fwdLabel(alt.mfe)}</span></span>
+                            )}
+                            {alt.mae != null && (
+                              <span title="Max Adverse Excursion"><span className="text-gray-600">↓</span><span className="text-rose-500">{fwdLabel(alt.mae)}</span></span>
+                            )}
+                          </div>
                         )}
                       </div>
                     )
@@ -773,6 +836,85 @@ function AlertJournalContent() {
               <AlertCircle className="text-gray-700" size={36} />
               <p className="text-gray-500 text-sm">No ticker selected.</p>
               <p className="text-gray-600 text-xs">Select a stock ticker from the left sidebar to analyze.</p>
+            </div>
+          )}
+        </div>
+      )}
+      {/* ── PERFORMANCE SCORECARD TAB ────────────────────────────────── */}
+      {activeTab === 'scorecard' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <BarChart2 size={16} className="text-sky-400" />
+            <span className="text-sm font-semibold text-gray-300">Performance Scorecard</span>
+            <span className="text-xs text-gray-500">· Last 30 days · requires 1-min candle data</span>
+          </div>
+
+          {scorecardLoading ? (
+            <div className="h-48 flex items-center justify-center">
+              <Loader2 className="text-sky-400 animate-spin" size={28} />
+            </div>
+          ) : !scorecard || scorecard.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 bg-gray-900/40 border border-gray-850 rounded-2xl">
+              <BarChart2 className="text-gray-700" size={36} />
+              <p className="text-gray-400 text-sm">No performance data yet.</p>
+              <p className="text-gray-600 text-xs">1-minute candle data is required to compute forward returns.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-2xl border border-gray-800">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-900/80 border-b border-gray-800">
+                    <th className="text-left px-3 py-2.5 text-gray-500 font-semibold tracking-wide">Alert Type</th>
+                    <th className="text-left px-3 py-2.5 text-gray-500 font-semibold tracking-wide">Price Bucket</th>
+                    <th className="text-left px-3 py-2.5 text-gray-500 font-semibold tracking-wide">Float</th>
+                    <th className="text-right px-3 py-2.5 text-gray-500 font-semibold tracking-wide">N</th>
+                    <th className="text-right px-3 py-2.5 text-gray-500 font-semibold tracking-wide">Win% (5m)</th>
+                    <th className="text-right px-3 py-2.5 text-gray-500 font-semibold tracking-wide">Avg 5m</th>
+                    <th className="text-right px-3 py-2.5 text-gray-500 font-semibold tracking-wide">Avg 15m</th>
+                    <th className="text-right px-3 py-2.5 text-gray-500 font-semibold tracking-wide">Avg MFE</th>
+                    <th className="text-right px-3 py-2.5 text-gray-500 font-semibold tracking-wide">Avg MAE</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scorecard.map((row, i) => {
+                    const winColor = row.win_rate_5m_pct == null ? 'text-gray-500'
+                      : row.win_rate_5m_pct >= 60 ? 'text-emerald-400 font-semibold'
+                      : row.win_rate_5m_pct >= 45 ? 'text-amber-400'
+                      : 'text-rose-400'
+                    const retColor = (v: number | null) => v == null ? 'text-gray-600'
+                      : v > 0 ? 'text-emerald-400' : v < 0 ? 'text-rose-400' : 'text-gray-400'
+                    const fmt = (v: number | null, suffix = '%') => v == null ? '–' : `${v > 0 ? '+' : ''}${v.toFixed(1)}${suffix}`
+
+                    return (
+                      <tr key={i} className={`border-b border-gray-800/60 ${
+                        i % 2 === 0 ? 'bg-gray-950/30' : 'bg-gray-900/20'
+                      } hover:bg-gray-800/30 transition-colors`}>
+                        <td className="px-3 py-2.5 font-mono font-semibold text-gray-200">
+                          {row.alert_type.replace(/_/g, ' ')}
+                        </td>
+                        <td className="px-3 py-2.5 text-gray-400 font-mono">{row.price_bucket}</td>
+                        <td className="px-3 py-2.5 text-gray-500">{row.float_category ?? '—'}</td>
+                        <td className="px-3 py-2.5 text-right text-gray-400 font-mono">{row.sample_count}</td>
+                        <td className={`px-3 py-2.5 text-right font-mono ${winColor}`}>
+                          {row.win_rate_5m_pct == null ? '–' : `${row.win_rate_5m_pct.toFixed(0)}%`}
+                        </td>
+                        <td className={`px-3 py-2.5 text-right font-mono ${retColor(row.avg_fwd_5m)}`}>
+                          {fmt(row.avg_fwd_5m)}
+                        </td>
+                        <td className={`px-3 py-2.5 text-right font-mono ${retColor(row.avg_fwd_15m)}`}>
+                          {fmt(row.avg_fwd_15m)}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-mono text-emerald-500">
+                          {fmt(row.avg_mfe_pct)}
+                        </td>
+                        <td className="px-3 py-2.5 text-right font-mono text-rose-500">
+                          {fmt(row.avg_mae_pct)}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

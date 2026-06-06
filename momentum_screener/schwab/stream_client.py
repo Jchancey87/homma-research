@@ -53,6 +53,7 @@ class SchwabStreamer:
         self.current_date = None      # tracking current ET date
         self.cooldowns = {}           # symbol -> datetime of last alert
         self.halted_tickers = {}      # symbol -> timestamp of last halt alert
+        self.halt_resume_times = {}   # symbol -> timestamp of last volatility resume (for post-halt suppression)
         self.watchlist_symbols = set()
 
         
@@ -352,7 +353,25 @@ class SchwabStreamer:
                 fund['shares_outstanding'], alert_type
             )
 
-            # 2. Publish JSON alert payload to Redis
+            # 2. Build enriched payload for Redis and Telegram
+            # Compute daily % change (using open_price from bars_1m if available)
+            bar_state = self.bars_1m.get(symbol)
+            open_price_ref = bar_state['open'] if bar_state and bar_state.get('open') else 0.0
+            daily_pct = ((last_price - open_price_ref) / open_price_ref * 100.0) if open_price_ref > 0 else 0.0
+
+            # Recent candle volume vs average for context
+            history = self.completed_bars_1m.get(symbol, [])
+            if history:
+                avg_candle_vol = int(sum(c['volume'] for c in history) / len(history))
+                last_candle_vol = history[-1]['volume'] if history else 0
+            else:
+                avg_candle_vol = 0
+                last_candle_vol = bar_state['last_volume'] - bar_state.get('start_volume', 0) if bar_state else 0
+
+            # VWAP reference from state
+            v_state = self.vwap_state.get(symbol, {})
+            vwap_ref = v_state['cum_vp'] / v_state['cum_vol'] if v_state.get('cum_vol', 0) > 0 else 0.0
+
             alert_payload = {
                 'symbol': symbol,
                 'price': last_price,
@@ -360,6 +379,13 @@ class SchwabStreamer:
                 'rvol': round(rvol, 2),
                 'gap_pct': round(gap_pct, 2),
                 'float_shares': fund['shares_outstanding'],
+                'float_category': fund.get('float_category', ''),
+                'market_cap': fund.get('market_cap', 0),
+                'daily_pct': round(daily_pct, 2),
+                'candle_vol': last_candle_vol,
+                'avg_candle_vol': avg_candle_vol,
+                'vwap': round(vwap_ref, 4),
+                'yesterday_high': fund.get('yesterday_high', 0.0),
                 'alert_type': alert_type,
                 'time': now.isoformat()
             }
@@ -492,24 +518,49 @@ class SchwabStreamer:
                 state['close'] = last_price
                 state['last_volume'] = total_volume
 
-        # Trigger 1: High of Day Breakout
-        if last_price >= high_price and last_price > open_price and rvol >= 1.5:
-            await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "HOD_BREAKOUT")
+        # Post-halt suppression: skip momentum triggers for 2 min after volatility resume
+        post_halt_suppressed = False
+        resume_ts = self.halt_resume_times.get(symbol)
+        if resume_ts is not None and (time.time() - resume_ts) < 120:
+            post_halt_suppressed = True
+            logger.debug(f"Post-halt suppression active for {symbol} ({120 - (time.time() - resume_ts):.0f}s remaining)")
 
-        # Trigger 2: VWAP Crossing (Hysteresis-based to prevent chatter during consolidation)
-        if vwap > 0:
-            buffer = 0.02 # 2% price buffer
+        # Trigger 1: High of Day Breakout (requires completed candle BODY close above session HOD)
+        # A wick touching the HOD is not sufficient — we need a closed candle where close > high_price.
+        if not post_halt_suppressed:
+            candle_history = self.completed_bars_1m.get(symbol, [])
+            if candle_history and rvol >= 1.5:
+                last_candle = candle_history[-1]
+                # Confirm close > open (bullish body) AND close broke above session high_price
+                if (last_candle['close'] > last_candle['open'] and
+                        last_candle['close'] >= high_price and
+                        last_candle['close'] > open_price):
+                    await self.check_and_fire_alert(symbol, last_candle['close'], total_volume, rvol, gap_pct, "HOD_BREAKOUT")
+
+        # Trigger 2: VWAP Crossing (ATR-based dynamic hysteresis to prevent chatter)
+        # Estimate ATR from last 10 completed candles (candle range = high - low, approximated here
+        # via open/close since we only store open/close in the bar history).
+        if vwap > 0 and not post_halt_suppressed:
+            candle_history = self.completed_bars_1m.get(symbol, [])
+            if len(candle_history) >= 5:
+                recent = candle_history[-10:] if len(candle_history) >= 10 else candle_history
+                avg_range = sum(abs(c['close'] - c['open']) for c in recent) / len(recent)
+                # ATR buffer: half the average candle range as a % of vwap, floored at 0.5% capped at 3%
+                atr_buffer = max(0.005, min(0.03, (avg_range / vwap) * 0.5))
+            else:
+                atr_buffer = 0.015  # default 1.5% until we have enough candle history
+
             if v_state.get('status') is None:
-                if last_price <= vwap * (1.0 - buffer):
+                if last_price <= vwap * (1.0 - atr_buffer):
                     v_state['status'] = 'below'
-                elif last_price >= vwap * (1.0 + buffer):
+                elif last_price >= vwap * (1.0 + atr_buffer):
                     v_state['status'] = 'above'
             else:
-                if v_state['status'] == 'below' and last_price >= vwap * (1.0 + buffer):
+                if v_state['status'] == 'below' and last_price >= vwap * (1.0 + atr_buffer):
                     if rvol >= 2.0:
                         await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "VWAP_CROSSOVER")
                     v_state['status'] = 'above'
-                elif v_state['status'] == 'above' and last_price <= vwap * (1.0 - buffer):
+                elif v_state['status'] == 'above' and last_price <= vwap * (1.0 - atr_buffer):
                     v_state['status'] = 'below'
 
         # Trigger 3: Previous Day High Breakout
@@ -643,8 +694,10 @@ class SchwabStreamer:
                         # If it was halted, mark it as resumed
                         if symbol in self.halted_tickers:
                             self.halted_tickers.pop(symbol, None)
+                            # Record resume time for post-halt suppression window
+                            self.halt_resume_times[symbol] = time.time()
                             asyncio.create_task(self.save_resume_to_db(symbol))
-                            logger.info(f"▶️ VOLATILITY RESUME DETECTED: {symbol}")
+                            logger.info(f"▶️ VOLATILITY RESUME DETECTED: {symbol} (2-min HOD/VWAP suppression activated)")
                             
                             now_dt = datetime.utcnow()
                             lp = last_price if last_price is not None else self.last_known_price.get(symbol, 0.0)
