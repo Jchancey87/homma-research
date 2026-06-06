@@ -343,47 +343,63 @@ def enrich_gainers_with_sparklines_and_history(gainers: list[dict]) -> list[dict
     
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         futures = {executor.submit(enrich_single_gainer, g): g for g in gainers}
-        for future in concurrent.futures.as_completed(futures):
-            g = futures[future]
-            try:
-                res = future.result()
-                ma_data = res['ma']
-                min_metrics = res['min']
-                
-                # Apply daily metrics
-                live_price = g.get('last_price')
-                sparkline = ma_data['sparkline_5d']
-                if live_price is not None:
-                    sparkline = sparkline[-4:] + [live_price]
-                
-                g['sparkline_5d'] = sparkline
-                g['sma20'] = ma_data['sma20']
-                g['sma50'] = ma_data['sma50']
-                g['sma100'] = ma_data['sma100']
-                
-                g['above_sma20'] = live_price > ma_data['sma20'] if live_price is not None and ma_data['sma20'] is not None else False
-                g['above_sma50'] = live_price > ma_data['sma50'] if live_price is not None and ma_data['sma50'] is not None else False
-                g['above_sma100'] = live_price > ma_data['sma100'] if live_price is not None and ma_data['sma100'] is not None else False
-                
-                # Apply minute-level metrics
-                g['mom_2m'] = min_metrics['mom_2m']
-                g['atr_hod'] = min_metrics['atr_hod']
-                g['atr_sprd'] = min_metrics['atr_sprd']
-                g['atr_vwap'] = min_metrics['atr_vwap']
-                g['zen_v'] = min_metrics['zen_v']
-                g['sparkline_intraday'] = min_metrics.get('intraday_sparkline', [])
-                if min_metrics.get('hod'):
-                    g['high_price'] = round(min_metrics['hod'], 4)
-                
-            except Exception as e:
-                log.warning(f"Failed to enrich {g['ticker']}: {e}")
-                g.update({
-                    'sparkline_5d': [],
-                    'sparkline_intraday': [],
-                    'above_sma20': False, 'above_sma50': False, 'above_sma100': False,
-                    'sma20': None, 'sma50': None, 'sma100': None,
-                    'mom_2m': None, 'atr_hod': None, 'atr_sprd': None, 'atr_vwap': None, 'zen_v': None
-                })
+        try:
+            for future in concurrent.futures.as_completed(futures, timeout=45):
+                g = futures[future]
+                try:
+                    res = future.result()
+                    ma_data = res['ma']
+                    min_metrics = res['min']
+                    
+                    # Apply daily metrics
+                    live_price = g.get('last_price')
+                    sparkline = ma_data['sparkline_5d']
+                    if live_price is not None:
+                        sparkline = sparkline[-4:] + [live_price]
+                    
+                    g['sparkline_5d'] = sparkline
+                    g['sma20'] = ma_data['sma20']
+                    g['sma50'] = ma_data['sma50']
+                    g['sma100'] = ma_data['sma100']
+                    
+                    g['above_sma20'] = live_price > ma_data['sma20'] if live_price is not None and ma_data['sma20'] is not None else False
+                    g['above_sma50'] = live_price > ma_data['sma50'] if live_price is not None and ma_data['sma50'] is not None else False
+                    g['above_sma100'] = live_price > ma_data['sma100'] if live_price is not None and ma_data['sma100'] is not None else False
+                    
+                    # Apply minute-level metrics
+                    g['mom_2m'] = min_metrics['mom_2m']
+                    g['atr_hod'] = min_metrics['atr_hod']
+                    g['atr_sprd'] = min_metrics['atr_sprd']
+                    g['atr_vwap'] = min_metrics['atr_vwap']
+                    g['zen_v'] = min_metrics['zen_v']
+                    g['sparkline_intraday'] = min_metrics.get('intraday_sparkline', [])
+                    if min_metrics.get('hod'):
+                        g['high_price'] = round(min_metrics['hod'], 4)
+                    
+                except Exception as e:
+                    log.warning(f"Failed to enrich {g['ticker']}: {e}")
+                    g.update({
+                        'sparkline_5d': [],
+                        'sparkline_intraday': [],
+                        'above_sma20': False, 'above_sma50': False, 'above_sma100': False,
+                        'sma20': None, 'sma50': None, 'sma100': None,
+                        'mom_2m': None, 'atr_hod': None, 'atr_sprd': None, 'atr_vwap': None, 'zen_v': None
+                    })
+        except concurrent.futures.TimeoutError:
+            log.error("[LiveScreener] Cache enrichment timed out after 45 seconds! Thread pool may have hung.")
+            for future in futures:
+                future.cancel()
+            
+            # Populate remaining un-enriched tickers with fallbacks so schema remains consistent
+            for g in gainers:
+                if 'sparkline_5d' not in g:
+                    g.update({
+                        'sparkline_5d': [],
+                        'sparkline_intraday': [],
+                        'above_sma20': False, 'above_sma50': False, 'above_sma100': False,
+                        'sma20': None, 'sma50': None, 'sma100': None,
+                        'mom_2m': None, 'atr_hod': None, 'atr_sprd': None, 'atr_vwap': None, 'zen_v': None
+                    })
                 
     for g in gainers:
         ticker = g['ticker']
