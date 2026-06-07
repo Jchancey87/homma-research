@@ -2,6 +2,24 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-07] Continuation Play Journal & Performance Tracker
+
+### Summary
+Implemented a comprehensive continuation play journal and statistical performance tracker. This feature enables multi-day tracking of runners (Day 1, Day 2, and Day 3 returns) and enriches continuation picks with fundamental metrics (market cap, cash position, operating cash flow, runway, and dilution risk).
+
+### What Changed
+* **Database Schema Migration (`backend/models/schema.sql`)**: Updated `continuation_picks` schema to include D0 close, D1-D3 open/high/low/close/volume columns, and fundamental fields. Added idempotent `ALTER TABLE` statements to automatically apply migrations on startup.
+* **Performance Service (`backend/services/continuation_performance_service.py`)**: Created a new python service that scans recent picks, fetches historical daily bars from Schwab (falling back to yfinance), matches Day 0-3 candles, and queries FMP/yfinance for company fundamentals.
+* **Scheduler Job (`backend/fastapi_app/scheduler.py`)**: Added a nightly Celery/APScheduler task `update_continuation_performance` running at 8:15 PM ET Mon-Fri to keep performance metrics and fundamentals up-to-date.
+* **FastAPI Routers (`backend/fastapi_app/routers/continuation.py`)**: Added `POST /refresh-performance` to manually force performance updates on demand, and `GET /performance` to compute the scorecard summary and breakdowns.
+* **UI Navigation (`frontend/components/NavBar.tsx`)**: Registered the "Continuation Journal" dashboard with a Zap icon in the main navigation.
+* **TypeScript Client (`frontend/lib/api.ts`)**: Expanded `ContinuationPick` type definition and declared `getContinuationPerformance()` and `refreshContinuationPerformance()` API methods.
+* **Frontend Page (`frontend/app/continuation/page.tsx`)**: Built a premium React dashboard with dynamic light/dark mode styling, presenting:
+  - **Journal view**: interactive list of picks showing D0 close, rank, and LLM rationale. Expands on click to display deep fundamental details (cash, runway, risk) and a mini-table detailing Open/High/Low/Close/Volume returns for subsequent days.
+  - **Performance stats view**: overall scorecard summarizing win rates and average extensions, with breakdowns categorized by float, gap, sector, dilution risk, and news freshness.
+
+---
+
 ## [2026-06-07] Agent Memory Reorganization & Git-Branch Flow Integration
 
 ### Summary

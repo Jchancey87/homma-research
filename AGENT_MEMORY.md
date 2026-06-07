@@ -37,12 +37,14 @@ This file maintains the active decisions, architectural constraints, and persist
 
 ## 🔱 Branch: `session` (Active Intent & Scope)
 
-### Current Session: Reorganizing Agent Memory System
-* **Goal**: Shift `AGENT_MEMORY.md` from an append-only log to a Git-like branch structure of active decisions.
-* **Forked context**: Moved all historical chronological struggles and lessons to [AGENT_MEMORY_HISTORY.md](file:///home/jackc/projects/homma-research/AGENT_MEMORY_HISTORY.md).
+### Current Session: Continuation Play Journal & Performance Tracker
+* **Goal**: Implement a multi-day continuation play journal and scorecard analyzer.
+* **Forked context**: Inspected database schema for `continuation_picks` and frontend layout for `AlertsPerformance`.
 * **Merged decisions**:
-  - Restructured `AGENT_MEMORY.md` with explicit permissions for deletion/pruning.
-  - Aligned memory design with Git-like fork/merge/prune model.
+  - Rebuilt the `continuation_picks` schema to include D0 close, D1-D3 OHLCV, and fundamental fields (market cap, cash position, runway, dilution risk, catalyst status).
+  - Created a robust async performance service (`continuation_performance_service.py`) with Schwab daily price bar integration and yfinance/FMP fallbacks.
+  - Registered a nightly performance sync job in the scheduler and exposed manual force-update (`POST /refresh-performance`) and scorecard analytics (`GET /performance`) API endpoints.
+  - Created a premium interactive Continuation Play Journal & Performance Tracker React dashboard (`frontend/app/continuation/page.tsx`) and added it to the NavBar.
 * **Pruned context**: None.
 
 ---
