@@ -88,3 +88,18 @@ async def test_continuation_stats(client):
     resp = await client.get("/api/continuation-picks/stats")
     assert resp.status_code == 200
     assert isinstance(resp.json(), list)
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_continuation_performance_and_refresh(client):
+    # 1. Trigger manual refresh
+    refresh_resp = await client.post("/api/continuation-picks/refresh-performance")
+    assert refresh_resp.status_code == 200
+    assert "updated" in refresh_resp.json()
+
+    # 2. Fetch performance stats
+    perf_resp = await client.get("/api/continuation-picks/performance")
+    assert perf_resp.status_code == 200
+    data = perf_resp.json()
+    assert "summary" in data
+    assert "groups" in data

@@ -72,6 +72,16 @@ def _build_scheduler():
         misfire_grace_time=1800,  # 30 min
     )
 
+    # ── Job 6: Update Continuation Play Performance ─────────────────────────
+    scheduler.add_job(
+        _update_continuation_performance,
+        CronTrigger(day_of_week="mon-fri", hour=20, minute=15, timezone="US/Eastern"),  # 8:15 PM ET
+        id="update_continuation_performance",
+        name="Update Continuation Performance",
+        replace_existing=True,
+        misfire_grace_time=1800,  # 30 min
+    )
+
     return scheduler
 
 
@@ -248,6 +258,28 @@ async def _nightly_alerts_backfill() -> None:
         log.info("[scheduler] nightly_alerts_backfill done")
     except Exception as exc:
         log.exception("[scheduler] nightly_alerts_backfill failed: %s", exc)
+
+
+async def _update_continuation_performance() -> None:
+    """Run update_all_continuation_performances from services/continuation_performance_service.py off-thread."""
+    import asyncio
+    log.info("[scheduler] update_continuation_performance starting")
+    try:
+        def _run() -> int:
+            import sys, os
+            _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            _repo = os.path.dirname(_backend)
+            if _repo not in sys.path:
+                sys.path.insert(0, _repo)
+            if _backend not in sys.path:
+                sys.path.insert(0, _backend)
+            from services.continuation_performance_service import update_all_continuation_performances
+            return update_all_continuation_performances()
+
+        count = await asyncio.to_thread(_run)
+        log.info("[scheduler] update_continuation_performance done — updated %d rows", count)
+    except Exception as exc:
+        log.exception("[scheduler] update_continuation_performance failed: %s", exc)
 
 
 # ---------------------------------------------------------------------------

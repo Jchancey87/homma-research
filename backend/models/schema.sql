@@ -142,6 +142,33 @@ CREATE TABLE IF NOT EXISTS continuation_picks (
     deactivated_at  TIMESTAMPTZ,
     deactivated_reason TEXT,
     created_at      TIMESTAMPTZ DEFAULT NOW(),
+    -- Performance tracking
+    close_d0        DOUBLE PRECISION,
+    d1_open         DOUBLE PRECISION,
+    d1_high         DOUBLE PRECISION,
+    d1_low          DOUBLE PRECISION,
+    d1_close        DOUBLE PRECISION,
+    d1_volume       DOUBLE PRECISION,
+    d2_open         DOUBLE PRECISION,
+    d2_high         DOUBLE PRECISION,
+    d2_low          DOUBLE PRECISION,
+    d2_close        DOUBLE PRECISION,
+    d2_volume       DOUBLE PRECISION,
+    d3_open         DOUBLE PRECISION,
+    d3_high         DOUBLE PRECISION,
+    d3_low          DOUBLE PRECISION,
+    d3_close        DOUBLE PRECISION,
+    d3_volume       DOUBLE PRECISION,
+    -- Fundamental metrics
+    market_cap      DOUBLE PRECISION,
+    shares_outstanding DOUBLE PRECISION,
+    cash            DOUBLE PRECISION,
+    net_income      DOUBLE PRECISION,
+    operating_cash_flow DOUBLE PRECISION,
+    runway_months   DOUBLE PRECISION,
+    dilution_risk   TEXT,
+    news_headline   TEXT,
+    news_fresh      BOOLEAN,
     UNIQUE(ticker, date)
 );
 
@@ -224,4 +251,36 @@ CREATE TABLE IF NOT EXISTS volatility_halts (
 
 CREATE INDEX IF NOT EXISTS idx_volatility_halts_ticker ON volatility_halts(ticker);
 CREATE INDEX IF NOT EXISTS idx_volatility_halts_time   ON volatility_halts(halt_time DESC);
+
+-- Migrations for continuation_picks (added 2026-06)
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS close_d0 DOUBLE PRECISION;
+
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS d1_open DOUBLE PRECISION;
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS d1_high DOUBLE PRECISION;
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS d1_low DOUBLE PRECISION;
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS d1_close DOUBLE PRECISION;
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS d1_volume DOUBLE PRECISION;
+
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS d2_open DOUBLE PRECISION;
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS d2_high DOUBLE PRECISION;
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS d2_low DOUBLE PRECISION;
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS d2_close DOUBLE PRECISION;
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS d2_volume DOUBLE PRECISION;
+
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS d3_open DOUBLE PRECISION;
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS d3_high DOUBLE PRECISION;
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS d3_low DOUBLE PRECISION;
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS d3_close DOUBLE PRECISION;
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS d3_volume DOUBLE PRECISION;
+
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS market_cap DOUBLE PRECISION;
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS shares_outstanding DOUBLE PRECISION;
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS cash DOUBLE PRECISION;
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS net_income DOUBLE PRECISION;
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS operating_cash_flow DOUBLE PRECISION;
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS runway_months DOUBLE PRECISION;
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS dilution_risk TEXT;
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS news_headline TEXT;
+ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS news_fresh BOOLEAN;
+
 

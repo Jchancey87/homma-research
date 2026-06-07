@@ -353,6 +353,61 @@ export interface ContinuationPick {
   today_open?:          number | null
   today_volume?:         number | null
   today_change_pct?:     number | null
+  // Performance details
+  close_d0?:             number | null
+  d1_open?:              number | null
+  d1_high?:              number | null
+  d1_low?:               number | null
+  d1_close?:             number | null
+  d1_volume?:            number | null
+  d2_open?:              number | null
+  d2_high?:              number | null
+  d2_low?:               number | null
+  d2_close?:             number | null
+  d2_volume?:            number | null
+  d3_open?:              number | null
+  d3_high?:              number | null
+  d3_low?:               number | null
+  d3_close?:             number | null
+  d3_volume?:            number | null
+  // Fundamental metrics
+  market_cap?:           number | null
+  shares_outstanding?:   number | null
+  cash?:                 number | null
+  net_income?:           number | null
+  operating_cash_flow?:  number | null
+  runway_months?:        number | null
+  dilution_risk?:        string | null
+  news_headline?:        string | null
+  news_fresh?:           boolean | null
+}
+
+export interface ContinuationPerformanceSummary {
+  total_picks: number
+  win_rate: number
+  super_win_rate: number
+  avg_max_ext: number
+  avg_d1_ret: number
+  avg_d3_ret: number
+}
+
+export interface ContinuationPerformanceGroupRow {
+  group_value: string
+  count: number
+  win_rate: number
+  super_win_rate: number
+  avg_max_ext: number
+}
+
+export interface ContinuationPerformanceData {
+  summary: ContinuationPerformanceSummary
+  groups: {
+    float_category: ContinuationPerformanceGroupRow[]
+    gap_category: ContinuationPerformanceGroupRow[]
+    sector: ContinuationPerformanceGroupRow[]
+    dilution_risk: ContinuationPerformanceGroupRow[]
+    news_freshness: ContinuationPerformanceGroupRow[]
+  }
 }
 
 export const getContinuationPicks = (includeInactive = false) =>
@@ -362,6 +417,12 @@ export const getContinuationPicks = (includeInactive = false) =>
 
 export const deactivateContinuationPick = (id: number, reason?: string) =>
   api.post(`/api/continuation-picks/${id}/deactivate`, { reason }).then(r => r.data)
+
+export const getContinuationPerformance = () =>
+  api.get<ContinuationPerformanceData>('/api/continuation-picks/performance').then(r => r.data)
+
+export const refreshContinuationPerformance = () =>
+  api.post<{ updated: number }>('/api/continuation-picks/refresh-performance').then(r => r.data)
 
 // ── Observations ──────────────────────────────────────────────────────────
 
