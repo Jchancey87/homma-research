@@ -2,6 +2,18 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-07] Agent Memory Reorganization & Git-Branch Flow Integration
+
+### Summary
+Reorganized the codebase's agentic memory system to optimize token footprint and prevent context bloat. Moved all chronological struggles and debug history to an archive and recreated `AGENT_MEMORY.md` around a decision-centric, Git-branch-like model with explicit pruning permissions.
+
+### What Changed
+* **Memory Archive Creation**: Created [AGENT_MEMORY_HISTORY.md](file:///home/jackc/projects/homma-research/AGENT_MEMORY_HISTORY.md) containing the full chronological logs of past session struggles, database schema migrations, and frontend rendering challenges.
+* **Active Memory Redesign**: Overwrote [AGENT_MEMORY.md](file:///home/jackc/projects/homma-research/AGENT_MEMORY.md) with a new structure focusing strictly on active persistent decisions (Schwab thread-safety, alert state machines, performance hooks, async test scopes) and current session goals. Added explicit agent permissions to delete or prune stale memory blocks.
+* **Agent Guidelines Update**: Modified [AGENTS.md](file:///home/jackc/projects/homma-research/AGENTS.md) to replace append-only memory guidelines with the new Git-branch memory flow instructions (Fork/Merge/Prune/Archive).
+
+---
+
 ## [2026-06-07] Codebase Context Optimization using SigMap
 
 ### Summary

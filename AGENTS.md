@@ -55,7 +55,11 @@ To maintain code quality and prevent system drift, adhere strictly to the follow
   * After modifying code, run the relevant local tests and lint checks before finalizing.
 
 ### 4. Agentic Reflections & Memory
-* **Session Wrap-up**: Before concluding a task, you **MUST** append a structured reflection entry to [AGENT_MEMORY.md](file:///home/jackc/projects/homma-research/AGENT_MEMORY.md) detailing the session's objective, prompt-adaptations, mistakes/self-corrections, and key directives for future sessions. Ensure the format matches the established template.
+* **Git-like Memory Flow**: Treat [AGENT_MEMORY.md](file:///home/jackc/projects/homma-research/AGENT_MEMORY.md) as a lean, active workspace rather than an append-only log:
+  * **Fork on New Context**: At the start of a session, define the current goals, assumptions, and scope in the `session` section.
+  * **Merge Decisions**: At the end of a session, merge any verified, persistent architectural/design decisions that *actually matter* into the `main` section.
+  * **Prune & Let Rot**: Actively delete stale rules, obsolete constraints, or completed session notes. Stale memory is technical debt.
+  * **Archive Struggles**: Move detailed chronological struggles and history logs to [AGENT_MEMORY_HISTORY.md](file:///home/jackc/projects/homma-research/AGENT_MEMORY_HISTORY.md) to keep active memory compact.
 
 ---
 
