@@ -109,9 +109,9 @@ export default function ContinuationPage() {
         <div>
           <div className="flex items-center gap-2">
             <Zap className="text-emerald-500 dark:text-emerald-400 h-6 w-6" />
-            <h1 className="text-2xl font-bold tracking-tight">Continuation Play Journal</h1>
+            <h1 className="text-3xl font-bold tracking-tight">Continuation Play Journal</h1>
           </div>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <p className="text-base text-gray-500 dark:text-gray-400 mt-1">
             Track multi-day runners, fundamental triggers, and study historical play statistics.
           </p>
         </div>
@@ -121,7 +121,7 @@ export default function ContinuationPage() {
           <div className="bg-gray-100 dark:bg-gray-800 p-0.5 rounded-lg flex items-center border border-gray-200 dark:border-gray-700">
             <button
               onClick={() => setActiveTab('journal')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold transition-all ${
                 activeTab === 'journal'
                   ? 'bg-white dark:bg-gray-900 shadow-sm text-gray-900 dark:text-white'
                   : 'text-gray-500 hover:text-gray-950 dark:hover:text-white'
@@ -132,7 +132,7 @@ export default function ContinuationPage() {
             </button>
             <button
               onClick={() => setActiveTab('performance')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-semibold transition-all ${
                 activeTab === 'performance'
                   ? 'bg-white dark:bg-gray-900 shadow-sm text-gray-900 dark:text-white'
                   : 'text-gray-500 hover:text-gray-950 dark:hover:text-white'
@@ -147,7 +147,7 @@ export default function ContinuationPage() {
           <button
             onClick={handleRefresh}
             disabled={refreshing || loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-800 text-xs font-medium bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/80 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-800 text-sm font-medium bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800/80 transition-colors disabled:opacity-50"
           >
             <RefreshCw size={13} className={refreshing ? 'animate-spin text-emerald-500' : ''} />
             {refreshing ? 'Syncing...' : 'Sync Play Performance'}
@@ -158,7 +158,7 @@ export default function ContinuationPage() {
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3">
           <RefreshCw className="animate-spin text-emerald-500 h-8 w-8" />
-          <span className="text-sm text-gray-500">Loading continuation journal details...</span>
+          <span className="text-base text-gray-500">Loading continuation journal details...</span>
         </div>
       ) : (
         <>
@@ -174,12 +174,12 @@ export default function ContinuationPage() {
                     placeholder="Search ticker, sector, catalyst..."
                     value={search}
                     onChange={e => setSearch(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 rounded-lg border border-gray-200 dark:border-gray-850 bg-white dark:bg-gray-900 text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                    className="w-full pl-9 pr-4 py-2 rounded-lg border border-gray-200 dark:border-gray-850 bg-white dark:bg-gray-900 text-sm focus:ring-1 focus:ring-emerald-500 focus:outline-none"
                   />
                 </div>
 
                 <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                  <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
                     <input
                       type="checkbox"
                       checked={showHistory}
@@ -210,7 +210,7 @@ export default function ContinuationPage() {
                     <tbody>
                       {filteredPicks.length === 0 ? (
                         <tr>
-                          <td colSpan={8} className="text-center py-10 text-xs text-gray-500">
+                          <td colSpan={8} className="text-center py-10 text-sm text-gray-500">
                             No continuation picks matching query.
                           </td>
                         </tr>
@@ -236,7 +236,7 @@ export default function ContinuationPage() {
                                 }`}
                               >
                                 <td className="px-4 py-4.5 text-center font-bold">
-                                  <span className={`inline-flex items-center justify-center h-6 w-6 rounded-full text-xs ${
+                                  <span className={`inline-flex items-center justify-center h-6 w-6 rounded-full text-sm ${
                                     p.rank === 1 ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20' :
                                     p.rank === 2 ? 'bg-slate-300/10 text-slate-400 border border-slate-300/20' :
                                     'bg-amber-600/10 text-amber-500 border border-amber-600/20'
@@ -245,24 +245,24 @@ export default function ContinuationPage() {
                                   </span>
                                 </td>
                                 <td className="px-4 py-4.5 font-mono">
-                                  <div className="font-bold text-sm text-gray-900 dark:text-white">{p.ticker}</div>
+                                  <div className="font-bold text-base text-gray-900 dark:text-white">{p.ticker}</div>
                                   <div className="text-[10px] text-gray-500 mt-0.5">
                                     {new Date(p.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                   </div>
                                 </td>
-                                <td className="px-4 py-4.5 text-center font-mono text-xs">
+                                <td className="px-4 py-4.5 text-center font-mono text-sm">
                                   {p.close_d0 ? `$${p.close_d0.toFixed(2)}` : '—'}
                                 </td>
-                                <td className="px-4 py-4.5 text-xs text-gray-600 dark:text-gray-400 leading-relaxed max-w-md">
+                                <td className="px-4 py-4.5 text-sm text-gray-600 dark:text-gray-400 leading-relaxed max-w-md">
                                   <div className="line-clamp-2">{p.reason || 'No description recorded'}</div>
                                 </td>
-                                <td className="px-4 py-4.5 text-center text-xs font-mono text-blue-500 dark:text-blue-400">
+                                <td className="px-4 py-4.5 text-center text-sm font-mono text-blue-500 dark:text-blue-400">
                                   {formatLargeNum(p.float_shares)}
                                 </td>
-                                <td className="px-4 py-4.5 text-center text-xs text-gray-600 dark:text-gray-400 truncate max-w-[120px]">
+                                <td className="px-4 py-4.5 text-center text-sm text-gray-600 dark:text-gray-400 truncate max-w-[120px]">
                                   {p.sector || '—'}
                                 </td>
-                                <td className="px-4 py-4.5 text-center font-mono text-xs">
+                                <td className="px-4 py-4.5 text-center font-mono text-sm">
                                   {getPerformanceBadge(maxExt)}
                                 </td>
                                 <td className="px-4 py-4.5 text-right">
@@ -277,7 +277,7 @@ export default function ContinuationPage() {
                                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                                       {/* Left Column: Fundamentals */}
                                       <div className="lg:col-span-5 space-y-4">
-                                        <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-gray-400">
+                                        <div className="flex items-center gap-1.5 text-sm font-bold uppercase tracking-wider text-gray-400">
                                           <Info size={13} />
                                           Company Fundamentals
                                         </div>
@@ -285,15 +285,15 @@ export default function ContinuationPage() {
                                         <div className="grid grid-cols-2 gap-3 bg-white dark:bg-gray-900/50 p-4 rounded-xl border border-gray-200 dark:border-gray-850 shadow-sm">
                                           <div>
                                             <span className="text-[10px] text-gray-400 block font-semibold">MARKET CAP</span>
-                                            <span className="text-xs font-mono font-bold">{formatLargeNum(p.market_cap)}</span>
+                                            <span className="text-sm font-mono font-bold">{formatLargeNum(p.market_cap)}</span>
                                           </div>
                                           <div>
                                             <span className="text-[10px] text-gray-400 block font-semibold">CASH POSITION</span>
-                                            <span className="text-xs font-mono font-bold">{formatLargeNum(p.cash)}</span>
+                                            <span className="text-sm font-mono font-bold">{formatLargeNum(p.cash)}</span>
                                           </div>
                                           <div>
                                             <span className="text-[10px] text-gray-400 block font-semibold">RUNWAY (MONTHS)</span>
-                                            <span className={`text-xs font-mono font-bold ${
+                                            <span className={`text-sm font-mono font-bold ${
                                               p.runway_months != null && p.runway_months < 6 ? 'text-red-500' :
                                               p.runway_months != null && p.runway_months < 12 ? 'text-yellow-500' :
                                               'text-emerald-500'
@@ -319,7 +319,7 @@ export default function ContinuationPage() {
                                             <span className="text-[10px] text-gray-400 block font-semibold uppercase mb-1">
                                               Catalyst News {p.news_fresh && <span className="text-emerald-500 font-bold ml-1">(Fresh)</span>}
                                             </span>
-                                            <p className="text-xs font-medium text-gray-700 dark:text-gray-300 leading-relaxed">
+                                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 leading-relaxed">
                                               {p.news_headline}
                                             </p>
                                           </div>
@@ -328,7 +328,7 @@ export default function ContinuationPage() {
                                         <div className="flex items-center gap-2">
                                           <button
                                             onClick={() => router.push(`/research?ticker=${p.ticker}`)}
-                                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-xs font-semibold transition-all"
+                                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-sm font-semibold transition-all"
                                           >
                                             <ExternalLink size={12} />
                                             Deep Research Ticker
@@ -336,7 +336,7 @@ export default function ContinuationPage() {
                                           {p.is_active && (
                                             <button
                                               onClick={(e) => { e.stopPropagation(); handleDeactivate(p.id) }}
-                                              className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-500/20 text-red-500 hover:bg-red-500/10 text-xs font-semibold transition-all"
+                                              className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-red-500/20 text-red-500 hover:bg-red-500/10 text-sm font-semibold transition-all"
                                             >
                                               <XCircle size={12} />
                                               Deactivate Pick
@@ -347,13 +347,13 @@ export default function ContinuationPage() {
 
                                       {/* Right Column: Performance Breakdown */}
                                       <div className="lg:col-span-7 space-y-4">
-                                        <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-gray-400">
+                                        <div className="flex items-center gap-1.5 text-sm font-bold uppercase tracking-wider text-gray-400">
                                           <Award size={13} />
                                           Subsequent 3-Day Performance Tracking
                                         </div>
 
                                         <div className="bg-white dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-850 overflow-hidden shadow-sm">
-                                          <table className="w-full text-left text-xs border-collapse">
+                                          <table className="w-full text-left text-sm border-collapse">
                                             <thead>
                                               <tr className="border-b border-gray-200 dark:border-gray-850 bg-gray-50/50 dark:bg-gray-900/30 text-gray-500 text-[10px] font-bold uppercase tracking-wider">
                                                 <th className="px-4 py-2">Day</th>
@@ -480,29 +480,29 @@ export default function ContinuationPage() {
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 <div className="bg-white dark:bg-gray-900 border border-gray-250/50 dark:border-gray-800 p-4.5 rounded-xl shadow-sm">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">Total Studies</span>
-                  <span className="text-xl font-bold font-mono">{performance.summary.total_picks || 0}</span>
+                  <span className="text-2xl font-bold font-mono">{performance.summary.total_picks || 0}</span>
                 </div>
                 <div className="bg-white dark:bg-gray-900 border border-gray-250/50 dark:border-gray-800 p-4.5 rounded-xl shadow-sm">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">Win Rate (≥10%)</span>
-                  <span className="text-xl font-bold font-mono text-green-500">{performance.summary.win_rate || 0}%</span>
+                  <span className="text-2xl font-bold font-mono text-green-500">{performance.summary.win_rate || 0}%</span>
                 </div>
                 <div className="bg-white dark:bg-gray-900 border border-gray-250/50 dark:border-gray-800 p-4.5 rounded-xl shadow-sm">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">Super Rate (≥30%)</span>
-                  <span className="text-xl font-bold font-mono text-emerald-500">{performance.summary.super_win_rate || 0}%</span>
+                  <span className="text-2xl font-bold font-mono text-emerald-500">{performance.summary.super_win_rate || 0}%</span>
                 </div>
                 <div className="bg-white dark:bg-gray-900 border border-gray-250/50 dark:border-gray-800 p-4.5 rounded-xl shadow-sm">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">Avg Max Extension</span>
-                  <span className="text-xl font-bold font-mono text-emerald-400">+{performance.summary.avg_max_ext || 0}%</span>
+                  <span className="text-2xl font-bold font-mono text-emerald-400">+{performance.summary.avg_max_ext || 0}%</span>
                 </div>
                 <div className="bg-white dark:bg-gray-900 border border-gray-250/50 dark:border-gray-800 p-4.5 rounded-xl shadow-sm">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">Avg Day 1 Close</span>
-                  <span className={`text-xl font-bold font-mono ${performance.summary.avg_d1_ret >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                  <span className={`text-2xl font-bold font-mono ${performance.summary.avg_d1_ret >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
                     {performance.summary.avg_d1_ret >= 0 ? '+' : ''}{performance.summary.avg_d1_ret || 0}%
                   </span>
                 </div>
                 <div className="bg-white dark:bg-gray-900 border border-gray-250/50 dark:border-gray-800 p-4.5 rounded-xl shadow-sm">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">Avg Day 3 Close</span>
-                  <span className={`text-xl font-bold font-mono ${performance.summary.avg_d3_ret >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                  <span className={`text-2xl font-bold font-mono ${performance.summary.avg_d3_ret >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
                     {performance.summary.avg_d3_ret >= 0 ? '+' : ''}{performance.summary.avg_d3_ret || 0}%
                   </span>
                 </div>
@@ -513,11 +513,11 @@ export default function ContinuationPage() {
                 {/* Float Category Scorecard */}
                 <div className="bg-white dark:bg-gray-950/40 border border-gray-250/50 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
                   <div className="px-4 py-3 bg-gray-50/50 dark:bg-gray-900/30 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Breakdown by Ticker Float</span>
+                    <span className="text-sm font-bold uppercase tracking-wider text-gray-400">Breakdown by Ticker Float</span>
                     <Layers size={14} className="text-gray-400" />
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
+                    <table className="w-full text-left text-sm border-collapse">
                       <thead>
                         <tr className="border-b border-gray-250/50 dark:border-gray-850 text-gray-500 font-bold text-[10px] uppercase">
                           <th className="px-4 py-2">Float range</th>
@@ -545,11 +545,11 @@ export default function ContinuationPage() {
                 {/* Gap Category Scorecard */}
                 <div className="bg-white dark:bg-gray-950/40 border border-gray-250/50 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
                   <div className="px-4 py-3 bg-gray-50/50 dark:bg-gray-900/30 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Breakdown by Day 0 Gap %</span>
+                    <span className="text-sm font-bold uppercase tracking-wider text-gray-400">Breakdown by Day 0 Gap %</span>
                     <TrendingUp size={14} className="text-gray-400" />
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
+                    <table className="w-full text-left text-sm border-collapse">
                       <thead>
                         <tr className="border-b border-gray-250/50 dark:border-gray-850 text-gray-500 font-bold text-[10px] uppercase">
                           <th className="px-4 py-2">Gap range</th>
@@ -577,11 +577,11 @@ export default function ContinuationPage() {
                 {/* News Catalyst Freshness Scorecard */}
                 <div className="bg-white dark:bg-gray-950/40 border border-gray-250/50 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
                   <div className="px-4 py-3 bg-gray-50/50 dark:bg-gray-900/30 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Fresh News Catalyst vs Stale</span>
+                    <span className="text-sm font-bold uppercase tracking-wider text-gray-400">Fresh News Catalyst vs Stale</span>
                     <FileText size={14} className="text-gray-400" />
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
+                    <table className="w-full text-left text-sm border-collapse">
                       <thead>
                         <tr className="border-b border-gray-250/50 dark:border-gray-850 text-gray-500 font-bold text-[10px] uppercase">
                           <th className="px-4 py-2">Catalyst status</th>
@@ -619,11 +619,11 @@ export default function ContinuationPage() {
                 {/* Dilution Risk Scorecard */}
                 <div className="bg-white dark:bg-gray-950/40 border border-gray-250/50 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm">
                   <div className="px-4 py-3 bg-gray-50/50 dark:bg-gray-900/30 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Breakdown by Dilution Risk</span>
+                    <span className="text-sm font-bold uppercase tracking-wider text-gray-400">Breakdown by Dilution Risk</span>
                     <ShieldAlert size={14} className="text-gray-400" />
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
+                    <table className="w-full text-left text-sm border-collapse">
                       <thead>
                         <tr className="border-b border-gray-250/50 dark:border-gray-850 text-gray-500 font-bold text-[10px] uppercase">
                           <th className="px-4 py-2">Risk category</th>
@@ -659,11 +659,11 @@ export default function ContinuationPage() {
                 {/* Sector Scorecard */}
                 <div className="bg-white dark:bg-gray-950/40 border border-gray-250/50 dark:border-gray-800 rounded-xl overflow-hidden shadow-sm xl:col-span-2">
                   <div className="px-4 py-3 bg-gray-50/50 dark:bg-gray-900/30 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase tracking-wider text-gray-400">Breakdown by Industry Sector</span>
+                    <span className="text-sm font-bold uppercase tracking-wider text-gray-400">Breakdown by Industry Sector</span>
                     <BarChart2 size={14} className="text-gray-400" />
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
+                    <table className="w-full text-left text-sm border-collapse">
                       <thead>
                         <tr className="border-b border-gray-250/50 dark:border-gray-850 text-gray-500 font-bold text-[10px] uppercase">
                           <th className="px-4 py-2">Sector</th>
