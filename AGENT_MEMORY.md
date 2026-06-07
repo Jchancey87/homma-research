@@ -6,7 +6,31 @@ This file acts as a persistent memory block where AI coding agents record prompt
 
 ## 🏛️ Chronological History of Learnings & Struggles
 
-### [2026-06-06] backend - Schwab Streamer: Multi-Type Cooldown & Adaptive Suppression Engine
+### [2026-06-06] Alert System Optimization: R1/R2/R3 Full Implementation
+
+* **Architecture: HOD Body-Close Confirmation**
+  - *Rationale*: The original trigger `last_price >= high_price` fired on any wick touching the session high. Candle close confirmation (`last_candle['close'] >= high_price AND last_candle['close'] > last_candle['open']`) requires at minimum one completed bar — this means HOD alerts will only fire once per minute at candle boundaries, which is the correct behavior for intraday momentum trades.
+  - *Key Directive*: `completed_bars_1m` stores the last 20 completed candles. HOD now reads `completed_bars_1m[-1]` on each tick — it fires at most once per completed candle, not every tick.
+
+* **Architecture: ATR-Based VWAP Hysteresis**
+  - *Rationale*: A static 2% buffer is too wide for high-beta names and too narrow for slow bleeders. Using `avg_range / vwap * 0.5` (half the average candle body as % of VWAP) provides a self-adjusting buffer proportional to the current volatility regime.
+  - *Floor/Cap*: Buffer is clamped to `[0.005, 0.03]` (0.5%–3%). Default 1.5% is used until at least 5 completed bars exist.
+
+* **Architecture: Post-Halt Suppression via `halt_resume_times`**
+  - *Context*: After a volatility halt resumes, the price often gaps sharply up/down, which would immediately trigger HOD and VWAP crossover alerts from stale state. A 2-minute suppression window gives the market time to stabilize.
+  - *Implementation*: `self.halt_resume_times[symbol] = time.time()` stored in `on_level1_equity_message` at resume detection. Checked at top of `evaluate_and_fire_alert` via `time.time() - resume_ts < 120`.
+
+* **Architecture: Enriched Alert Payload Pipeline**
+  - *Context*: The Celery task `send_telegram_alert_task` receives its data via `alert_payload` built in `check_and_fire_alert`. All enrichment (daily %, VWAP, candle vol, etc.) must be computed before the payload is dispatched to Redis and Celery — it cannot be fetched later inside the Celery worker which has no access to the streamer's in-memory state.
+  - *Key Directive*: `bar_state = self.bars_1m.get(symbol)` provides the current bar open for daily_pct. `self.completed_bars_1m.get(symbol, [])` provides candle vol history for avg_candle_vol.
+
+* **Architecture: Forward Returns via asyncio.gather in FastAPI**
+  - *Context*: The `daily-summary` endpoint processes N alerts simultaneously using `asyncio.gather` on inner `get_forward_returns()` coroutines that each query `price_history_1min`. This avoids serial N+1 queries.
+  - *Caution*: Each coroutine reuses the same `asyncpg.Connection` from `Depends(get_db)`. Since asyncpg connections are not thread-safe but *are* async-safe (single-threaded async), gather on the same connection is fine in FastAPI.
+
+* **Architecture: `/api/alerts/performance` Scorecard**
+  - *Context*: The CTE-based SQL query uses correlated subqueries to fetch the closest 1-min candle after each alert window (4.5–5.5 min for 5m, 14.5–15.5 min for 15m). This approach works even with sparse candle data since it uses `ORDER BY timestamp ASC LIMIT 1` within a range.
+  - *Key Directive*: The `FILTER (WHERE fwd_5m IS NOT NULL)` aggregate clause ensures rows with missing candle data are excluded from win rate and avg return calculations rather than counting as losses.
 
 * **Struggle: PL/pgSQL function syntax splitting in migration scripts**
   - *Context*: Running a migration script that parses and splits a SQL file by semicolons (`clean_sql.split(';')`) breaks SQL function definitions (which internally contain semicolons in declare/begin/end blocks), resulting in `Unterminated dollar-quoted string` syntax errors.
@@ -269,6 +293,15 @@ This file acts as a persistent memory block where AI coding agents record prompt
 
 ---
 
+### [2026-06-07] Codebase Context Optimization using SigMap
+
+* **Architecture: Zero-Dependency Codebase Mapping**
+  - *Rationale*: Storing entire files or running full-context checks is extremely token-expensive. Utilizing SigMap's CLI/MCP server allows extracting compact signatures (97.5% token reduction for this repository, from ~365k to ~9k tokens) to map codebase structure natively.
+  - *Key Directive*: The generated context file [.github/copilot-instructions.md](file:///home/jackc/projects/homma-research/.github/copilot-instructions.md) can be auto-injected by Cursor, Cline, or Copilot to provide instant file location maps.
+  - *Handoff File*: A complete handoff guide has been created at [013_sigmap_antigravity_mcp_handoff.md](file:///home/jackc/projects/homma-research/handoffs/013_sigmap_antigravity_mcp_handoff.md) to facilitate setting up SigMap and Antigravity MCP server configs in other projects.
+
+---
+
 ## 📜 Central Directives for Future Agents
 
 * **Environment Configuration**: Always verify environment variables in both the development workspace and the active production file [backend/.env](file:///home/jackc/projects/homma-research/backend/.env).
@@ -289,3 +322,6 @@ This file acts as a persistent memory block where AI coding agents record prompt
 * **TradingView Ticker Hyperlinks**: All stock tickers in Telegram alert messages must be formatted as TradingView hyperlinks matching the format `[$TICKER](https://www.tradingview.com/chart/?symbol=TICKER)`.
 * **Momentum Alert Types**: Keep in mind the new alert types: `VOLATILITY_HALT`, `VOLATILITY_RESUME`, `VOLUME_SPIKE`, `PREV_DAY_BREAKOUT`, and `VWAP_BOUNCE`. Make sure they follow the standard filters ($1-$30 price, <100M float) where applicable and trigger Telegram alerts.
 * **Schwab HTTP Client Thread-Safety**: The Schwab HTTP client (`get_http_client()`) is stored in `threading.local()` to prevent concurrent HTTP requests on the same `httpx.Client` from deadlocking. Always use `get_http_client()` to obtain a thread-safe client instance. Do not store the client in global variables shared across concurrent threads.
+* **SigMap Context Integration**: Run `npx sigmap` to regenerate [.github/copilot-instructions.md](file:///home/jackc/projects/homma-research/.github/copilot-instructions.md) whenever new files or methods are introduced. Use `npx sigmap --query "<question>"` to run local TF-IDF file ranking. SigMap is configured as an MCP server for Antigravity in `/home/jackc/.gemini/antigravity-cli/mcp_config.json` via `npx -y sigmap --mcp` to support on-demand context fetching.
+
+

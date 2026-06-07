@@ -2,6 +2,50 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-07] Codebase Context Optimization using SigMap
+
+### Summary
+Evaluated and integrated SigMap context engine to analyze system architecture and reduce LLM token usage. Generated a compact signature map file and configured it for future coding sessions.
+
+### What Changed
+* **Signature Map Generation**: Executed `sigmap` to produce [.github/copilot-instructions.md](file:///home/jackc/projects/homma-research/.github/copilot-instructions.md) containing exports, imports, class structures, and method signature mappings for the repository.
+* **Token Budget Reduction**: Accomplished a **97.5%** token reduction (~364,584 raw tokens compressed to ~9,091 instructions tokens) while retaining full coverage of essential symbol pathways.
+* **Analysis & MCP Documentation**: Created a detailed setup guide and architectural analysis in [sigmap_analysis.md](file:///home/jackc/.gemini/antigravity-cli/brain/369290e9-ddcc-4f92-bafe-be2fd4d9f76a/sigmap_analysis.md) outlining Cursor/Claude Desktop MCP integrations, CLI-based TF-IDF search usage, and future maintenance directives.
+* **Antigravity MCP Configuration**: Configured and created `/home/jackc/.gemini/antigravity-cli/mcp_config.json` registering `sigmap` on stdio (`npx -y sigmap --mcp`), enabling native codebase context queries for Antigravity.
+* **Handoff Guide Creation**: Created a comprehensive integration handoff file at [013_sigmap_antigravity_mcp_handoff.md](file:///home/jackc/projects/homma-research/handoffs/013_sigmap_antigravity_mcp_handoff.md) describing setup, configuration, and tools for other web applications using Antigravity.
+
+---
+
+## [2026-06-06] Alert System Optimization: Trigger Quality, Telegram Enrichment, Performance Scorecard
+
+### Summary
+Implemented the full alert optimization plan (R1/R2/R3) covering trigger quality improvements, richer Telegram notifications, and a performance feedback loop with forward returns and expectancy scoring.
+
+### What Changed
+* **R1 — Trigger Quality (`momentum_screener/schwab/stream_client.py`)**:
+  * **HOD Breakout** now requires a completed 1-min candle **body close** above the session high (close > open, close >= session high_price) instead of a raw tick price touch. Eliminates wick false breakouts.
+  * **VWAP Crossover** hysteresis switched from a static 2% buffer to an **ATR-based dynamic buffer** (half the average open/close range of the last 10 candles as a % of VWAP, clamped 0.5%-3%). Adapts to current volatility regime automatically.
+  * **Post-Halt Suppression**: Added `halt_resume_times` dict to streamer state. When a volatility resume is detected, the symbol's resume timestamp is recorded. HOD Breakout and VWAP Crossover triggers are **suppressed for 2 minutes** after a resume to prevent immediate false-positive momentum alerts.
+
+* **R2 — Telegram Enrichment (`backend/fastapi_app/tasks/alerts.py`)**:
+  * Enriched `alert_payload` (built in `check_and_fire_alert`) with: `daily_pct`, `candle_vol`, `avg_candle_vol`, `vwap`, `yesterday_high`, `float_category`, `market_cap`.
+  * Rewrote all Telegram message formatters to include: ticker TV chart link, daily % change, RVOL, candle vol vs avg, VWAP distance %, PDH distance %, float size/category, and market cap.
+  * Added dedicated formatters for `HOD_BREAKOUT` and `VWAP_CROSSOVER` (previously fell through to the generic handler).
+
+* **R3 — Performance & Expectancy Feedback Loop**:
+  * **Backend (`backend/fastapi_app/routers/alerts.py`)**:
+    * `/api/alerts/daily-summary` now concurrently computes forward returns (1m, 3m, 5m, 15m) and excursions (MFE, MAE) from `price_history_1min` for each alert via `asyncio.gather`.
+    * New `/api/alerts/performance` endpoint returns a statistical scorecard (win rate, avg fwd 5m/15m, avg MFE/MAE) grouped by `alert_type`, `price_bucket` ($1-2/$2-5/$5-15/$15+), and `float_category`. Last N days configurable via `?days=` param.
+  * **Frontend (`frontend/lib/api.ts`)**: Extended `AlertInstance` with `fwd_1m/3m/5m/15m`, `mfe`, `mae` fields. Added `ScorecardRow`, `AlertsPerformance` types and `getAlertsPerformance()` API function.
+  * **Frontend (`frontend/app/alerts/page.tsx`)**:
+    * Alert trigger rows now display a mini forward return strip below the type/time row showing 1m/5m/15m returns and MFE/MAE when candle data is available (color-coded green/red).
+    * Added **Performance tab** (toggle between Journal and Performance in header). The Performance tab renders the full scorecard table with win rate (colour-coded by tier), avg 5m/15m returns, avg MFE/MAE grouped by alert type/price bucket/float.
+
+### Git Commit
+`f3923c9` — feat(alerts): R1 trigger quality, R2 Telegram enrichment, R3 forward returns scorecard
+
+---
+
 ## [2026-06-06] Schwab Streamer: Multi-Type Cooldown & Adaptive Suppression Engine
 
 ### Summary
