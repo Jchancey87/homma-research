@@ -1,734 +1,713 @@
 """
-Live Gainer Screener  — in-memory cache, Polygon Snapshot API.
+Live Gainer Screener — flat, clean pipeline.
 
-Lifecycle:
-  1.  Any call to `get_live_gainers()` triggers a Polygon snapshot fetch if
-      the cache is stale (older than CACHE_TTL_SECONDS).
-  2.  A background thread launched by `start_auto_persist()` waits until
-      8:00 PM Eastern every weekday and then writes the final snapshot to
-      the `daily_gainers` PostgreSQL table (same schema as nightly ingest).
-  3.  The final persist also enriches the top 100 Polygon tickers with
-      float/sector/RVOL via yfinance (same logic as ingest_gainers.py), so
-      the end-of-day record is fully enriched.
+Data flow:
+  1. _fetch_candidates()  — Schwab Movers (primary) + TradingView (enrichment)
+  2. _fetch_quotes()      — bulk Schwab quotes for real-time price/vol/spread
+  3. _filter_and_rank()   — apply screening filters, sort by gap_pct desc
+  4. _enrich_ticker()     — per-ticker: minute candles → mom_2m, VWAP, ATR, sparkline
+  5. refresh_cache()      — assembles result, writes to _cache
 
 Market session labels (Eastern time):
-  - PRE_MARKET   04:00 – 09:29
-  - OPEN         09:30 – 15:59
-  - AFTER_HOURS  16:00 – 19:59
-  - CLOSED       20:00 – 03:59 (next day)
+  PRE_MARKET   04:00 – 09:29
+  OPEN         09:30 – 15:59
+  AFTER_HOURS  16:00 – 19:59
+  CLOSED       20:00 – 03:59
 """
 
 import threading
 import time
 import logging
+import concurrent.futures
 from datetime import datetime, date as date_cls
-from typing import Optional
+from typing import Optional, List, Dict
 
 import pytz
 
 log = logging.getLogger(__name__)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
-EASTERN = pytz.timezone('US/Eastern')
-
-CACHE_TTL_SECONDS = 60           # Re-fetch Polygon every 1 minute
-PERSIST_HOUR_ET   = 20           # 8:00 PM Eastern — after-hours close
+EASTERN          = pytz.timezone('US/Eastern')
+CACHE_TTL_SECONDS = 60       # Background refresh interval
+PERSIST_HOUR_ET  = 20        # 8 PM ET — trigger EOD persist
 PERSIST_MINUTE_ET = 0
 
-# Screening thresholds (same as ingest job)
-MIN_GAP_PCT    = 5.0     # Show anything > 5% gap
-MAX_FLOAT_M    = 500.0   # < 500M shares
-MIN_RVOL       = 2.0     # > 2x RVOL
-MIN_PRICE      = 0.10    # >= $0.10
-MAX_PRICE      = 100.00  # <= $100
-MAX_MARKET_CAP = 10_000e6 # < $10B
-
-TOP_N           = 25    # Number of tickers to surface in the live panel
-POLYGON_LIMIT   = 100   # How many tickers to pull from Polygon snapshot
-
+# Screening thresholds
+MIN_GAP_PCT    = 5.0          # % gain vs prev close
+MIN_PRICE      = 0.50         # floor price
+MAX_PRICE      = 100.00       # ceiling price
+TOP_N          = 25           # rows returned to frontend
+ENRICH_WORKERS = 12           # parallel threads for minute-bar enrichment
 
 # ── In-process state ───────────────────────────────────────────────────────────
-_cache_lock    = threading.RLock()
-_cache: dict   = {
-    'gainers':      [],     # list[dict] — enriched top-N
-    'raw_tickers':  [],     # list[str]  — all tickers from Polygon, pre-filter
-    'fetched_at':   None,   # datetime (UTC)
-    'session':      None,   # str: 'pre_market' | 'open' | 'after_hours' | 'closed'
-    'persisted_dates': set(),   # set of date strings already persisted today
+_cache_lock = threading.RLock()
+_cache: dict = {
+    'gainers':         [],
+    'fetched_at':      None,
+    'session':         None,
+    'persisted_dates': set(),
 }
 
-_ma_cache = {}  # ticker -> (timestamp, data_dict)
-_ma_cache_lock = threading.Lock()
-
-_minute_cache = {}  # ticker -> (timestamp, metrics_dict)
+# Per-ticker caches (avoid re-fetching within short windows)
+_minute_cache: Dict[str, tuple] = {}   # ticker -> (ts, metrics_dict)
 _minute_cache_lock = threading.Lock()
+_daily_cache: Dict[str, tuple]  = {}   # ticker -> (ts, data_dict)
+_daily_cache_lock  = threading.Lock()
 
-def get_cached_sparkline_and_ma(ticker: str) -> dict:
-    now = time.time()
-    with _ma_cache_lock:
-        if ticker in _ma_cache:
-            ts, data = _ma_cache[ticker]
-            if now - ts < 3600:  # 1 hour cache
-                return data
+_last_auth_alert_ts = 0.0
+_auth_alert_lock    = threading.Lock()
 
-    try:
-        from momentum_screener.schwab.http_client import get_price_history_every_day
-        candles = get_price_history_every_day(ticker)
-        if not candles:
-            data = {
-                'sparkline_5d': [],
-                'sma20': None, 'sma50': None, 'sma100': None
-            }
-        else:
-            closes = [c.get('close') for c in candles if c.get('close') is not None]
-            if not closes:
-                data = {
-                    'sparkline_5d': [],
-                    'sma20': None, 'sma50': None, 'sma100': None
-                }
-            else:
-                sparkline_5d = closes[-5:]
-                
-                def sma(n):
-                    if len(closes) < n:
-                        return None
-                    return sum(closes[-n:]) / n
-                
-                data = {
-                    'sparkline_5d': sparkline_5d,
-                    'sma20': round(sma(20), 2) if sma(20) is not None else None,
-                    'sma50': round(sma(50), 2) if sma(50) is not None else None,
-                    'sma100': round(sma(100), 2) if sma(100) is not None else None,
-                }
-    except Exception as e:
-        log.warning(f"Error computing sparkline & MA for {ticker}: {e}")
-        data = {
-            'sparkline_5d': [],
-            'sma20': None, 'sma50': None, 'sma100': None
+
+# ── Market session ─────────────────────────────────────────────────────────────
+
+def get_market_session(now_et: Optional[datetime] = None) -> str:
+    if now_et is None:
+        now_et = datetime.now(EASTERN)
+    if now_et.weekday() >= 5:
+        return 'closed'
+    hm = now_et.hour * 60 + now_et.minute
+    if   4 * 60 <= hm < 9 * 60 + 30:  return 'pre_market'
+    elif 9 * 60 + 30 <= hm < 16 * 60: return 'open'
+    elif 16 * 60 <= hm < 20 * 60:     return 'after_hours'
+    else:                               return 'closed'
+
+def get_session_label(session: str) -> str:
+    return {
+        'pre_market':  '🌅 Pre-Market',
+        'open':        '🟢 Market Open',
+        'after_hours': '🌙 After-Hours',
+        'closed':      '⏸ Market Closed',
+    }.get(session, session)
+
+
+# ── Step 1: Candidate discovery ────────────────────────────────────────────────
+
+def _fetch_schwab_movers() -> Dict[str, dict]:
+    """Pull top movers from Schwab (NASDAQ, NYSE, EQUITY_ALL). Real-time, no lag."""
+    from momentum_screener.schwab.http_client import get_movers
+    candidates = {}
+    for exch in ['NASDAQ', 'NYSE', 'EQUITY_ALL']:
+        try:
+            for m in get_movers(exch):
+                sym = (m.get('symbol') or '').upper()
+                if not sym or len(sym) > 5:
+                    continue
+                change = round((m.get('netPercentChange') or 0) * 100, 2)
+                if sym not in candidates or abs(change) > abs(candidates[sym]['change']):
+                    candidates[sym] = {
+                        'change':      change,
+                        'price':       m.get('lastPrice') or 0,
+                        'volume':      m.get('volume') or 0,
+                        'float_shares': None,
+                        'market_cap':  None,
+                        'sector':      None,
+                    }
+        except Exception as e:
+            log.warning(f"[Screener] Schwab movers {exch} failed: {e}")
+    log.info(f"[Screener] Schwab movers: {len(candidates)} candidates")
+    return candidates
+
+
+def _fetch_tradingview_candidates() -> Dict[str, dict]:
+    """Pull gainers from TradingView for float/sector/market_cap metadata."""
+    import requests
+    url     = "https://scanner.tradingview.com/america/scan"
+    headers = {"User-Agent": "Mozilla/5.0", "Content-Type": "application/json"}
+    candidates = {}
+
+    scans = [
+        ("regular",   "change",           "close",           "volume",           ["change","close","volume","market_cap_basic","float_shares_outstanding","sector"]),
+        ("premarket",  "premarket_change", "premarket_close", "premarket_volume", ["premarket_change","premarket_close","premarket_volume","market_cap_basic","float_shares_outstanding","sector"]),
+        ("postmarket", "postmarket_change","postmarket_close","postmarket_volume",["postmarket_change","postmarket_close","postmarket_volume","market_cap_basic","float_shares_outstanding","sector"]),
+    ]
+
+    for label, change_col, price_col, vol_col, cols in scans:
+        payload = {
+            "filter": [
+                {"left": change_col, "operation": "greater", "right": 5},
+                {"left": vol_col,    "operation": "greater", "right": 5000},
+                {"left": "type",     "operation": "in_range","right": ["stock","dr","fund"]},
+            ],
+            "options": {"active_symbols_only": True},
+            "markets": ["america"],
+            "symbols": {"query": {"types": []}},
+            "sort":    {"sortBy": change_col, "sortOrder": "desc"},
+            "columns": ["name"] + cols,
+            "range":   [0, 150],
         }
+        try:
+            r = requests.post(url, json=payload, headers=headers, timeout=10)
+            if r.status_code != 200:
+                log.warning(f"[Screener] TradingView {label} HTTP {r.status_code}")
+                continue
+            for row in r.json().get("data", []):
+                d   = row.get("d", [])
+                sym = (d[0] or '').upper() if d else ''
+                if not sym or len(sym) > 5:
+                    continue
+                change = d[1] or 0
+                price  = d[2] or 0
+                volume = d[3] or 0
+                mcap   = d[4]
+                flt    = d[5]
+                sector = d[6] if len(d) > 6 else None
+                if sym not in candidates or abs(change) > abs(candidates[sym]['change']):
+                    candidates[sym] = {
+                        'change':      change,
+                        'price':       price,
+                        'volume':      volume,
+                        'float_shares': flt,
+                        'market_cap':  mcap,
+                        'sector':      sector,
+                    }
+        except Exception as e:
+            log.warning(f"[Screener] TradingView {label} error: {e}")
 
-    with _ma_cache_lock:
-        _ma_cache[ticker] = (now, data)
-    return data
+    log.info(f"[Screener] TradingView: {len(candidates)} candidates")
+    return candidates
 
-def check_tickers_history(tickers: list[str]) -> dict:
-    if not tickers:
-        return {}
+
+def _merge_candidates(schwab: dict, tv: dict) -> Dict[str, dict]:
+    """
+    Merge Schwab (primary) with TradingView (enrichment).
+    TV never overwrites Schwab change/price unless TV's % is strictly higher.
+    TV always fills missing float/sector/market_cap.
+    """
+    merged = dict(schwab)
+    for sym, tv_data in tv.items():
+        if sym not in merged:
+            merged[sym] = tv_data
+        else:
+            c = merged[sym]
+            # Always fill metadata gaps
+            if c.get('float_shares') is None: c['float_shares'] = tv_data.get('float_shares')
+            if c.get('market_cap')   is None: c['market_cap']   = tv_data.get('market_cap')
+            if c.get('sector')       is None: c['sector']       = tv_data.get('sector')
+            # Only upgrade change if TV is meaningfully higher
+            if abs(tv_data.get('change', 0) or 0) > abs(c.get('change', 0) or 0):
+                c['change'] = tv_data['change']
+    return merged
+
+
+def _fetch_watchlist_tickers() -> List[str]:
+    """Fetch pinned watchlist tickers from DB (always included in quote fetch)."""
     try:
         from database import get_connection
-        today_et = datetime.now(EASTERN).strftime('%Y-%m-%d')
         with get_connection() as conn:
-            cur = conn.execute("SELECT MAX(date) as max_date FROM daily_gainers WHERE date < %s", (today_et,))
-            row = cur.fetchone()
-            recent_date = row['max_date'] if row else None
-            
-            if not recent_date:
-                return {}
-            
-            cur = conn.execute(
-                """
-                SELECT ticker, COUNT(*) as total_count,
-                       SUM(CASE WHEN date = %s THEN 1 ELSE 0 END) as yesterday_count
-                FROM daily_gainers
-                WHERE ticker = ANY(%s) AND date < %s
-                GROUP BY ticker
-                """,
-                (recent_date, list(tickers), today_et)
-            )
-            rows = cur.fetchall()
-            
-            history = {}
-            for r in rows:
-                history[r['ticker']] = {
-                    'is_repeat_runner': r['total_count'] > 0,
-                    'is_follow_through': r['yesterday_count'] > 0
-                }
-            return history
+            rows = conn.execute("SELECT ticker FROM watchlist").fetchall()
+            return [r['ticker'].upper() for r in rows if r.get('ticker')]
     except Exception as e:
-        log.warning(f"Error checking ticker history: {e}")
-        return {}
+        log.warning(f"[Screener] Watchlist fetch failed: {e}")
+        return []
 
-import concurrent.futures
 
-def get_minute_metrics(ticker: str, last_price: Optional[float], high_price: Optional[float], bid: Optional[float], ask: Optional[float]) -> dict:
+# ── Step 2: Bulk quote fetch ───────────────────────────────────────────────────
+
+def _fetch_quotes(symbols: List[str]) -> Dict[str, dict]:
+    """Fetch Schwab quotes in chunks of 50. Returns {sym: quote_dict}."""
+    from momentum_screener.schwab.http_client import get_quotes
+    all_quotes = {}
+    for i in range(0, len(symbols), 50):
+        chunk = symbols[i:i+50]
+        try:
+            all_quotes.update(get_quotes(chunk))
+        except Exception as e:
+            log.warning(f"[Screener] Quote chunk {chunk[:3]}… failed: {e}")
+    return all_quotes
+
+
+# ── Step 3: Filter & rank ──────────────────────────────────────────────────────
+
+def _build_gainer_rows(quotes: Dict[str, dict], candidate_meta: Dict[str, dict],
+                        watchlist: set) -> List[dict]:
+    """
+    Build flat gainer dicts from live Schwab quotes + candidate metadata.
+    Applies price and gap filters. Always includes watchlist tickers (no filter).
+    """
+    rows = []
+    for sym, data in quotes.items():
+        q    = data.get('quote', {}) or {}
+        fund = data.get('fundamental', {}) or {}
+        meta = candidate_meta.get(sym, {})
+
+        last_price = q.get('lastPrice')
+        prev_close = q.get('closePrice')  # previous session close from Schwab
+
+        if not last_price or not prev_close or prev_close <= 0:
+            if sym not in watchlist:
+                continue
+            # watchlist tickers kept even with incomplete data
+            gap_pct = 0.0
+        else:
+            gap_pct = round(((last_price - prev_close) / prev_close) * 100, 2)
+
+        in_watchlist = sym in watchlist
+
+        # Price filter (skip for watchlist)
+        if not in_watchlist:
+            if last_price < MIN_PRICE or last_price > MAX_PRICE:
+                continue
+            if gap_pct < MIN_GAP_PCT:
+                continue
+
+        high_price = q.get('highPrice') or last_price
+        open_price = q.get('openPrice')
+        low_price  = q.get('lowPrice')
+        ask        = q.get('askPrice')
+        bid        = q.get('bidPrice')
+        total_vol  = q.get('totalVolume') or meta.get('volume') or 0
+        avg_vol    = fund.get('avg10DaysVolume') or fund.get('avg1YearVolume') or 0
+        rvol       = round(total_vol / avg_vol, 2) if avg_vol and avg_vol > 0 else None
+        spread_pct = round(((ask - bid) / bid) * 100, 2) if ask and bid and bid > 0 else None
+        is_hod     = (last_price >= high_price * 0.995) if high_price and high_price > 0 else False
+
+        rows.append({
+            'ticker':        sym,
+            'gap_pct':       gap_pct,
+            'last_price':    round(last_price, 4) if last_price else None,
+            'high_price':    round(high_price, 4) if high_price else None,
+            'low_price':     round(low_price, 4) if low_price else None,
+            'open_price':    round(open_price, 4) if open_price else None,
+            'prev_close':    round(prev_close, 4) if prev_close else None,
+            'volume':        int(total_vol),
+            'rvol_15m':      rvol,
+            'float_shares':  meta.get('float_shares'),
+            'market_cap':    meta.get('market_cap'),
+            'sector':        meta.get('sector'),
+            'ask':           ask,
+            'bid':           bid,
+            'spread_pct':    spread_pct,
+            'is_hod':        is_hod,
+            'in_watchlist':  in_watchlist,
+            'news_headline': None,
+            'news_fresh':    None,
+        })
+
+    # Sort: watchlist first, then by gap_pct descending
+    rows.sort(key=lambda x: (not x['in_watchlist'], -x['gap_pct']))
+    return rows
+
+
+# ── Step 4: Per-ticker minute-level enrichment ─────────────────────────────────
+
+def _compute_minute_metrics(ticker: str, last_price: Optional[float],
+                             high_price: Optional[float],
+                             bid: Optional[float], ask: Optional[float]) -> dict:
+    """
+    Fetch intraday 1-min candles and compute:
+      - mom_2m  : % change from close of candle nearest to 2 min ago → current price
+      - vwap    : volume-weighted average price (intraday)
+      - atr_14  : 14-period average true range
+      - atr_hod : distance to HOD in ATR units
+      - atr_sprd: bid-ask spread in ATR units
+      - atr_vwap: distance to VWAP in ATR units
+      - zen_v   : 5-candle price slope / ATR (momentum direction indicator)
+      - intraday_sparkline: sampled list of closes (max 30 points)
+    """
     now = time.time()
+
+    # 30-second cache — return stale data with fresh price updates applied inline
     with _minute_cache_lock:
         if ticker in _minute_cache:
-            ts, data = _minute_cache[ticker]
+            ts, cached = _minute_cache[ticker]
             if now - ts < 30:
-                # Update high-frequency values dynamically if we have a cached base
                 if last_price is not None:
-                    if data.get('atr_14') and data['atr_14'] > 0:
+                    # Refresh price-derived fields without a full re-fetch
+                    atr = cached.get('atr_14') or 0
+                    if atr > 0:
                         if high_price is not None:
-                            data['atr_hod'] = round((high_price - last_price) / data['atr_14'], 2)
+                            cached['atr_hod']  = round(max(0, (high_price - last_price) / atr), 2)
                         if bid is not None and ask is not None:
-                            data['atr_sprd'] = round((ask - bid) / data['atr_14'], 2)
-                        if data.get('vwap') is not None:
-                            data['atr_vwap'] = round((last_price - data['vwap']) / data['atr_14'], 2)
-                    if 'intraday_sparkline' in data and data['intraday_sparkline']:
-                        data['intraday_sparkline'] = list(data['intraday_sparkline'])
-                        data['intraday_sparkline'][-1] = last_price
-                    # Re-anchor mom_2m to wall-clock now so the cached base price stays correct
-                    # even as wall-clock time advances past the 30-second cache window edges
-                    if data.get('price_2min_ago') and data['price_2min_ago'] > 0:
-                        data['mom_2m'] = round(((last_price - data['price_2min_ago']) / data['price_2min_ago']) * 100, 2)
-                        # Invalidate stale base price: if the cached price_2min_ago was set
-                        # when the cache was first computed (up to 30s ago), it may now be
-                        # older than 2.5 minutes — in that case force a full recalculation
-                        # next call by expiring the cache entry.
-                        cache_age_s = now - ts
-                        if cache_age_s > 28:  # near cache expiry — let it naturally expire
-                            pass  # next call will recompute fresh
-                return data
+                            cached['atr_sprd'] = round((ask - bid) / atr, 2)
+                        if cached.get('vwap') is not None:
+                            cached['atr_vwap'] = round((last_price - cached['vwap']) / atr, 2)
+                    # Update mom_2m inline with cached base price
+                    base = cached.get('price_2min_ago')
+                    if base and base > 0:
+                        cached['mom_2m'] = round(((last_price - base) / base) * 100, 2)
+                    # Append latest price to sparkline tail
+                    if cached.get('intraday_sparkline'):
+                        cached['intraday_sparkline'][-1] = last_price
+                return cached
 
     try:
         from services.schwab_client import get_minute_bars
         candles = get_minute_bars(ticker)
-        if not candles:
-            metrics = {
-                'mom_2m': None,
-                'price_2min_ago': None,
-                'atr_hod': None,
-                'atr_sprd': None,
-                'atr_vwap': None,
-                'zen_v': None,
-                'atr_14': None,
-                'vwap': None,
-                'intraday_sparkline': []
-            }
-        else:
-            # 1. Compute ATR(14)
-            tr_values = []
-            for i in range(1, len(candles)):
-                h = candles[i].get('h') or candles[i].get('c')
-                l = candles[i].get('l') or candles[i].get('c')
-                prev_c = candles[i-1].get('c')
-                if h is not None and l is not None and prev_c is not None:
-                    tr = max(h - l, abs(h - prev_c), abs(l - prev_c))
-                    tr_values.append(tr)
-            
-            atr = 0.0
-            if tr_values:
-                periods = min(14, len(tr_values))
-                atr = sum(tr_values[-periods:]) / periods
-            
-            if atr <= 0:
-                atr = (last_price or candles[-1].get('c') or 1.0) * 0.001
-
-            # 2. Compute 2-min % change: find the candle closest to 2 minutes ago,
-            # use its close as the base. Compare against current price.
-            curr_p = last_price if last_price is not None else (candles[-1].get('c') or 0.0)
-            mom_2m = 0.0
-            if candles and curr_p:
-                now_ms = int(time.time() * 1000)
-                target_ts = now_ms - 120_000  # 2 minutes ago in ms
-                # Pick the candle whose open time is nearest to target_ts
-                best = min(candles, key=lambda c: abs((c.get('t') or 0) - target_ts))
-                price_2min_ago = best.get('c')
-                if price_2min_ago and price_2min_ago > 0:
-                    mom_2m = round(((curr_p - price_2min_ago) / price_2min_ago) * 100, 2)
-
-            # 3. Compute VWAP
-            total_vol = sum(c.get('v') or 0 for c in candles)
-            if total_vol > 0:
-                sum_pv = 0.0
-                for c in candles:
-                    h = c.get('h') or c.get('c') or 0.0
-                    l = c.get('l') or c.get('c') or 0.0
-                    close = c.get('c') or 0.0
-                    v = c.get('v') or 0
-                    tp = (h + l + close) / 3.0
-                    sum_pv += tp * v
-                vwap = sum_pv / total_vol
-            else:
-                vwap = curr_p
-
-            # 4. Compute ZenV (Slope)
-            zen_v = 0.0
-            if len(candles) >= 5:
-                y = [c.get('c') or 0.0 for c in candles[-5:]]
-                sum_iy = sum((i + 1) * y[i] for i in range(5))
-                sum_y = sum(y)
-                slope = (sum_iy - 3.0 * sum_y) / 10.0
-                zen_v = round(slope / atr, 2)
-            elif len(candles) >= 2:
-                n = len(candles)
-                y = [c.get('c') or 0.0 for c in candles[-n:]]
-                sum_x = sum(range(1, n + 1))
-                sum_x2 = sum(i * i for i in range(1, n + 1))
-                sum_y = sum(y)
-                sum_xy = sum((i + 1) * y[i] for i in range(n))
-                denom = (n * sum_x2 - sum_x * sum_x)
-                slope = (n * sum_xy - sum_x * sum_y) / denom if denom > 0 else 0.0
-                zen_v = round(slope / atr, 2)
-
-            # 5. Compute ATR Distance to High of Day (AtrHoD)
-            candle_high = max((c.get('h') or c.get('c') or 0.0) for c in candles) if candles else 0.0
-            hod = max(high_price or 0.0, candle_high, curr_p)
-            atr_hod = round((hod - curr_p) / atr, 2) if hod and atr > 0 else 0.0
-            if atr_hod < 0:
-                atr_hod = 0.0
-
-            # 6. Compute ATR Spread
-            atr_sprd = None
-            if bid is not None and ask is not None:
-                atr_sprd = round((ask - bid) / atr, 2)
-
-            # 7. Compute ATR VWAP
-            atr_vwap = round((curr_p - vwap) / atr, 2) if atr > 0 else 0.0
-
-            # 8. Compute Detailed Intraday Sparkline
-            closes = [c.get('c') for c in candles if c.get('c') is not None]
-            intraday_sparkline = []
-            if closes:
-                target_len = 30
-                if len(closes) > target_len:
-                    intraday_sparkline = [
-                        closes[int(i * (len(closes) - 1) / (target_len - 1))]
-                        for i in range(target_len)
-                    ]
-                else:
-                    intraday_sparkline = closes
-                if last_price is not None:
-                    intraday_sparkline[-1] = last_price
-
-            metrics = {
-                'mom_2m': mom_2m,
-                'raw_mom_2m': mom_2m,
-                'price_2min_ago': price_2min_ago,
-                'atr_hod': atr_hod,
-                'atr_sprd': atr_sprd,
-                'atr_vwap': atr_vwap,
-                'zen_v': zen_v,
-                'atr_14': atr,
-                'vwap': vwap,
-                'intraday_sparkline': intraday_sparkline,
-                'hod': hod
-            }
     except Exception as e:
-        log.warning(f"Error computing minute metrics for {ticker}: {e}", exc_info=True)
-        metrics = {
-            'mom_2m': None,
-            'price_2min_ago': None,
-            'atr_hod': None,
-            'atr_sprd': None,
-            'atr_vwap': None,
-            'zen_v': None,
-            'atr_14': None,
-            'vwap': None,
-            'intraday_sparkline': [],
-            'hod': high_price or last_price
-        }
+        log.warning(f"[Screener] get_minute_bars({ticker}) failed: {e}")
+        candles = []
+
+    empty = {
+        'mom_2m': None, 'price_2min_ago': None,
+        'atr_14': None, 'vwap': None,
+        'atr_hod': None, 'atr_sprd': None, 'atr_vwap': None,
+        'zen_v': None, 'intraday_sparkline': [], 'hod': high_price or last_price,
+    }
+
+    if not candles:
+        with _minute_cache_lock:
+            _minute_cache[ticker] = (now, empty)
+        return empty
+
+    curr_p = last_price if last_price is not None else (candles[-1].get('c') or 0.0)
+
+    # ── ATR(14) ──
+    tr_vals = []
+    for i in range(1, len(candles)):
+        h = candles[i].get('h') or candles[i].get('c') or 0
+        l = candles[i].get('l') or candles[i].get('c') or 0
+        pc = candles[i-1].get('c') or 0
+        if h and l and pc:
+            tr_vals.append(max(h - l, abs(h - pc), abs(l - pc)))
+    periods = min(14, len(tr_vals))
+    atr = (sum(tr_vals[-periods:]) / periods) if periods > 0 else (curr_p * 0.001 or 0.001)
+
+    # ── mom_2m: find candle closest to 2 min ago, use its close as base ──
+    now_ms     = int(time.time() * 1000)
+    target_ts  = now_ms - 120_000   # exactly 2 minutes ago
+    best       = min(candles, key=lambda c: abs((c.get('t') or 0) - target_ts))
+    price_2min_ago = best.get('c')
+    mom_2m = 0.0
+    if price_2min_ago and price_2min_ago > 0 and curr_p:
+        mom_2m = round(((curr_p - price_2min_ago) / price_2min_ago) * 100, 2)
+
+    # ── VWAP (intraday, cumulative) ──
+    total_vol = sum(c.get('v') or 0 for c in candles)
+    if total_vol > 0:
+        sum_pv = sum(
+            ((c.get('h') or c.get('c') or 0) + (c.get('l') or c.get('c') or 0) + (c.get('c') or 0)) / 3
+            * (c.get('v') or 0)
+            for c in candles
+        )
+        vwap = sum_pv / total_vol
+    else:
+        vwap = curr_p
+
+    # ── ZenV: 5-candle linear slope / ATR ──
+    zen_v = 0.0
+    n = min(5, len(candles))
+    if n >= 2:
+        y = [c.get('c') or 0.0 for c in candles[-n:]]
+        xs = list(range(1, n + 1))
+        sx  = sum(xs)
+        sx2 = sum(x * x for x in xs)
+        sy  = sum(y)
+        sxy = sum(xs[i] * y[i] for i in range(n))
+        denom = n * sx2 - sx * sx
+        slope = (n * sxy - sx * sy) / denom if denom > 0 else 0.0
+        zen_v = round(slope / atr, 2) if atr > 0 else 0.0
+
+    # ── ATR distances ──
+    candle_hod = max((c.get('h') or c.get('c') or 0) for c in candles)
+    hod        = max(high_price or 0, candle_hod, curr_p)
+    atr_hod    = round(max(0, (hod - curr_p) / atr), 2) if atr > 0 else 0.0
+    atr_sprd   = round((ask - bid) / atr, 2) if atr > 0 and bid is not None and ask is not None else None
+    atr_vwap   = round((curr_p - vwap) / atr, 2) if atr > 0 else 0.0
+
+    # ── Intraday sparkline (≤30 sampled close prices) ──
+    closes = [c.get('c') for c in candles if c.get('c') is not None]
+    if len(closes) > 30:
+        sparkline = [closes[int(i * (len(closes) - 1) / 29)] for i in range(30)]
+    else:
+        sparkline = list(closes)
+    if sparkline and curr_p:
+        sparkline[-1] = curr_p
+
+    metrics = {
+        'mom_2m':            mom_2m,
+        'price_2min_ago':    price_2min_ago,
+        'atr_14':            atr,
+        'vwap':              vwap,
+        'atr_hod':           atr_hod,
+        'atr_sprd':          atr_sprd,
+        'atr_vwap':          atr_vwap,
+        'zen_v':             zen_v,
+        'intraday_sparkline': sparkline,
+        'hod':               hod,
+    }
 
     with _minute_cache_lock:
         _minute_cache[ticker] = (now, metrics)
     return metrics
 
-def enrich_single_gainer(g: dict) -> dict:
-    ticker = g['ticker']
-    # 1. Daily indicators (1 hour cache)
-    ma_data = get_cached_sparkline_and_ma(ticker)
-    
-    # 2. Minute-level indicators (30 seconds cache)
+
+def _compute_daily_metrics(ticker: str) -> dict:
+    """Fetch daily candles, compute SMA20/50/100 and 5-day sparkline. 1-hour cache."""
+    now = time.time()
+    with _daily_cache_lock:
+        if ticker in _daily_cache:
+            ts, data = _daily_cache[ticker]
+            if now - ts < 3600:
+                return data
+
+    empty = {'sparkline_5d': [], 'sma20': None, 'sma50': None, 'sma100': None}
+    try:
+        from momentum_screener.schwab.http_client import get_price_history_every_day
+        raw = get_price_history_every_day(ticker)
+        closes = [c.get('close') for c in raw if c.get('close') is not None]
+        if not closes:
+            data = empty
+        else:
+            def sma(n): return round(sum(closes[-n:]) / n, 2) if len(closes) >= n else None
+            data = {
+                'sparkline_5d': closes[-5:],
+                'sma20':  sma(20),
+                'sma50':  sma(50),
+                'sma100': sma(100),
+            }
+    except Exception as e:
+        log.warning(f"[Screener] Daily metrics for {ticker} failed: {e}")
+        data = empty
+
+    with _daily_cache_lock:
+        _daily_cache[ticker] = (now, data)
+    return data
+
+
+def _enrich_ticker(g: dict) -> dict:
+    """Apply minute-level and daily metrics to a gainer row in-place. Returns g."""
+    ticker     = g['ticker']
     last_price = g.get('last_price')
     high_price = g.get('high_price')
-    bid = g.get('bid')
-    ask = g.get('ask')
-    min_metrics = get_minute_metrics(ticker, last_price, high_price, bid, ask)
-    
-    return {
-        'ma': ma_data,
-        'min': min_metrics
-    }
+    bid        = g.get('bid')
+    ask        = g.get('ask')
 
-_last_auth_alert_time = 0.0
-_auth_alert_lock = threading.Lock()
+    # Minute metrics
+    mm = _compute_minute_metrics(ticker, last_price, high_price, bid, ask)
+    g['mom_2m']            = mm['mom_2m']
+    g['atr_hod']           = mm['atr_hod']
+    g['atr_sprd']          = mm['atr_sprd']
+    g['atr_vwap']          = mm['atr_vwap']
+    g['zen_v']             = mm['zen_v']
+    g['vwap']              = round(mm['vwap'], 4) if mm.get('vwap') else None
+    g['sparkline_intraday'] = mm['intraday_sparkline']
+    if mm.get('hod'):
+        g['high_price'] = round(mm['hod'], 4)
 
-def enrich_gainers_with_sparklines_and_history(gainers: list[dict]) -> list[dict]:
-    if not gainers:
-        return gainers
-        
-    schwab_available = True
-    try:
-        from momentum_screener.schwab.http_client import get_http_client
-        get_http_client()
-    except Exception as e:
-        log.error(f"[LiveScreener] Schwab HTTP client initialization failed: {e}", exc_info=True)
-        schwab_available = False
+    # Daily metrics
+    dm = _compute_daily_metrics(ticker)
+    live = last_price
+    sparkline = dm['sparkline_5d']
+    if live is not None and sparkline:
+        sparkline = sparkline[-4:] + [live]
+    g['sparkline_5d'] = sparkline
+    g['sma20']        = dm['sma20']
+    g['sma50']        = dm['sma50']
+    g['sma100']       = dm['sma100']
+    g['above_sma20']  = (live > dm['sma20'])  if live and dm['sma20']  else False
+    g['above_sma50']  = (live > dm['sma50'])  if live and dm['sma50']  else False
+    g['above_sma100'] = (live > dm['sma100']) if live and dm['sma100'] else False
 
-        # Rate-limit Telegram alert to once every 1 hour to avoid spamming
-        global _last_auth_alert_time
-        now = time.time()
-        with _auth_alert_lock:
-            should_alert = (now - _last_auth_alert_time) > 3600
-            if should_alert:
-                _last_auth_alert_time = now
+    return g
 
-        if should_alert:
-            try:
-                from fastapi_app.tasks.alerts import send_telegram_message
-                send_telegram_message(
-                    "🚨 *[Schwab Auth Failure]* 🚨\n\n"
-                    "Schwab HTTP client failed to initialize! The live screener will run in fallback mode.\n"
-                    f"- *Error:* {e}\n"
-                    "- *Action:* Please run `python schwab_auth_setup.py` on the host to refresh the token."
-                )
-            except Exception as alert_err:
-                log.error(f"Failed to send Telegram auth alert: {alert_err}")
 
-    tickers = [g['ticker'] for g in gainers]
-    history = check_tickers_history(tickers)
-    
-    if not schwab_available:
-        # Populate remaining un-enriched tickers with fallbacks so schema remains consistent
-        for g in gainers:
-            g.update({
-                'sparkline_5d': [],
-                'sparkline_intraday': [],
-                'above_sma20': False, 'above_sma50': False, 'above_sma100': False,
-                'sma20': None, 'sma50': None, 'sma100': None,
-                'mom_2m': None, 'atr_hod': None, 'atr_sprd': None, 'atr_vwap': None, 'zen_v': None
-            })
-            ticker = g['ticker']
-            hist = history.get(ticker, {})
-            g['is_repeat_runner'] = hist.get('is_repeat_runner', False)
-            g['is_follow_through'] = hist.get('is_follow_through', False)
-        return gainers
-    
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        futures = {executor.submit(enrich_single_gainer, g): g for g in gainers}
+def _enrich_all(gainers: List[dict]) -> List[dict]:
+    """Parallel enrichment of all gainers. Skips tickers that time out."""
+    with concurrent.futures.ThreadPoolExecutor(max_workers=ENRICH_WORKERS) as ex:
+        futures = {ex.submit(_enrich_ticker, g): g for g in gainers}
         try:
-            for future in concurrent.futures.as_completed(futures, timeout=45):
-                g = futures[future]
+            for fut in concurrent.futures.as_completed(futures, timeout=45):
+                g = futures[fut]
                 try:
-                    res = future.result()
-                    ma_data = res['ma']
-                    min_metrics = res['min']
-                    
-                    # Apply daily metrics
-                    live_price = g.get('last_price')
-                    sparkline = ma_data['sparkline_5d']
-                    if live_price is not None:
-                        sparkline = sparkline[-4:] + [live_price]
-                    
-                    g['sparkline_5d'] = sparkline
-                    g['sma20'] = ma_data['sma20']
-                    g['sma50'] = ma_data['sma50']
-                    g['sma100'] = ma_data['sma100']
-                    
-                    g['above_sma20'] = live_price > ma_data['sma20'] if live_price is not None and ma_data['sma20'] is not None else False
-                    g['above_sma50'] = live_price > ma_data['sma50'] if live_price is not None and ma_data['sma50'] is not None else False
-                    g['above_sma100'] = live_price > ma_data['sma100'] if live_price is not None and ma_data['sma100'] is not None else False
-                    
-                    # Apply minute-level metrics
-                    g['mom_2m'] = min_metrics['mom_2m']
-                    g['atr_hod'] = min_metrics['atr_hod']
-                    g['atr_sprd'] = min_metrics['atr_sprd']
-                    g['atr_vwap'] = min_metrics['atr_vwap']
-                    g['zen_v'] = min_metrics['zen_v']
-                    g['sparkline_intraday'] = min_metrics.get('intraday_sparkline', [])
-                    if min_metrics.get('hod'):
-                        g['high_price'] = round(min_metrics['hod'], 4)
-                    
+                    fut.result()
                 except Exception as e:
-                    log.warning(f"Failed to enrich {g['ticker']}: {e}")
-                    g.update({
-                        'sparkline_5d': [],
-                        'sparkline_intraday': [],
-                        'above_sma20': False, 'above_sma50': False, 'above_sma100': False,
-                        'sma20': None, 'sma50': None, 'sma100': None,
-                        'mom_2m': None, 'atr_hod': None, 'atr_sprd': None, 'atr_vwap': None, 'zen_v': None
-                    })
+                    log.warning(f"[Screener] Enrich failed for {g['ticker']}: {e}")
         except concurrent.futures.TimeoutError:
-            log.error("[LiveScreener] Cache enrichment timed out after 45 seconds! Thread pool may have hung.")
-            for future in futures:
-                future.cancel()
-            
-            # Populate remaining un-enriched tickers with fallbacks so schema remains consistent
-            for g in gainers:
-                if 'sparkline_5d' not in g:
-                    g.update({
-                        'sparkline_5d': [],
-                        'sparkline_intraday': [],
-                        'above_sma20': False, 'above_sma50': False, 'above_sma100': False,
-                        'sma20': None, 'sma50': None, 'sma100': None,
-                        'mom_2m': None, 'atr_hod': None, 'atr_sprd': None, 'atr_vwap': None, 'zen_v': None
-                    })
-                
-    for g in gainers:
-        ticker = g['ticker']
-        hist = history.get(ticker, {})
-        g['is_repeat_runner'] = hist.get('is_repeat_runner', False)
-        g['is_follow_through'] = hist.get('is_follow_through', False)
-        
+            log.error("[Screener] Enrichment timed out — some tickers may be missing metrics")
     return gainers
 
 
-# ── Market session logic ───────────────────────────────────────────────────────
-
-def get_market_session(now_et: Optional[datetime] = None) -> str:
-    """Return the current US market session label."""
-    if now_et is None:
-        now_et = datetime.now(EASTERN)
-    # Check if it's the weekend (Saturday or Sunday)
-    if now_et.weekday() >= 5:
-        return 'closed'
-    hm = now_et.hour * 60 + now_et.minute
-    if   4 * 60 <= hm < 9 * 60 + 30:
-        return 'pre_market'
-    elif 9 * 60 + 30 <= hm < 16 * 60:
-        return 'open'
-    elif 16 * 60 <= hm < 20 * 60:
-        return 'after_hours'
-    else:
-        return 'closed'
-
-def get_session_label(session: str) -> str:
-    return {
-        'pre_market':   '🌅 Pre-Market',
-        'open':         '🟢 Market Open',
-        'after_hours':  '🌙 After-Hours',
-        'closed':       '⏸ Market Closed',
-    }.get(session, session)
-
-
-# ── Polygon Snapshot fetch ─────────────────────────────────────────────────────
-
-def _fetch_polygon_snapshot() -> list[dict]:
-    """
-    Fetch top gainers from Massive.com (fka Polygon.io) via the official SDK.
-    With Standard tier, this includes extended-hours data.
-    Returns a list of raw ticker dicts.
-    """
-    from services import polygon_client as poly
-    try:
-        snaps = poly.get_gainers_snapshot(include_otc=False)
-        log.info(f"[LiveScreener] Massive returned {len(snaps)} raw gainers")
-        return snaps[:POLYGON_LIMIT]
-    except Exception as e:
-        log.warning(f"[LiveScreener] Massive snapshot failed: {e}")
-        return []
-
-
-# ── Per-ticker enrichment (lightweight, no yfinance for live cache) ────────────
-
-def _enrich_snapshot_tickers(raw_tickers: list[dict]) -> list[dict]:
-    """
-    Build structured gainer dicts from Polygon snapshot data.
-    This is intentionally lightweight — we use only Polygon fields so we
-    can refresh every 5 min without hammering yfinance.
-    """
-    gainers = []
-    for t in raw_tickers:
-        try:
-            sym = t.get('ticker', '')
-            if not sym or len(sym) > 5:   # skip obvious non-equities
-                continue
-
-            day   = t.get('day', {})
-            prevd = t.get('prevDay', {})
-            snap  = t.get('lastQuote', {}) or {}
-            last  = t.get('lastTrade', {}) or {}
-
-            # Volume & RVOL
-            volume     = day.get('v') or 0
-            prev_vol   = prevd.get('v') or 0
-            # Simple 1-day RVOL proxy until we have moving averages
-            rvol = round(volume / prev_vol, 2) if prev_vol > 0 else None
-
-            # Prices
-            open_price  = day.get('o') or prevd.get('c')
-            # For live price: prefer last trade, then VWAP, then close
-            last_price  = (
-                last.get('p')
-                or day.get('c')
-                or day.get('vw')
-            )
-            prev_close  = prevd.get('c') or prevd.get('vw')
-
-            if not last_price or not prev_close:
-                continue
-
-            # Gap % — calculate gap off last vs prev_close so it reflects the current
-            # extended-hours move, not just the gap at open or stale regular change
-            gap_pct = round(((last_price - prev_close) / prev_close) * 100, 2)
-            if gap_pct < MIN_GAP_PCT:
-                continue
-
-            # ── Price Filter ───────────────────────────────────────────────────────
-            if last_price < MIN_PRICE or last_price > MAX_PRICE:
-                continue
-
-            gainers.append({
-                'ticker':        sym,
-                'gap_pct':       gap_pct,
-                'last_price':    round(last_price, 4),
-                'high_price':    round(t.get('day', {}).get('h', last_price), 4) if t.get('day', {}).get('h') else round(last_price, 4),
-                'open_price':    round(open_price, 4) if open_price else None,
-                'prev_close':    round(prev_close, 4),
-                'volume':        int(volume),
-                'rvol_15m':      rvol,
-                'float_shares':  t.get('float_shares'),
-                'sector':        t.get('sector'),
-                'market_cap':    t.get('market_cap'),
-                'spread_pct':    t.get('spread_pct'),
-                'ask':           t.get('ask'),
-                'bid':           t.get('bid'),
-                'trade_time':    t.get('trade_time'),
-                'is_hod':        t.get('is_hod'),
-                'news_headline': None,
-                'news_fresh':    None,
-            })
-        except Exception as e:
-            log.debug(f"[LiveScreener] Skipping ticker {t.get('ticker')}: {e}")
-            continue
-
-    # Sort descending by gap
-    gainers.sort(key=lambda x: x['gap_pct'], reverse=True)
-    return gainers[:TOP_N * 3]   # keep a wider pool for the persist step
-
-
-# ── Public cache API ───────────────────────────────────────────────────────────
-
-def _is_cache_fresh() -> bool:
-    with _cache_lock:
-        fetched = _cache['fetched_at']
-    if fetched is None:
-        return False
-    age = (datetime.utcnow() - fetched).total_seconds()
-    return age < CACHE_TTL_SECONDS
-
-
-def _load_fallback_gainers_from_db() -> list[dict]:
-    """
-    Query the daily_gainers table for the most recent trading day,
-    enrich them (including history & sparklines) so they match the
-    format expected by the live screener, and return them.
-    """
+def _check_repeat_history(tickers: List[str]) -> Dict[str, dict]:
+    """Check if tickers appeared in daily_gainers previously (repeat runner / follow-through)."""
     try:
         from database import get_connection
+        today_et = datetime.now(EASTERN).strftime('%Y-%m-%d')
         with get_connection() as conn:
-            # 1. Find the most recent date in daily_gainers
-            cur = conn.execute("SELECT MAX(date) as max_date FROM daily_gainers")
-            row = cur.fetchone()
-            recent_date = row['max_date'] if row else None
-            
-            if not recent_date:
-                log.info("[LiveScreener] Fallback: No historical daily gainers found in DB.")
-                return []
-                
-            log.info(f"[LiveScreener] Fallback: Loading gainers from DB for date {recent_date}")
-            
-            # 2. Fetch gappers for that date with gap_pct >= MIN_GAP_PCT
-            cur = conn.execute(
-                """
-                SELECT * FROM daily_gainers 
-                WHERE date = %s 
-                  AND gap_pct >= %s
-                ORDER BY gap_pct DESC 
-                LIMIT %s
-                """,
-                (recent_date, MIN_GAP_PCT, TOP_N)
-            )
-            rows = cur.fetchall()
-            
-            gainers = []
-            for r in rows:
-                last_price = r.get('close_price')
-                high_price = r.get('high_price')
-                is_hod = (last_price >= (high_price * 0.995)) if last_price and high_price and high_price > 0 else False
-                
-                # Check close_location as fallback for is_hod if high_price was not populated properly
-                if not is_hod and r.get('close_location') is not None:
-                    is_hod = r.get('close_location') >= 0.995
-                
-                gainers.append({
-                    'ticker':        r.get('ticker'),
-                    'gap_pct':       r.get('gap_pct'),
-                    'last_price':    last_price,
-                    'high_price':    high_price,
-                    'open_price':    r.get('open_price'),
-                    'prev_close':    r.get('prev_close'),
-                    'volume':        int(r.get('volume')) if r.get('volume') is not None else 0,
-                    'rvol_15m':      r.get('rvol_15m'),
-                    'float_shares':  r.get('float_shares'),
-                    'sector':        r.get('sector'),
-                    'market_cap':    r.get('market_cap'),
-                    'spread_pct':    None,
-                    'ask':           None,
-                    'bid':           None,
-                    'trade_time':    None,
-                    'is_hod':        is_hod,
-                    'news_headline': r.get('news_headline'),
-                    'news_fresh':    r.get('news_fresh'),
-                })
-            
-            gainers = enrich_gainers_with_sparklines_and_history(gainers)
-            return gainers
+            row = conn.execute("SELECT MAX(date) as d FROM daily_gainers WHERE date < %s", (today_et,)).fetchone()
+            recent = row['d'] if row else None
+            if not recent:
+                return {}
+            rows = conn.execute(
+                """SELECT ticker,
+                          COUNT(*) as total,
+                          SUM(CASE WHEN date = %s THEN 1 ELSE 0 END) as yesterday
+                   FROM daily_gainers
+                   WHERE ticker = ANY(%s) AND date < %s
+                   GROUP BY ticker""",
+                (recent, list(tickers), today_et)
+            ).fetchall()
+            return {r['ticker']: {
+                'is_repeat_runner':   r['total'] > 0,
+                'is_follow_through':  r['yesterday'] > 0,
+            } for r in rows}
     except Exception as e:
-        log.error(f"[LiveScreener] Failed to load fallback gainers from DB: {e}", exc_info=True)
-        return []
+        log.warning(f"[Screener] Repeat history check failed: {e}")
+        return {}
 
+
+# ── Main refresh pipeline ──────────────────────────────────────────────────────
 
 def refresh_cache(force: bool = False) -> dict:
     """
-    Refresh the live gainer cache from Polygon if stale.
-    Returns the current cache contents.
+    Run the full screener pipeline and update the in-memory cache.
+    If cache is fresh and force=False, returns immediately.
     """
-    now_et  = datetime.now(EASTERN)
-    session = get_market_session(now_et)
-
+    # Fast path: serve from cache
     if not force:
         with _cache_lock:
-            # If cache has data, return it immediately to keep API response latency extremely low.
-            # The background cache refresh thread is responsible for updating the cache asynchronously.
             if _cache['gainers']:
                 return dict(_cache)
 
-    # During deep-closed hours (midnight to 3:59 AM ET) don't burn API calls if we already have data
-    hm = now_et.hour * 60 + now_et.minute
-    if 0 <= hm < 4 * 60 and not force:
-        with _cache_lock:
-            if _cache['gainers']:
-                _cache['session'] = session
-                return dict(_cache)
+    # ── 1. Candidate discovery ──
+    try:
+        schwab_candidates = _fetch_schwab_movers()
+    except Exception as e:
+        log.error(f"[Screener] Schwab movers failed: {e}")
+        schwab_candidates = {}
 
-    raw = _fetch_polygon_snapshot()
-    gainers = _enrich_snapshot_tickers(raw)
-    gainers = enrich_gainers_with_sparklines_and_history(gainers)
+    try:
+        tv_candidates = _fetch_tradingview_candidates()
+    except Exception as e:
+        log.warning(f"[Screener] TradingView candidates failed: {e}")
+        tv_candidates = {}
+
+    candidates = _merge_candidates(schwab_candidates, tv_candidates)
+
+    watchlist = set(_fetch_watchlist_tickers())
+
+    # Ensure watchlist tickers are in the quote-fetch pool
+    for sym in watchlist:
+        if sym not in candidates:
+            candidates[sym] = {'change': 0, 'price': 0, 'volume': 0,
+                                'float_shares': None, 'market_cap': None, 'sector': None}
+
+    # Sort by absolute change descending, watchlist always first
+    watchlist_syms = [s for s in candidates if s in watchlist]
+    other_syms     = sorted(
+        [s for s in candidates if s not in watchlist],
+        key=lambda s: abs(candidates[s].get('change', 0) or 0),
+        reverse=True
+    )
+    to_quote = watchlist_syms + other_syms[:150]
+
+    # ── 2. Bulk quotes ──
+    try:
+        quotes = _fetch_quotes(to_quote)
+    except Exception as e:
+        log.error(f"[Screener] Quote fetch failed: {e}")
+        quotes = {}
+
+    # ── 3. Filter & rank ──
+    gainers = _build_gainer_rows(quotes, candidates, watchlist)
 
     if not gainers:
-        log.info("[LiveScreener] Live fetch returned 0 gainers, falling back to DB.")
-        gainers = _load_fallback_gainers_from_db()
+        log.warning("[Screener] No gainers after filter — checking fallback DB")
+        gainers = _load_fallback_from_db()
 
-    # ── Phase 1 catalyst classification (lightweight, no I/O) ──────────────
+    # Limit before expensive enrichment
+    gainers = gainers[:TOP_N * 2]
+
+    # ── 4. Repeat-runner history ──
+    history = _check_repeat_history([g['ticker'] for g in gainers])
+    for g in gainers:
+        h = history.get(g['ticker'], {})
+        g['is_repeat_runner']  = h.get('is_repeat_runner', False)
+        g['is_follow_through'] = h.get('is_follow_through', False)
+
+    # ── 5. Per-ticker enrichment (minute metrics + daily SMAs) ──
+    try:
+        from momentum_screener.schwab.http_client import get_http_client
+        get_http_client()
+        gainers = _enrich_all(gainers)
+    except Exception as e:
+        log.error(f"[Screener] Schwab unavailable for enrichment: {e}")
+        _maybe_send_auth_alert(e)
+        for g in gainers:
+            g.update({
+                'mom_2m': None, 'atr_hod': None, 'atr_sprd': None,
+                'atr_vwap': None, 'zen_v': None, 'vwap': None,
+                'sparkline_intraday': [], 'sparkline_5d': [],
+                'sma20': None, 'sma50': None, 'sma100': None,
+                'above_sma20': False, 'above_sma50': False, 'above_sma100': False,
+            })
+
+    # ── 6. Catalyst tags ──
     try:
         from services.pump_classifier import stamp_catalyst_tags
         gainers = stamp_catalyst_tags(gainers)
-    except Exception as _e:
-        log.warning(f"[LiveScreener] Catalyst tagging failed: {_e}")
+    except Exception as e:
+        log.warning(f"[Screener] Catalyst tagging failed: {e}")
 
+    session = get_market_session()
     with _cache_lock:
-        _cache['raw_tickers']  = [t.get('ticker', '') for t in raw] if raw else []
-        _cache['gainers']      = gainers[:TOP_N]
-        _cache['fetched_at']   = datetime.utcnow()
-        _cache['session']      = session
+        _cache['gainers']    = gainers[:TOP_N]
+        _cache['fetched_at'] = datetime.utcnow()
+        _cache['session']    = session
         return dict(_cache)
 
 
+def _maybe_send_auth_alert(err: Exception):
+    global _last_auth_alert_ts
+    now = time.time()
+    with _auth_alert_lock:
+        if now - _last_auth_alert_ts < 3600:
+            return
+        _last_auth_alert_ts = now
+    try:
+        from fastapi_app.tasks.alerts import send_telegram_message
+        send_telegram_message(
+            "🚨 *[Schwab Auth Failure]*\nLive screener enrichment failed — Schwab client unavailable.\n"
+            f"Error: `{err}`\nRun `python schwab_auth_setup.py` to refresh token."
+        )
+    except Exception:
+        pass
+
+
+def _load_fallback_from_db() -> List[dict]:
+    """Return last day's gainers from DB when live fetch yields nothing."""
+    try:
+        from database import get_connection
+        today_et = datetime.now(EASTERN).strftime('%Y-%m-%d')
+        with get_connection() as conn:
+            row = conn.execute("SELECT MAX(date) as d FROM daily_gainers").fetchone()
+            recent = row['d'] if row else None
+            if not recent:
+                return []
+            rows = conn.execute(
+                "SELECT * FROM daily_gainers WHERE date=%s AND gap_pct>=%s ORDER BY gap_pct DESC LIMIT %s",
+                (recent, MIN_GAP_PCT, TOP_N)
+            ).fetchall()
+            gainers = []
+            for r in rows:
+                lp = r.get('close_price')
+                hp = r.get('high_price')
+                gainers.append({
+                    'ticker':       r.get('ticker'),
+                    'gap_pct':      r.get('gap_pct', 0),
+                    'last_price':   lp,
+                    'high_price':   hp,
+                    'low_price':    None,
+                    'open_price':   r.get('open_price'),
+                    'prev_close':   r.get('prev_close'),
+                    'volume':       int(r.get('volume') or 0),
+                    'rvol_15m':     r.get('rvol_15m'),
+                    'float_shares': r.get('float_shares'),
+                    'market_cap':   r.get('market_cap'),
+                    'sector':       r.get('sector'),
+                    'ask': None, 'bid': None, 'spread_pct': None,
+                    'is_hod': False, 'in_watchlist': False,
+                    'news_headline': r.get('news_headline'),
+                    'news_fresh':   r.get('news_fresh'),
+                })
+            return gainers
+    except Exception as e:
+        log.error(f"[Screener] Fallback DB load failed: {e}", exc_info=True)
+        return []
+
+
+# ── Public API ─────────────────────────────────────────────────────────────────
+
 def get_live_gainers(force: bool = False) -> dict:
-    """
-    Public entry point for the API route.
-    Returns:
-      {
-        session:      str,
-        session_label: str,
-        fetched_at:   ISO string | null,
-        gainers:      list[dict],
-        top_n:        int,
-        cache_ttl_s:  int,
-      }
-    """
     snap = refresh_cache(force=force)
     fetched = snap['fetched_at']
     return {
@@ -741,147 +720,89 @@ def get_live_gainers(force: bool = False) -> dict:
     }
 
 
-# ── End-of-day persist (8:00 PM ET) ───────────────────────────────────────────
-
-def _do_persist(target_date: str):
-    """
-    Run the full Polygon+FMP enrichment pipeline and write to daily_gainers.
-    Runs in a background thread at 8:00 PM ET.
-    """
-    log.info(f"[LiveScreener] Starting EOD persist for {target_date}")
-
-    try:
-        import sys, os
-        sys.path.insert(0, os.path.dirname(__file__))
-        from jobs.ingest_gainers import fetch_gainers, write_gainers
-        gainers = fetch_gainers(target_date)
-        if gainers:
-            inserted, skipped = write_gainers(gainers, target_date)
-            log.info(f"[LiveScreener] EOD persist done — inserted={inserted} skipped={skipped}")
-        else:
-            log.warning("[LiveScreener] Enrichment pipeline returned no qualified gainers")
-    except Exception as e:
-        log.error(f"[LiveScreener] EOD persist failed: {e}", exc_info=True)
-
-    with _cache_lock:
-        _cache['persisted_dates'].add(target_date)
-
-
-def _auto_persist_loop():
-    """Background thread: waits for 8:00 PM ET on weekdays, then persists."""
-    log.info("[LiveScreener] Auto-persist watchdog started")
-    while True:
-        try:
-            now_et = datetime.now(EASTERN)
-            today  = now_et.strftime('%Y-%m-%d')
-
-            # Only run on weekdays
-            if now_et.weekday() < 5:
-                hm = now_et.hour * 60 + now_et.minute
-                persist_hm = PERSIST_HOUR_ET * 60 + PERSIST_MINUTE_ET
-
-                with _cache_lock:
-                    already_done = today in _cache['persisted_dates']
-
-                if hm >= persist_hm and not already_done:
-                    _do_persist(today)
-
-            # Sleep until next check (every 60 seconds is fine — we only trigger once)
-            time.sleep(60)
-        except Exception as e:
-            log.exception(f"[LiveScreener] Auto-persist loop error: {e}")
-            time.sleep(60)
-
+# ── Background threads ─────────────────────────────────────────────────────────
 
 def _background_refresh_loop():
-    """Background thread: refreshes the live screener cache every 60 seconds during active sessions."""
-    log.info("[LiveScreener] Background cache refresh loop started")
-    
-    # Wait 2 seconds before the first refresh to let the app start up cleanly
+    log.info("[Screener] Background refresh loop started")
     time.sleep(2)
-    
-    consecutive_failures = 0
-    alerted_failure_state = False
+    failures = 0
 
-    def handle_loop_failure(error_msg: str):
-        nonlocal consecutive_failures, alerted_failure_state
-        consecutive_failures += 1
-        log.exception(f"[LiveScreener] Background cache refresh failed (consecutive: {consecutive_failures})")
-        if consecutive_failures >= 3 and not alerted_failure_state:
-            try:
-                from fastapi_app.tasks.alerts import send_telegram_message
-                alert_text = (
-                    "⚠️ *[System Warning]* ⚠️\n\n"
-                    "Live Screener cache refresh loop is failing consecutively!\n"
-                    f"- *Consecutive Failures:* {consecutive_failures}\n"
-                    f"- *Last Error:* {error_msg}\n"
-                    "- *Action:* Check logs at `/var/log/trading-journal/fastapi-err.log`."
-                )
-                send_telegram_message(alert_text)
-                alerted_failure_state = True
-            except Exception as alert_err:
-                log.error(f"Failed to send Telegram alert: {alert_err}")
-
-    # Run initial cache refresh on startup so cache is populated immediately
     try:
-        log.info("[LiveScreener] Running initial cache refresh on startup...")
+        log.info("[Screener] Initial cache load...")
         refresh_cache(force=True)
-        consecutive_failures = 0
-        alerted_failure_state = False
+        failures = 0
     except Exception as e:
-        handle_loop_failure(str(e))
+        log.exception("[Screener] Initial refresh failed")
 
     while True:
         try:
             time.sleep(CACHE_TTL_SECONDS)
-            now_et = datetime.now(EASTERN)
-            session = get_market_session(now_et)
-            
-            # Refresh if market is active (pre-market, open, post-market)
-            # If closed, we don't need to refresh because EOD data is static.
+            session = get_market_session()
             if session != 'closed':
-                log.info(f"[LiveScreener] Auto-refreshing live cache (session: {session})...")
+                log.info(f"[Screener] Auto-refresh (session={session})")
                 refresh_cache(force=True)
-                
-                # Successful refresh! Reset failure states.
-                if consecutive_failures > 0:
-                    log.info(f"[LiveScreener] Cache refresh loop recovered after {consecutive_failures} failures.")
-                    if alerted_failure_state:
-                        try:
-                            from fastapi_app.tasks.alerts import send_telegram_message
-                            send_telegram_message("✅ *[System Recovery]*\n\nLive Screener cache refresh loop has recovered and is now running normally.")
-                        except Exception:
-                            pass
-                    consecutive_failures = 0
-                    alerted_failure_state = False
+                if failures > 0:
+                    log.info(f"[Screener] Recovered after {failures} failures")
+                failures = 0
         except Exception as e:
-            handle_loop_failure(str(e))
+            failures += 1
+            log.exception(f"[Screener] Refresh loop error (#{failures})")
+            if failures == 3:
+                try:
+                    from fastapi_app.tasks.alerts import send_telegram_message
+                    send_telegram_message(
+                        f"⚠️ *[Screener]* Refresh loop failing (#{failures})\n`{e}`"
+                    )
+                except Exception:
+                    pass
+
+
+def _auto_persist_loop():
+    log.info("[Screener] Auto-persist watchdog started")
+    while True:
+        try:
+            now_et = datetime.now(EASTERN)
+            today  = now_et.strftime('%Y-%m-%d')
+            if now_et.weekday() < 5:
+                hm = now_et.hour * 60 + now_et.minute
+                target_hm = PERSIST_HOUR_ET * 60 + PERSIST_MINUTE_ET
+                with _cache_lock:
+                    done = today in _cache['persisted_dates']
+                if hm >= target_hm and not done:
+                    _do_persist(today)
+            time.sleep(60)
+        except Exception:
+            log.exception("[Screener] Auto-persist loop error")
+            time.sleep(60)
+
+
+def _do_persist(target_date: str):
+    log.info(f"[Screener] Starting EOD persist for {target_date}")
+    try:
+        from jobs.ingest_gainers import fetch_gainers, write_gainers
+        gainers = fetch_gainers(target_date)
+        if gainers:
+            inserted, skipped = write_gainers(gainers, target_date)
+            log.info(f"[Screener] EOD persist done — inserted={inserted} skipped={skipped}")
+        else:
+            log.warning("[Screener] EOD persist: no qualified gainers")
+    except Exception:
+        log.exception(f"[Screener] EOD persist failed for {target_date}")
+    with _cache_lock:
+        _cache['persisted_dates'].add(target_date)
 
 
 def start_auto_persist():
-    """
-    Launch the EOD auto-persist background thread, the live cache refresh loop,
-    and the news enrichment loop.
-    """
-    # 1. EOD persist watchdog
-    t = threading.Thread(target=_auto_persist_loop, name='live-screener-persist', daemon=True)
-    t.start()
-    log.info("[LiveScreener] Auto-persist thread launched")
+    """Launch background refresh, EOD persist, and news enrichment threads."""
+    threading.Thread(target=_auto_persist_loop,     name='screener-persist', daemon=True).start()
+    threading.Thread(target=_background_refresh_loop, name='screener-refresh', daemon=True).start()
+    log.info("[Screener] Background threads launched")
 
-    # 2. Live cache refresh loop
-    t_refresh = threading.Thread(target=_background_refresh_loop, name='live-screener-refresh', daemon=True)
-    t_refresh.start()
-    log.info("[LiveScreener] Background cache refresh thread launched")
-
-    # 3. Phase 2: background news verification loop (every 3 min during market hours)
     try:
         from services.pump_classifier import start_news_enrichment_loop
-
-        def _get_current_gainers() -> list[dict]:
-            """Return live reference to cached gainers for in-place mutation."""
+        def _current_gainers():
             with _cache_lock:
                 return _cache['gainers']
-
-        start_news_enrichment_loop(_get_current_gainers, interval_seconds=180)
+        start_news_enrichment_loop(_current_gainers, interval_seconds=180)
     except Exception as e:
-        log.warning(f"[LiveScreener] Failed to start news enrichment loop: {e}")
+        log.warning(f"[Screener] News enrichment loop failed to start: {e}")
