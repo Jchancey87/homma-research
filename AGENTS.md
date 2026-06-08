@@ -1,86 +1,33 @@
-# Agent Onboarding & Guidelines (`AGENTS.md`) 🤖
+# Agent Guidelines (AGENTS.md) 🤖
+Read completely on startup before beginning any task.
 
-Welcome! This file acts as the primary orientation guide for all AI coding agents working in this repository. **Please read this document fully on startup before beginning any task.**
-
----
-
-## 🚀 Welcome Routine (Do This First!)
-
-When starting a session or a new task, perform the following steps to orient yourself:
-1. **Check Git Status**: Run `git status` to see if there are any untracked or modified files.
-2. **Check Logs / Recent Activity**: Review [devlogs.md](file:///home/jackc/projects/homma-research/devlogs.md) to understand recent modifications and status updates.
-3. **Inspect Active Workspaces**: Locate the frontend/backend services and ensure they are running properly.
-4. **Check Agent Memory**: Read [AGENT_MEMORY.md](file:///home/jackc/projects/homma-research/AGENT_MEMORY.md) to align on styles, prompt adaptations, and lessons learned in previous sessions.
-
----
-
-## 🛠️ Project Architecture Summary
-
-This platform is a self-hosted trade journal and research platform designed for technical traders.
-
-* **Backend**: Python 3.12, FastAPI (Asynchronous lifespan), PostgreSQL (TimescaleDB), Celery, Redis. Located in [backend/](file:///home/jackc/projects/homma-research/backend).
-* **Frontend**: Next.js 14 (App Router), Tailwind CSS. Located in [frontend/](file:///home/jackc/projects/homma-research/frontend).
-* **AI Engine**: Groq (Llama 3) for text reports, Gemini 1.5 for chart annotation and pattern recognition.
-* **Integrations**: Schwab Trader API, FMP API, SEC EDGAR, finviz, yfinance.
-* **Database**: TimescaleDB for high-frequency market data.
-
----
-
-## 📜 Agent Guidelines & Rules of Engagement
-
-To maintain code quality and prevent system drift, adhere strictly to the following rules:
+## 📜 Rules of Engagement
 
 ### 1. Style & Integrity
-* **Documentation & Comments**: Do not modify or delete existing comments, docstrings, or documentation unless explicitly requested. Always preserve the original author's comments.
-* **Links**: When referring to files, directory structures, or code components in your responses, **always** format them as clickable Markdown links using the absolute path with the `file://` scheme.
-  * *Example*: [backend/fastapi_app/main.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/main.py)
-* **Conciseness**: Keep your responses to the user brief, direct, and actionable.
+* **Documentation:** Never modify/delete existing comments, docstrings, or docs unless explicitly requested. Preserve original comments.
+* **Links:** Format all file/directory references as clickable Markdown links using absolute paths with the `file://` scheme (e.g., `[main.py](file:///backend/fastapi_app/main.py)`).
+* **Communication:** Keep responses to the user brief, direct, and actionable.
 
 ### 2. File Modifying Best Practices
-* **Contiguous Changes**: Use the `replace_file_content` tool for editing single contiguous blocks of lines.
-* **Non-contiguous Changes**: Use the `multi_replace_file_content` tool when modifying multiple separate blocks in a single file. Do not run these tools in parallel for the same file.
-* **Scratch Space**: Store temporary scripts, test queries, or debug logs in the [scratch/](file:///home/jackc/projects/homma-research/scratch/) directory or the [backend/scratch/](file:///home/jackc/projects/homma-research/backend/scratch/) directory.
+* **Edits:** Use `replace_file_content` for single contiguous line blocks. Use `multi_replace_file_content` for multiple separate blocks. *Never run these in parallel on the same file.*
+* **Scratchpads:** Store temporary scripts, test queries, or debug logs only in `scratch/` or `backend/scratch/`.
 
-### 3. Tooling, Efficiency & QA Directives
-* **Tooling & Search**:
-  * Prefer `rg` (ripgrep) over `grep` for text searches and file scanning.
-  * Exclude `node_modules`, `.venv`, `.git`, `dist`, and `build` from broad directory listings and searches unless the task explicitly targets them.
-  * Exclude lockfiles from broad searches unless working on dependencies, package resolution, or CI/debug issues.
-* **Token & Context Efficiency**:
-  * Avoid reading entire files over 200 lines when targeted ranges or chunks will answer the question.
-  * Prefer atomic search-and-replace edits over rewriting unchanged code blocks.
-* **Execution & Quality Assurance**:
-  * Use `&&` for short related command chains when it reduces turn count; split commands when intermediate inspection is useful.
-  * Use quiet flags like `-q` or `-s` when verbose output is unnecessary, but do not hide useful failure diagnostics.
-  * After modifying code, run the relevant local tests and lint checks before finalizing.
+### 3. Tooling & Token Efficiency
+* **Search:** Prefer `rg` over `grep`. Exclude `node_modules`, `.venv`, `.git`, `dist`, `build`, and lockfiles from broad searches unless explicitly targeted.
+* **Tokens:** Do not read entire files >200 lines if chunks suffice. Use atomic search-and-replace instead of rewriting unchanged code blocks.
+* **QA:** Use `&&` for short related command chains. Use quiet flags (`-q`, `-s`) unless debugging failures. Run local tests and lints after modifying code.
 
-### 4. Agentic Reflections & Memory
-* **Git-like Memory Flow**: Treat [AGENT_MEMORY.md](file:///home/jackc/projects/homma-research/AGENT_MEMORY.md) as a lean, active workspace rather than an append-only log:
-  * **Fork on New Context**: At the start of a session, define the current goals, assumptions, and scope in the `session` section.
-  * **Merge Decisions**: At the end of a session, merge any verified, persistent architectural/design decisions that *actually matter* into the `main` section.
-  * **Prune & Let Rot**: Actively delete stale rules, obsolete constraints, or completed session notes. Stale memory is technical debt.
-  * **Archive Struggles**: Move detailed chronological struggles and history logs to [AGENT_MEMORY_HISTORY.md](file:///home/jackc/projects/homma-research/AGENT_MEMORY_HISTORY.md) to keep active memory compact.
+### 4. Memory Management (AGENT_MEMORY.md)
+* **Fork:** At session start, define current goals, assumptions, and scope in the session section.
+* **Merge:** At session end, merge verified, persistent architectural/design decisions into the main section.
+* **Prune/Archive:** Actively delete stale rules/completed notes. Move heavy chronological logs to `AGENT_MEMORY_HISTORY.md`.
 
----
+## 📂 Key Files Reference
+* `README.md` / `docs/ARCHITECTURE.md` / `docs/DEVOPS_GUIDE.md`
+* `devlogs.md` (State tracker) | `AGENT_MEMORY.md` (Active adaptations)
+* `pocket-data/issue-setup.md` (GitHub issue workflows) | `handoffs/` (Historical handoffs)
 
-## 📂 Key Files & Directories
-
-* **Project Documentation**:
-  * [README.md](file:///home/jackc/projects/homma-research/README.md) - General setup and commands.
-  * [docs/ARCHITECTURE.md](file:///home/jackc/projects/homma-research/docs/ARCHITECTURE.md) - Detailed backend & database architecture.
-  * [docs/DEVOPS_GUIDE.md](file:///home/jackc/projects/homma-research/docs/DEVOPS_GUIDE.md) - Hosting, deployment, and service management.
-  * [devlogs.md](file:///home/jackc/projects/homma-research/devlogs.md) - Chronological development logs and state tracker.
-  * [AGENT_MEMORY.md](file:///home/jackc/projects/homma-research/AGENT_MEMORY.md) - Agent reflections, adaptations, and learning logs.
-* **Data & Authority Mapping**:
-  * [pocket-data/issue-setup.md](file:///home/jackc/projects/homma-research/pocket-data/issue-setup.md) - Pocket data alignment and GitHub issue flows.
-  * [handoffs/](file:///home/jackc/projects/homma-research/handoffs/) - Historical coding agent handoff documents.
-
----
-
-## 🏗️ Active Tasks & Focus Areas
-*(To be updated dynamically by the user or agents as tasks evolve.)*
-
-- [ ] Review current database schema and verify Schwab token retrieval processes.
-- [ ] Investigate issues or feature updates requested by the user.
-- [ ] Keep [devlogs.md](file:///home/jackc/projects/homma-research/devlogs.md) updated as changes are made.
-- [ ] Keep [AGENT_MEMORY.md](file:///home/jackc/projects/homma-research/AGENT_MEMORY.md) updated at the end of each session.
+## 🏗️ Active Focus
+- [ ] Review current database schema & verify Schwab token retrieval.
+- [ ] Investigate user-requested updates.
+- [ ] Update `devlogs.md` and `AGENT_MEMORY.md` dynamically.
