@@ -108,46 +108,91 @@ def _get_tradingview_candidates() -> Dict[str, Dict]:
 def get_gainers_snapshot(include_otc: bool = False) -> List[Dict]:
     """
     Simulates Polygon's gainer snapshot using a hybrid strategy:
-    1. Try to fetch candidate tickers from TradingView (covering pre, regular, and post sessions).
-    2. Fall back to Schwab's /movers endpoint if TradingView fails or returns nothing.
-    3. Bulk fetch quotes from Schwab in chunks of 50.
+    1. Fetch candidate tickers from TradingView (covering pre, regular, and post sessions).
+    2. Fetch movers from Schwab (/movers endpoint for NYSE, NASDAQ, and EQUITY_ALL) and merge them.
+    3. Fetch watchlist tickers from the local DB and merge them.
+    4. Ensure all watchlist tickers are included, then fill the remaining slots up to a limit of 150 candidates with the top movers.
+    5. Bulk fetch quotes from Schwab in chunks of 50.
     """
     candidate_data = {}
+    
+    # 1. Fetch TradingView candidates
     try:
         candidate_data = _get_tradingview_candidates()
     except Exception as e:
         log.warning(f"[Schwab Client] Failed to fetch candidates from TradingView: {e}")
-        
-    if not candidate_data:
-        log.info("[Schwab Client] TradingView returned no candidates; falling back to Schwab Movers")
-        try:
-            # Fallback to Schwab Movers
-            movers_raw = []
-            for exch in ['NASDAQ', 'NYSE']:
+    
+    # 2. Fetch Schwab Movers and merge
+    try:
+        movers_raw = []
+        for exch in ['NASDAQ', 'NYSE', 'EQUITY_ALL']:
+            try:
                 movers_raw.extend(get_movers(exch))
-            for m in movers_raw:
-                sym = m['symbol']
-                change = m.get('percentChange') or m.get('change') or 0
+            except Exception as exch_err:
+                log.warning(f"[Schwab Client] Failed to fetch movers for {exch}: {exch_err}")
+                
+        for m in movers_raw:
+            sym = m.get('symbol')
+            if not sym:
+                continue
+            sym = sym.upper()
+            # Schwab netPercentChange is fractional (e.g. 0.6246 for 62.46%)
+            change = round(m.get('netPercentChange', 0) * 100, 2)
+            price = m.get('lastPrice') or 0
+            volume = m.get('volume') or 0
+            
+            if sym not in candidate_data or abs(change) > abs(candidate_data[sym].get('change', 0)):
                 candidate_data[sym] = {
                     'change': change,
-                    'price': m.get('last') or 0,
-                    'volume': m.get('volume') or 0,
+                    'price': price,
+                    'volume': volume,
                     'market_cap': None,
                     'float_shares': None,
                     'sector': None
                 }
-        except Exception as e:
-            log.warning(f"[Schwab Client] Schwab movers fallback failed: {e}")
-            return []
+    except Exception as e:
+        log.warning(f"[Schwab Client] Failed to merge Schwab movers: {e}")
+
+    # 3. Fetch Watchlist Tickers from DB
+    watchlist_tickers = set()
+    try:
+        from database import get_connection
+        with get_connection() as conn:
+            cur = conn.execute("SELECT ticker FROM watchlist")
+            rows = cur.fetchall()
+            for r in rows:
+                ticker = r['ticker']
+                if ticker:
+                    watchlist_tickers.add(ticker.upper())
+    except Exception as e:
+        log.warning(f"[Schwab Client] Failed to fetch watchlist: {e}")
+
+    # Ensure all watchlist tickers are in candidate_data (so we fetch their quotes)
+    for sym in watchlist_tickers:
+        if sym not in candidate_data:
+            candidate_data[sym] = {
+                'change': 0.0,
+                'price': 0.0,
+                'volume': 0.0,
+                'market_cap': None,
+                'float_shares': None,
+                'sector': None
+            }
 
     if not candidate_data:
         return []
 
-    # Sort candidates by change descending to ensure we keep the top movers
-    sorted_candidates = sorted(candidate_data.keys(), key=lambda x: abs(candidate_data[x].get('change', 0) or 0), reverse=True)
+    # 4. Construct top_candidates list:
+    # Always include all watchlist tickers first.
+    top_candidates = list(watchlist_tickers)
     
-    # Enforce limit of 150 candidates to avoid making too many quote calls
-    top_candidates = sorted_candidates[:150]
+    # Sort non-watchlist candidates by absolute change descending
+    non_watchlist_candidates = [sym for sym in candidate_data if sym not in watchlist_tickers]
+    non_watchlist_candidates.sort(key=lambda x: abs(candidate_data[x].get('change', 0) or 0), reverse=True)
+    
+    # Fill remaining slots up to 150
+    slots_left = max(0, 150 - len(top_candidates))
+    top_candidates.extend(non_watchlist_candidates[:slots_left])
 
     # Batch fetch quotes in chunks of 50 (Schwab limit)
     all_quotes = {}

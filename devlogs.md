@@ -2,6 +2,19 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-08] Live Screener Latency & Momentum Percentage Fixes
+
+### Summary
+Addressed live screener candidate discovery lag (preventing specific runners like "ABAT" from being delayed up to 15 minutes) and resolved incorrect/stale values in the 2-minute momentum percentage column ("Mom %").
+
+### What Changed
+* **Screener Discovery Pipeline (`backend/services/schwab_client.py`)**: Enhanced [get_gainers_snapshot](file:///home/jackc/projects/homma-research/backend/services/schwab_client.py) to merge TradingView candidates, Schwab Movers (`NASDAQ`, `NYSE`, and `EQUITY_ALL`), and database watchlisted symbols. Always prioritizes watchlisted symbols first within the 150 candidate fetch limit. Mapped Schwab movers camelCase keys and decimal-percent values correctly.
+* **Momentum Calculations (`backend/services/live_screener.py`)**:
+  - Rewrote [get_minute_metrics](file:///home/jackc/projects/homma-research/backend/services/live_screener.py) `mom_2m` lookback to search backwards relative to the latest candle's timestamp (target timestamp = latest_ts - 120_000 ms), finding the closest printed candle instead of guessing using index offsets (which were incorrect when zero-volume minutes skipped candles).
+  - Added dynamic real-time momentum recalculation inside the 30-second cache window whenever a new live quote tick arrives, updating the cached value on the fly rather than leaving it stale.
+
+---
+
 ## [2026-06-07] Continuation Play Journal & Performance Tracker
 
 ### Summary

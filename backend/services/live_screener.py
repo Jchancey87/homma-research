@@ -168,6 +168,8 @@ def get_minute_metrics(ticker: str, last_price: Optional[float], high_price: Opt
                     if 'intraday_sparkline' in data and data['intraday_sparkline']:
                         data['intraday_sparkline'] = list(data['intraday_sparkline'])
                         data['intraday_sparkline'][-1] = last_price
+                    if data.get('price_2min_ago') and data['price_2min_ago'] > 0:
+                        data['mom_2m'] = round(((last_price - data['price_2min_ago']) / data['price_2min_ago']) * 100, 2)
                 return data
 
     try:
@@ -176,6 +178,7 @@ def get_minute_metrics(ticker: str, last_price: Optional[float], high_price: Opt
         if not candles:
             metrics = {
                 'mom_2m': None,
+                'price_2min_ago': None,
                 'atr_hod': None,
                 'atr_sprd': None,
                 'atr_vwap': None,
@@ -203,15 +206,19 @@ def get_minute_metrics(ticker: str, last_price: Optional[float], high_price: Opt
             if atr <= 0:
                 atr = (last_price or candles[-1].get('c') or 1.0) * 0.001
 
-            # 2. Compute 2Min % change
+            # 2. Compute 2Min % change (based on timestamp, not index)
             curr_p = last_price if last_price is not None else (candles[-1].get('c') or 0.0)
             price_2min_ago = None
-            if len(candles) >= 3:
-                price_2min_ago = candles[-3].get('c')
-            elif len(candles) >= 2:
-                price_2min_ago = candles[-2].get('c')
-            elif len(candles) >= 1:
-                price_2min_ago = candles[-1].get('c')
+            if candles:
+                latest_ts = candles[-1].get('t')
+                if latest_ts:
+                    target_ts = latest_ts - 120_000  # 2 minutes ago in ms
+                    for c in reversed(candles):
+                        if c.get('t') is not None and c['t'] <= target_ts:
+                            price_2min_ago = c.get('c')
+                            break
+                if price_2min_ago is None:
+                    price_2min_ago = candles[0].get('c')
                 
             mom_2m = 0.0
             if price_2min_ago and price_2min_ago > 0:
@@ -284,6 +291,7 @@ def get_minute_metrics(ticker: str, last_price: Optional[float], high_price: Opt
             metrics = {
                 'mom_2m': mom_2m,
                 'raw_mom_2m': mom_2m,
+                'price_2min_ago': price_2min_ago,
                 'atr_hod': atr_hod,
                 'atr_sprd': atr_sprd,
                 'atr_vwap': atr_vwap,
@@ -297,6 +305,7 @@ def get_minute_metrics(ticker: str, last_price: Optional[float], high_price: Opt
         log.warning(f"Error computing minute metrics for {ticker}: {e}", exc_info=True)
         metrics = {
             'mom_2m': None,
+            'price_2min_ago': None,
             'atr_hod': None,
             'atr_sprd': None,
             'atr_vwap': None,
