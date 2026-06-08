@@ -215,36 +215,18 @@ def get_minute_metrics(ticker: str, last_price: Optional[float], high_price: Opt
             if atr <= 0:
                 atr = (last_price or candles[-1].get('c') or 1.0) * 0.001
 
-            # 2. Compute 2Min % change anchored to wall-clock now (not last candle ts)
-            # Using wall-clock time avoids skew on slow/gapped tickers where the
-            # last candle may itself be several minutes old.
+            # 2. Compute 2-min % change: find the candle closest to 2 minutes ago,
+            # use its close as the base. Compare against current price.
             curr_p = last_price if last_price is not None else (candles[-1].get('c') or 0.0)
-            price_2min_ago = None
-            if candles:
-                # Anchor lookback to now (ms), not the last candle's timestamp
+            mom_2m = 0.0
+            if candles and curr_p:
                 now_ms = int(time.time() * 1000)
                 target_ts = now_ms - 120_000  # 2 minutes ago in ms
-                five_min_ago_ts = now_ms - 300_000  # 5-minute window for fallback
-
-                # Walk backwards: find the latest candle at or before 2 min ago
-                for c in reversed(candles):
-                    c_ts = c.get('t')
-                    if c_ts is not None and c_ts <= target_ts:
-                        price_2min_ago = c.get('c')
-                        break
-
-                # Fallback: use the earliest candle within the last 5 minutes
-                # (never fall back all the way to candles[0] / 4 AM pre-market)
-                if price_2min_ago is None:
-                    for c in candles:
-                        c_ts = c.get('t')
-                        if c_ts is not None and c_ts >= five_min_ago_ts:
-                            price_2min_ago = c.get('c')
-                            break
-
-            mom_2m = 0.0
-            if price_2min_ago and price_2min_ago > 0:
-                mom_2m = round(((curr_p - price_2min_ago) / price_2min_ago) * 100, 2)
+                # Pick the candle whose open time is nearest to target_ts
+                best = min(candles, key=lambda c: abs((c.get('t') or 0) - target_ts))
+                price_2min_ago = best.get('c')
+                if price_2min_ago and price_2min_ago > 0:
+                    mom_2m = round(((curr_p - price_2min_ago) / price_2min_ago) * 100, 2)
 
             # 3. Compute VWAP
             total_vol = sum(c.get('v') or 0 for c in candles)
