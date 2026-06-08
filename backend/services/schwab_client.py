@@ -108,21 +108,17 @@ def _get_tradingview_candidates() -> Dict[str, Dict]:
 def get_gainers_snapshot(include_otc: bool = False) -> List[Dict]:
     """
     Simulates Polygon's gainer snapshot using a hybrid strategy:
-    1. Fetch candidate tickers from TradingView (covering pre, regular, and post sessions).
-    2. Fetch movers from Schwab (/movers endpoint for NYSE, NASDAQ, and EQUITY_ALL) and merge them.
-    3. Fetch watchlist tickers from the local DB and merge them.
-    4. Ensure all watchlist tickers are included, then fill the remaining slots up to a limit of 150 candidates with the top movers.
-    5. Bulk fetch quotes from Schwab in chunks of 50.
+    1. Fetch movers from Schwab (/movers endpoint for NYSE, NASDAQ, and EQUITY_ALL) — PRIMARY source.
+       Schwab data is real-time and eliminates the ~15-minute indexing lag that TradingView has.
+    2. Supplement with TradingView candidates (pre/regular/post sessions) — FALLBACK/ENRICHMENT.
+       TV adds float_shares, sector, and market_cap metadata and may catch tickers Schwab movers miss.
+       TV data only overwrites a Schwab entry if it reports a higher absolute % change.
+    3. Fetch watchlist tickers from the local DB and merge them (always included, highest priority).
+    4. Bulk fetch quotes from Schwab in chunks of 50.
     """
     candidate_data = {}
     
-    # 1. Fetch TradingView candidates
-    try:
-        candidate_data = _get_tradingview_candidates()
-    except Exception as e:
-        log.warning(f"[Schwab Client] Failed to fetch candidates from TradingView: {e}")
-    
-    # 2. Fetch Schwab Movers and merge
+    # 1. PRIMARY: Fetch Schwab Movers (real-time, no indexing lag)
     try:
         movers_raw = []
         for exch in ['NASDAQ', 'NYSE', 'EQUITY_ALL']:
@@ -141,17 +137,44 @@ def get_gainers_snapshot(include_otc: bool = False) -> List[Dict]:
             price = m.get('lastPrice') or 0
             volume = m.get('volume') or 0
             
-            if sym not in candidate_data or abs(change) > abs(candidate_data[sym].get('change', 0)):
-                candidate_data[sym] = {
-                    'change': change,
-                    'price': price,
-                    'volume': volume,
-                    'market_cap': None,
-                    'float_shares': None,
-                    'sector': None
-                }
+            candidate_data[sym] = {
+                'change': change,
+                'price': price,
+                'volume': volume,
+                'market_cap': None,
+                'float_shares': None,
+                'sector': None
+            }
+        log.info(f"[Schwab Client] Schwab Movers seeded {len(candidate_data)} candidates (primary source)")
     except Exception as e:
-        log.warning(f"[Schwab Client] Failed to merge Schwab movers: {e}")
+        log.warning(f"[Schwab Client] Failed to seed Schwab movers: {e}")
+
+    # 2. SUPPLEMENTAL: Fetch TradingView candidates and merge
+    # TV enriches entries with float, sector, market_cap — and may find symbols Schwab movers missed.
+    # It does NOT overwrite a Schwab entry unless it reports a strictly higher absolute % change.
+    try:
+        tv_candidates = _get_tradingview_candidates()
+        tv_new = 0
+        tv_upgraded = 0
+        for sym, tv_data in tv_candidates.items():
+            if sym not in candidate_data:
+                candidate_data[sym] = tv_data
+                tv_new += 1
+            else:
+                # Always carry over enrichment metadata if Schwab didn't have it
+                if candidate_data[sym].get('market_cap') is None:
+                    candidate_data[sym]['market_cap'] = tv_data.get('market_cap')
+                if candidate_data[sym].get('float_shares') is None:
+                    candidate_data[sym]['float_shares'] = tv_data.get('float_shares')
+                if candidate_data[sym].get('sector') is None:
+                    candidate_data[sym]['sector'] = tv_data.get('sector')
+                # Only update change/price/volume if TV has a meaningfully higher % change
+                if abs(tv_data.get('change', 0) or 0) > abs(candidate_data[sym].get('change', 0) or 0):
+                    candidate_data[sym]['change'] = tv_data['change']
+                    tv_upgraded += 1
+        log.info(f"[Schwab Client] TradingView added {tv_new} new candidates, upgraded {tv_upgraded} existing entries")
+    except Exception as e:
+        log.warning(f"[Schwab Client] Failed to merge TradingView candidates: {e}")
 
     # 3. Fetch Watchlist Tickers from DB
     watchlist_tickers = set()

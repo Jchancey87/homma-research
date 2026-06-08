@@ -2,6 +2,17 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-08] Screener Candidate Priority & 2-Min Momentum Fixes (Round 2)
+
+### Summary
+Fixed two remaining bugs found via the `live_gainers.html` reference screenshot: (1) `mom_2m` was anchored to the last completed candle timestamp instead of wall-clock time, producing wildly incorrect values on slow/gapped tickers; (2) Schwab Movers was wrongly treated as secondary to TradingView, causing up to 15-minute discovery latency for new runners.
+
+### What Changed
+* **`mom_2m` Calculation (`backend/services/live_screener.py`)**: Rewrote the 2-minute lookback anchor in `get_minute_metrics` to use `time.time()` (wall-clock now in ms) as the reference point instead of `candles[-1].get('t')`. The old approach skewed the window backward on slow/gapped tickers where the last candle itself was several minutes old. Also fixed the dangerous fallback: instead of falling back to `candles[0]` (the 4 AM pre-market open candle), it now finds the earliest candle within the last 5 minutes, so `mom_2m` is always a meaningful intraday momentum reading.
+* **Screener Candidate Priority (`backend/services/schwab_client.py`)**: Inverted the discovery order in `get_gainers_snapshot`. Schwab Movers (NASDAQ, NYSE, EQUITY_ALL) is now seeded **first** as the primary real-time source. TradingView then runs as a supplemental pass, only adding new symbols or enriching existing Schwab entries with metadata (float, sector, market_cap) that Schwab doesn't return. TV data never overwrites Schwab's change/price/volume unless it reports a strictly higher absolute % change. This eliminates TradingView's ~15-minute indexing lag as the screener bottleneck.
+
+---
+
 ## [2026-06-08] Live Screener Latency & Momentum Percentage Fixes
 
 ### Summary

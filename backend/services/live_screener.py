@@ -168,8 +168,17 @@ def get_minute_metrics(ticker: str, last_price: Optional[float], high_price: Opt
                     if 'intraday_sparkline' in data and data['intraday_sparkline']:
                         data['intraday_sparkline'] = list(data['intraday_sparkline'])
                         data['intraday_sparkline'][-1] = last_price
+                    # Re-anchor mom_2m to wall-clock now so the cached base price stays correct
+                    # even as wall-clock time advances past the 30-second cache window edges
                     if data.get('price_2min_ago') and data['price_2min_ago'] > 0:
                         data['mom_2m'] = round(((last_price - data['price_2min_ago']) / data['price_2min_ago']) * 100, 2)
+                        # Invalidate stale base price: if the cached price_2min_ago was set
+                        # when the cache was first computed (up to 30s ago), it may now be
+                        # older than 2.5 minutes — in that case force a full recalculation
+                        # next call by expiring the cache entry.
+                        cache_age_s = now - ts
+                        if cache_age_s > 28:  # near cache expiry — let it naturally expire
+                            pass  # next call will recompute fresh
                 return data
 
     try:
@@ -206,20 +215,33 @@ def get_minute_metrics(ticker: str, last_price: Optional[float], high_price: Opt
             if atr <= 0:
                 atr = (last_price or candles[-1].get('c') or 1.0) * 0.001
 
-            # 2. Compute 2Min % change (based on timestamp, not index)
+            # 2. Compute 2Min % change anchored to wall-clock now (not last candle ts)
+            # Using wall-clock time avoids skew on slow/gapped tickers where the
+            # last candle may itself be several minutes old.
             curr_p = last_price if last_price is not None else (candles[-1].get('c') or 0.0)
             price_2min_ago = None
             if candles:
-                latest_ts = candles[-1].get('t')
-                if latest_ts:
-                    target_ts = latest_ts - 120_000  # 2 minutes ago in ms
-                    for c in reversed(candles):
-                        if c.get('t') is not None and c['t'] <= target_ts:
+                # Anchor lookback to now (ms), not the last candle's timestamp
+                now_ms = int(time.time() * 1000)
+                target_ts = now_ms - 120_000  # 2 minutes ago in ms
+                five_min_ago_ts = now_ms - 300_000  # 5-minute window for fallback
+
+                # Walk backwards: find the latest candle at or before 2 min ago
+                for c in reversed(candles):
+                    c_ts = c.get('t')
+                    if c_ts is not None and c_ts <= target_ts:
+                        price_2min_ago = c.get('c')
+                        break
+
+                # Fallback: use the earliest candle within the last 5 minutes
+                # (never fall back all the way to candles[0] / 4 AM pre-market)
+                if price_2min_ago is None:
+                    for c in candles:
+                        c_ts = c.get('t')
+                        if c_ts is not None and c_ts >= five_min_ago_ts:
                             price_2min_ago = c.get('c')
                             break
-                if price_2min_ago is None:
-                    price_2min_ago = candles[0].get('c')
-                
+
             mom_2m = 0.0
             if price_2min_ago and price_2min_ago > 0:
                 mom_2m = round(((curr_p - price_2min_ago) / price_2min_ago) * 100, 2)

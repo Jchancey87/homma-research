@@ -26,8 +26,10 @@ This file maintains the active decisions, architectural constraints, and persist
 * **Halt Suppression**: Suppress all momentum triggers for a symbol for 2 minutes following a volatility halt resume.
 
 ### 3. Live Screener & Momentum Calculations
-* **Timestamp-Based Lookback**: Compute `mom_2m` in [live_screener.py](file:///home/jackc/projects/homma-research/backend/services/live_screener.py) by looking back for a candle at or before 2 minutes ago relative to the latest candle timestamp (rather than raw index indexing like `candles[-3]`) to handle low-volume/pre-market periods.
+* **Timestamp-Based Lookback (Wall-Clock Anchor)**: Compute `mom_2m` in [live_screener.py](file:///home/jackc/projects/homma-research/backend/services/live_screener.py) using `time.time()` (wall-clock now in ms) minus 120,000 ms as the reference, NOT `candles[-1].get('t')`. The last candle timestamp may itself be stale on slow/gapped tickers, skewing the window backward.
+* **Fallback Candle Capping**: When no candle ≥2 min old exists, fall back to the **earliest candle within the last 5 minutes**. Never fall back to `candles[0]` (4 AM pre-market open) which made `mom_2m` reflect the entire-day move instead of 2-minute momentum.
 * **Dynamic Cache Recalculation**: Cache `price_2min_ago` in memory and dynamically update `mom_2m` within the 30-second cache window whenever a new `last_price` quote arrives, keeping the UI value responsive.
+* **Schwab as Primary Discovery Source**: In [schwab_client.py](file:///home/jackc/projects/homma-research/backend/services/schwab_client.py) `get_gainers_snapshot`, Schwab Movers (NASDAQ, NYSE, EQUITY_ALL) is seeded FIRST as the primary real-time source. TradingView runs second as enrichment only (adds float/sector/market_cap). TV never overwrites Schwab change/price/volume unless it has a strictly higher absolute % change. This eliminates the ~15-min TradingView indexing lag.
 
 ### 4. Frontend & UI performance
 * **Toggle-on-Click Expand**: Large lists in [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx) must only expand details on explicit click. Avoid React state handlers on mouse hover/enter to prevent UI rendering lag.
@@ -43,14 +45,15 @@ This file maintains the active decisions, architectural constraints, and persist
 
 ## 🔱 Branch: `session` (Active Intent & Scope)
 
-### Current Session: Live Screener Latency & Momentum Percentage Fixes
-* **Goal**: Fix screener indexing latency (e.g. ABAT taking 15m to appear) and resolve incorrect/stale values in the 2-minute momentum column.
-* **Forked context**: Inspected TradingView candidate scanner limitations and the old index-based `mom_2m` calculations.
-* **Merged decisions**:
-  - Combined TradingView, Schwab Movers (NYSE, NASDAQ, and EQUITY_ALL), and watchlisted symbols into the hybrid candidate pool in [schwab_client.py](file:///home/jackc/projects/homma-research/backend/services/schwab_client.py) to eliminate indexing delays.
-  - Refactored `mom_2m` calculation in [live_screener.py](file:///home/jackc/projects/homma-research/backend/services/live_screener.py) to use a robust timestamp-based lookback instead of raw indices.
-  - Added real-time updates for `mom_2m` inside the 30-second in-memory cache of `get_minute_metrics` whenever a new quote ticks.
-* **Pruned context**: None.
+### Current Session: Screener Candidate Priority & mom_2m Anchor Fix (Round 2)
+* **Goal**: Fix `mom_2m` using wrong anchor (last candle ts vs wall-clock now), fix candle[0] fallback bug, and invert Schwab/TradingView discovery priority.
+* **Bugs identified from `live_gainers.html`**:
+  - GMHS: +77.9% gap but -3.45% mom → mom was comparing vs very old candle (4 AM fallback)
+  - Discovery latency: TradingView's 15-min indexing window was the primary bottleneck
+* **Fixes applied**:
+  - `mom_2m` now anchored to wall-clock `time.time()` in ms, not `candles[-1].get('t')`
+  - Fallback capped to last 5-minute window instead of `candles[0]`
+  - Schwab Movers seeded first; TradingView runs as enrichment pass only
 
 ---
 
