@@ -11,6 +11,8 @@ Read completely on startup before beginning any task.
 ### 2. File Modifying Best Practices
 * **Edits:** Use `replace_file_content` for single contiguous line blocks. Use `multi_replace_file_content` for multiple separate blocks. *Never run these in parallel on the same file.*
 * **Scratchpads:** Store temporary scripts, test queries, or debug logs only in `scratch/` or `backend/scratch/`.
+* **Links & Paths:** Use the `sigmap` MCP tool to locate files. When referencing files/directories in responses, always format them as clickable Markdown links using absolute paths with the `file://` scheme (e.g., `[main.py](file:///backend/fastapi_app/main.py)`).
+* **Communication:** Keep responses to the user brief, direct, and actionable.
 
 ### 3. Tooling & Token Efficiency
 * **Search:** Prefer `rg` over `grep`. Exclude `node_modules`, `.venv`, `.git`, `dist`, `build`, and lockfiles from broad searches unless explicitly targeted.
