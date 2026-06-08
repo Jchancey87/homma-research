@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>All Live Gainers</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #0b0e14;
+            color: #ffffff;
+            padding: 30px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 900px;
+            background-color: #0f131c;
+            border: 1px solid #1e2530;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #1e2530;
+            padding-bottom: 15px;
+        }
+        .title {
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+        }
+        .title::before {
+            content: "";
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background-color: #00c896;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .runners-badge {
+            background-color: #161c26;
+            border: 1px solid #2a3447;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            color: #8a96a8;
+        }
+        .runners-count {
+            color: #ffffff;
+            font-weight: 600;
+            margin-right: 3px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        th {
+            color: #56667a;
+            text-align: left;
+            padding: 12px 8px;
+            font-weight: 500;
+            font-size: 12px;
+            border-bottom: 1px solid #1e2530;
+        }
+        th.sortable {
+            cursor: pointer;
+        }
+        th.sortable::after {
+            content: " ⌃";
+            font-size: 10px;
+            color: #00c896;
+            vertical-align: middle;
+        }
+        th:nth-child(3), td:nth-child(3),
+        th:nth-child(4), td:nth-child(4),
+        th:nth-child(5), td:nth-child(5),
+        th:nth-child(6), td:nth-child(6),
+        th:nth-child(7), td:nth-child(7) {
+            text-align: right;
+        }
+        td {
+            padding: 14px 8px;
+            border-bottom: 1px solid #161c26;
+            vertical-align: middle;
+        }
+        tr:hover td {
+            background-color: #141a24;
+        }
+        .rank {
+            color: #56667a;
+            font-weight: 600;
+            width: 40px;
+        }
+        .ticker-container {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .ticker-name {
+            font-weight: 700;
+            color: #ffffff;
+            margin-right: 5px;
+        }
+        .badge {
+            font-size: 9px;
+            font-weight: 700;
+            padding: 2px 4px;
+            border-radius: 3px;
+            text-transform: uppercase;
+        }
+        .badge-rr {
+            background-color: #d97706;
+            color: #ffffff;
+        }
+        .badge-ft {
+            background-color: #2563eb;
+            color: #ffffff;
+        }
+        .badge-nnp {
+            background-color: #7c2d12;
+            color: #fdba74;
+            border: 1px solid #9a3412;
+        }
+        .badge-nnp::before {
+            content: "▲ ";
+            font-size: 8px;
+        }
+        .badge-spec {
+            background-color: #1f2937;
+            color: #9ca3af;
+            border: 1px solid #374151;
+        }
+        .badge-spec::before {
+            content: "? ";
+        }
+        .price {
+            font-weight: 600;
+        }
+        .pos-change {
+            color: #00c896;
+            font-weight: 600;
+        }
+        .pct-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            min-width: 65px;
+            text-align: right;
+        }
+        .pct-pos {
+            background-color: rgba(0, 200, 150, 0.15);
+            color: #00c896;
+            border: 1px solid rgba(0, 200, 150, 0.2);
+        }
+        .pct-neg {
+            background-color: rgba(ef, 68, 68, 0.15);
+            color: #ef4444;
+            border: 1px solid rgba(ef, 68, 68, 0.2);
+        }
+        .rvol {
+            font-weight: 600;
+        }
+        .rvol-high {
+            color: #00c896;
+        }
+        .float-text {
+            font-weight: 500;
+        }
+        .float-medium {
+            color: #d97706;
+        }
+        .float-large {
+            color: #2563eb;
+        }
+        .float-normal {
+            color: #00c896;
+        }
+        .empty-cell {
+            color: #374151;
+            text-align: right;
+            padding-right: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <div class="title">All Live Gainers</div>
+        <div class="runners-badge"><span class="runners-count">13</span> Runners</div>
+    </div>
+    
+    <table>
+        <thead>
+            <tr>
+                <th class="sortable">Rank</th>
+                <th>Ticker</th>
+                <th>Price</th>
+                <th>Change(%)</th>
+                <th>Mom %</th>
+                <th>RVOL</th>
+                <th>Float</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td class="rank">1</td>
+                <td>
+                    <div class="ticker-container">
+                        <span class="ticker-name">GMHS</span>
+                        <span class="badge badge-rr">RR</span>
+                        <span class="badge badge-ft">FT</span>
+                        <span class="badge badge-nnp">NNP</span>
+                    </div>
+                </td>
+                <td class="price">$1.67</td>
+                <td class="pos-change">+77.9%</td>
+                <td><span class="pct-badge pct-neg">-3.45%</span></td>
+                <td class="rvol">4.9x</td>
+                <td class="float-text float-medium">9.8M (Medium)</td>
+            </tr>
+            <tr>
+                <td class="rank">2</td>
+                <td>
+                    <div class="ticker-container">
+                        <span class="ticker-name">TDIC</span>
+                        <span class="badge badge-rr">RR</span>
+                        <span class="badge badge-nnp">NNP</span>
+                    </div>
+                </td>
+                <td class="price">$0.36</td>
+                <td class="pos-change">+61.0%</td>
+                <td><span class="pct-badge pct-pos">+62.99%</span></td>
+                <td class="rvol rvol-high">10.4x</td>
+                <td class="float-text float-medium">3.0M (Medium)</td>
+            </tr>
+            <tr>
+                <td class="rank">3</td>
+                <td>
+                    <div class="ticker-container">
+                        <span class="ticker-name">SMTK</span>
+                        <span class="badge badge-rr">RR</span>
+                        <span class="badge badge-ft">FT</span>
+                        <span class="badge badge-spec">SPEC</span>
+                    </div>
+                </td>
+                <td class="price">$0.65</td>
+                <td class="pos-change">+59.6%</td>
+                <td><span class="pct-badge pct-pos">+37.69%</span></td>
+                <td class="rvol">1.6x</td>
+                <td class="empty-cell">—</td>
+            </tr>
+            <tr>
+                <td class="rank">4</td>
+                <td>
+                    <div class="ticker-container">
+                        <span class="ticker-name">LXEH</span>
+                        <span class="badge badge-rr">RR</span>
+                        <span class="badge badge-nnp">NNP</span>
+                    </div>
+                </td>
+                <td class="price">$1.77</td>
+                <td class="pos-change">+36.1%</td>
+                <td><span class="pct-badge pct-pos">+47.50%</span></td>
+                <td class="rvol rvol-high">450.6x</td>
+                <td class="empty-cell">—</td>
+            </tr>
+            <tr>
+                <td class="rank">5</td>
+                <td>
+                    <div class="ticker-container">
+                        <span class="ticker-name">BATL</span>
+                        <span class="badge badge-rr">RR</span>
+                        <span class="badge badge-nnp">NNP</span>
+                    </div>
+                </td>
+                <td class="price">$1.74</td>
+                <td class="pos-change">+31.8%</td>
+                <td><span class="pct-badge pct-pos">+25.18%</span></td>
+                <td class="rvol rvol-high">5.2x</td>
+                <td class="empty-cell">—</td>
+            </tr>
+            <tr>
+                <td class="rank">6</td>
+                <td>
+                    <div class="ticker-container">
+                        <span class="ticker-name">ABAT</span>
+                        <span class="badge badge-rr">RR</span>
+                        <span class="badge badge-spec">SPEC</span>
+                    </div>
+                </td>
+                <td class="price">$3.87</td>
+                <td class="pos-change">+24.4%</td>
+                <td><span class="pct-badge pct-pos">+22.45%</span></td>
+                <td class="rvol">1.8x</td>
+                <td class="float-text float-large">131.4M (Large)</td>
+            </tr>
+            <tr>
+                <td class="rank">7</td>
+                <td>
+                    <div class="ticker-container">
+                        <span class="ticker-name">QTEX</span>
+                        <span class="badge badge-rr">RR</span>
+                        <span class="badge badge-spec">SPEC</span>
+                    </div>
+                </td>
+                <td class="price">$1.70</td>
+                <td class="pos-change">+19.7%</td>
+                <td><span class="pct-badge pct-pos">+27.82%</span></td>
+                <td class="rvol">0.1x</td>
+                <td class="empty-cell">—</td>
+            </tr>
+            <tr>
+                <td class="rank">8</td>
+                <td>
+                    <div class="ticker-container">
+                        <span class="ticker-name">GPUS</span>
+                        <span class="badge badge-rr">RR</span>
+                        <span class="badge badge-spec">SPEC</span>
+                    </div>
+                </td>
+                <td class="price">$0.18</td>
+                <td class="pos-change">+19.0%</td>
+                <td><span class="pct-badge pct-pos">+5.64%</span></td>
+                <td class="rvol">0.3x</td>
+                <td class="float-text float-large">456.8M (Large)</td>
+            </tr>
+            <tr>
+                <td class="rank">9</td>
+                <td>
+                    <div class="ticker-container">
+                        <span class="ticker-name">NEXR</span>
+                        <span class="badge badge-rr">RR</span>
+                        <span class="badge badge-spec">SPEC</span>
+                    </div>
+                </td>
+                <td class="price">$1.42</td>
+                <td class="pos-change">+17.4%</td>
+                <td><span class="pct-badge pct-neg">-11.25%</span></td>
+                <td class="rvol">0.2x</td>
+                <td class="float-text float-medium">1.8M (Medium)</td>
+            </tr>
+            <tr>
+                <td class="rank">10</td>
+                <td>
+                    <div class="ticker-container">
+                        <span class="ticker-name">NYXH</span>
+                        <span class="badge badge-spec">SPEC</span>
+                    </div>
+                </td>
+                <td class="price">$1.67</td>
+                <td class="pos-change">+15.2%</td>
+                <td><span class="pct-badge pct-pos">+9.21%</span></td>
+                <td class="rvol">0.6x</td>
+                <td class="float-text float-normal">24.2M (Normal)</td>
+            </tr>
+            <tr>
+                <td class="rank">11</td>
+                <td>
+                    <div class="ticker-container">
+                        <span class="ticker-name">STI</span>
+                        <span class="badge badge-rr">RR</span>
+                        <span class="badge badge-ft">FT</span>
+                        <span class="badge badge-spec">SPEC</span>
+                    </div>
+                </td>
+                <td class="price">$40.79</td>
+                <td class="pos-change">+14.2%</td>
+                <td><span class="pct-badge pct-pos">+18.47%</span></td>
+                <td class="rvol">0.1x</td>
+                <td class="float-text float-medium">2.5M (Medium)</td>
+            </tr>
+            <tr>
+                <td class="rank">12</td>
+                <td>
+                    <div class="ticker-container">
+                        <span class="ticker-name">JLHL</span>
+                        <span class="badge badge-spec">SPEC</span>
+                    </div>
+                </td>
+                <td class="price">$48.99</td>
+                <td class="pos-change">+9.3%</td>
+                <td><span class="pct-badge pct-pos">+16.64%</span></td>
+                <td class="rvol">0.0x</td>
+                <td class="float-text float-medium">1.3M (Medium)</td>
+            </tr>
+            <tr>
+                <td class="rank">13</td>
+                <td>
+                    <div class="ticker-container">
+                        <span class="ticker-name">ELOG</span>
+                        <span class="badge badge-rr">RR</span>
+                        <span class="badge badge-ft">FT</span>
+                        <span class="badge badge-spec">SPEC</span>
+                    </div>
+                </td>
+                <td class="price">$1.32</td>
+                <td class="pos-change">+9.1%</td>
+                <td><span class="pct-badge pct-neg">-7.69%</span></td>
+                <td class="rvol">0.2x</td>
+                <td class="float-text float-medium">6.3M (Medium)</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+</body>
+</html>
