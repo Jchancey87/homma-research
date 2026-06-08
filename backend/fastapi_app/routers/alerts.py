@@ -349,7 +349,7 @@ async def get_alerts_performance(
         FROM alert_fwd
         GROUP BY alert_type, price_bucket, float_category
         ORDER BY alert_type, price_bucket, float_category
-    """, days)
+    """, str(days))
 
     return {
         "days": days,
