@@ -3,21 +3,17 @@ news_aggregator.py — Pluggable news aggregation interface.
 
 Architecture:
   - NewsSource (ABC)          — defines the interface all news providers must implement
-  - YFinanceNewsSource        — live implementation using yfinance (free, no API key)
-  - BenzingaNewsSource        — stub, ready for your custom aggregator
+  - MassiveNewsSource         — Massive.com (fka Polygon.io) REST API — primary, real-time
+  - YFinanceNewsSource        — yfinance scraper — free fallback / supplement
+  - BenzingaNewsSource        — stub, ready for future implementation
   - NewsAggregator            — fan-out orchestrator; merges results from all sources
 
 Usage:
-    from services.news_aggregator import NewsAggregator, YFinanceNewsSource
+    from services.news_aggregator import get_default_aggregator
 
-    aggregator = NewsAggregator(sources=[YFinanceNewsSource()])
-    if aggregator.has_news('YMAT', hours_back=24):
-        articles = aggregator.get_news('YMAT', hours_back=24)
-
-To add a new source in the future:
-    1. Subclass NewsSource
-    2. Implement get_news(ticker, hours_back) -> list[dict]
-    3. Append an instance to the NewsAggregator.sources list
+    agg = get_default_aggregator()
+    if agg.has_news('YMAT', hours_back=4):
+        articles = agg.get_news('YMAT', hours_back=4)
 """
 from __future__ import annotations
 
@@ -36,7 +32,7 @@ def _make_article(title: str, published: str, source: str, description: str = ''
     """Normalize a raw article into the standard shape used by all sources."""
     return {
         'title':       title,
-        'published':   published,   # ISO date string YYYY-MM-DD or YYYY-MM-DDTHH:MM:SSZ
+        'published':   published,   # ISO datetime string YYYY-MM-DDTHH:MM:SSZ
         'source':      source,
         'description': description,
     }
@@ -78,7 +74,83 @@ class NewsSource(ABC):
 
 
 # ---------------------------------------------------------------------------
-# yfinance implementation (live)
+# Massive.com (fka Polygon.io) — PRIMARY source
+# ---------------------------------------------------------------------------
+
+class MassiveNewsSource(NewsSource):
+    """
+    Live news from Massive.com via the official SDK (polygon-api-client / massive).
+    Real-time, indexed within seconds of publication. Requires POLYGON_API_KEY.
+
+    This is the primary source used for live screener catalyst verification
+    because it has zero indexing lag and covers all major financial newswires.
+    """
+
+    def get_news(self, ticker: str, hours_back: int = 24) -> list[dict]:
+        try:
+            from massive import RESTClient
+            from config import Config
+
+            if not Config.POLYGON_API_KEY:
+                log.debug('[MassiveNewsSource] POLYGON_API_KEY not set, skipping.')
+                return []
+
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=hours_back)
+            from_str = cutoff.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+            client   = RESTClient(api_key=Config.POLYGON_API_KEY, pagination=False)
+            articles = list(client.list_ticker_news(
+                ticker,
+                published_utc_gte=from_str,
+                order='desc',
+                limit=20,
+            ))
+
+            results = []
+            for a in articles:
+                title = getattr(a, 'title', '') or ''
+                if not title:
+                    continue
+
+                pub_utc = getattr(a, 'published_utc', '') or ''
+                pub_dt  = None
+                if pub_utc:
+                    try:
+                        pub_dt = datetime.fromisoformat(
+                            pub_utc.replace('Z', '+00:00')
+                        ).astimezone(timezone.utc)
+                    except ValueError:
+                        pass
+
+                if pub_dt and pub_dt < cutoff:
+                    continue
+
+                publisher = ''
+                pub_obj   = getattr(a, 'publisher', None)
+                if isinstance(pub_obj, dict):
+                    publisher = pub_obj.get('name', '')
+                elif hasattr(pub_obj, 'name'):
+                    publisher = pub_obj.name or ''
+
+                description = getattr(a, 'description', '') or ''
+
+                results.append(_make_article(
+                    title=title,
+                    published=pub_dt.strftime('%Y-%m-%dT%H:%M:%SZ') if pub_dt else pub_utc,
+                    source=f'massive/{publisher}' if publisher else 'massive',
+                    description=(description or '')[:400],
+                ))
+
+            log.debug(f'[MassiveNewsSource] {ticker}: {len(results)} articles in last {hours_back}h')
+            return results
+
+        except Exception as e:
+            log.warning(f'[MassiveNewsSource] {ticker}: fetch failed — {e}')
+            return []
+
+
+# ---------------------------------------------------------------------------
+# yfinance — FALLBACK / supplement
 # ---------------------------------------------------------------------------
 
 class YFinanceNewsSource(NewsSource):
@@ -86,21 +158,19 @@ class YFinanceNewsSource(NewsSource):
     Live news source backed by yfinance (free, no API key required).
 
     Note: yfinance news is scraped from Yahoo Finance and may lag real-time
-    by 5–30 minutes. Good enough to confirm whether a catalyst exists.
+    by 5–30 minutes. Used as fallback when Massive is unavailable or returns nothing.
     """
 
     def get_news(self, ticker: str, hours_back: int = 24) -> list[dict]:
         try:
             import yfinance as yf
-            from datetime import timezone
 
             cutoff = datetime.now(timezone.utc) - timedelta(hours=hours_back)
-            t = yf.Ticker(ticker)
-            raw_news = t.news or []
+            t      = yf.Ticker(ticker)
+            raw    = t.news or []
 
             results = []
-            for item in raw_news[:30]:
-                # --- Title ---
+            for item in raw[:30]:
                 title = (
                     item.get('title') or
                     (item.get('content') or {}).get('title', '') or
@@ -109,14 +179,12 @@ class YFinanceNewsSource(NewsSource):
                 if not title:
                     continue
 
-                # --- Publisher ---
                 publisher = (
                     item.get('publisher') or
                     (item.get('content') or {}).get('provider', {}).get('displayName', '') or
                     'yfinance'
                 )
 
-                # --- Timestamp (multiple yfinance API shapes) ---
                 pub_dt = None
 
                 # Shape 1: providerPublishTime (unix int)
@@ -126,40 +194,34 @@ class YFinanceNewsSource(NewsSource):
 
                 # Shape 2: content.pubDate (ISO string)
                 if pub_dt is None:
-                    pub_date_str = (item.get('content') or {}).get('pubDate', '')
-                    if pub_date_str:
+                    s = (item.get('content') or {}).get('pubDate', '')
+                    if s:
                         try:
-                            pub_dt = datetime.fromisoformat(
-                                pub_date_str.replace('Z', '+00:00')
-                            ).astimezone(timezone.utc)
+                            pub_dt = datetime.fromisoformat(s.replace('Z', '+00:00')).astimezone(timezone.utc)
                         except ValueError:
                             pass
 
                 # Shape 3: displayTime
                 if pub_dt is None:
-                    display_time = item.get('displayTime', '')
-                    if display_time:
+                    s = item.get('displayTime', '')
+                    if s:
                         try:
-                            pub_dt = datetime.fromisoformat(
-                                display_time.replace('Z', '+00:00')
-                            ).astimezone(timezone.utc)
+                            pub_dt = datetime.fromisoformat(s.replace('Z', '+00:00')).astimezone(timezone.utc)
                         except ValueError:
                             pass
 
-                # Filter by recency
                 if pub_dt is None:
-                    continue   # can't verify freshness, skip
+                    continue
                 if pub_dt < cutoff:
-                    continue   # too old
+                    continue
 
                 results.append(_make_article(
                     title=title,
                     published=pub_dt.strftime('%Y-%m-%dT%H:%M:%SZ'),
                     source=f'yfinance/{publisher}',
-                    description='',
                 ))
 
-            log.debug(f'[YFinanceNewsSource] {ticker}: found {len(results)} articles in last {hours_back}h')
+            log.debug(f'[YFinanceNewsSource] {ticker}: {len(results)} articles in last {hours_back}h')
             return results
 
         except Exception as e:
@@ -168,18 +230,17 @@ class YFinanceNewsSource(NewsSource):
 
 
 # ---------------------------------------------------------------------------
-# Benzinga stub (future custom aggregator)
+# Benzinga stub (future)
 # ---------------------------------------------------------------------------
 
 class BenzingaNewsSource(NewsSource):
     """
-    Stub implementation for a future Benzinga (or custom in-house) news aggregator.
+    Stub implementation for a future Benzinga news aggregator.
 
     To activate:
       1. Set BENZINGA_API_KEY in your .env
-      2. Implement get_news() using the Benzinga REST API:
-         GET https://api.benzinga.com/api/v2/news?tickers={ticker}&pageSize=10&token={key}
-      3. Register it: NewsAggregator(sources=[YFinanceNewsSource(), BenzingaNewsSource()])
+      2. Implement get_news() using the Benzinga REST API
+      3. Register it in get_default_aggregator()
     """
 
     def __init__(self, api_key: str | None = None):
@@ -188,8 +249,7 @@ class BenzingaNewsSource(NewsSource):
 
     def get_news(self, ticker: str, hours_back: int = 24) -> list[dict]:
         raise NotImplementedError(
-            'BenzingaNewsSource is a stub. Implement get_news() with your API credentials '
-            'or swap in your custom in-house news aggregator.'
+            'BenzingaNewsSource is a stub. Implement get_news() with your API credentials.'
         )
 
 
@@ -201,11 +261,6 @@ class NewsAggregator:
     """
     Runs multiple NewsSource providers in sequence, merges results, and
     de-duplicates by title prefix (first 40 chars, case-insensitive).
-
-    Usage:
-        agg = NewsAggregator(sources=[YFinanceNewsSource()])
-        if agg.has_news('YMAT', hours_back=24):
-            ...
     """
 
     def __init__(self, sources: list[NewsSource]):
@@ -216,16 +271,15 @@ class NewsAggregator:
     def get_news(self, ticker: str, hours_back: int = 24) -> list[dict]:
         """Return merged, de-duplicated articles from all sources."""
         all_articles: list[dict] = []
-        seen_prefixes: set[str] = set()
+        seen: set[str] = set()
 
         for source in self.sources:
             try:
-                articles = source.get_news(ticker, hours_back=hours_back)
-                for article in articles:
+                for article in source.get_news(ticker, hours_back=hours_back):
                     prefix = (article.get('title', '') or '')[:40].lower().strip()
-                    if prefix and prefix not in seen_prefixes:
+                    if prefix and prefix not in seen:
                         all_articles.append(article)
-                        seen_prefixes.add(prefix)
+                        seen.add(prefix)
             except NotImplementedError:
                 log.debug(f'[NewsAggregator] {source.name} is not implemented, skipping.')
             except Exception as e:
@@ -235,7 +289,7 @@ class NewsAggregator:
 
     def has_news(self, ticker: str, hours_back: int = 24) -> bool:
         """
-        Returns True if any news article was found for `ticker` in the last `hours_back` hours.
+        Returns True if any news article was found within the last `hours_back` hours.
         Short-circuits on the first source that returns a result.
         """
         for source in self.sources:
@@ -243,7 +297,7 @@ class NewsAggregator:
                 articles = source.get_news(ticker, hours_back=hours_back)
                 if articles:
                     log.debug(
-                        f'[NewsAggregator] {ticker}: news confirmed via {source.name} '
+                        f'[NewsAggregator] {ticker}: confirmed via {source.name} '
                         f'({len(articles)} article(s))'
                     )
                     return True
@@ -253,23 +307,21 @@ class NewsAggregator:
                 log.warning(f'[NewsAggregator] {source.name} error for {ticker}: {e}')
                 continue
 
-        log.debug(f'[NewsAggregator] {ticker}: no news found in last {hours_back}h across all sources')
+        log.debug(f'[NewsAggregator] {ticker}: no news found in last {hours_back}h')
         return False
 
 
 # ---------------------------------------------------------------------------
-# Default singleton aggregator (used by pump_classifier)
+# Default singleton — Massive primary, yfinance fallback
 # ---------------------------------------------------------------------------
 
 def get_default_aggregator() -> NewsAggregator:
     """
-    Returns the default NewsAggregator instance for use by the pump classifier.
-
-    To add a new source in the future, append it here:
-        return NewsAggregator(sources=[
-            YFinanceNewsSource(),
-            BenzingaNewsSource(),   # when ready
-            MyCustomSource(),
-        ])
+    Returns the production NewsAggregator.
+    Massive is called first (real-time, no lag).
+    yfinance is called only if Massive returns nothing.
     """
-    return NewsAggregator(sources=[YFinanceNewsSource()])
+    return NewsAggregator(sources=[
+        MassiveNewsSource(),
+        YFinanceNewsSource(),
+    ])
