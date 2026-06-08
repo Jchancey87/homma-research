@@ -2,6 +2,30 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-08] Live Screener Full Refactor + News Pipeline Upgrade
+
+### Summary
+Three separate fixes shipped this session: a backend crash caused by a type mismatch, a full clean rewrite of the live screener pipeline, and a major upgrade to the news enrichment loop using Massive as the primary source with a per-ticker retry state machine.
+
+### What Changed
+
+#### 1. `alerts.py` DataError Crash (`backend/fastapi_app/routers/alerts.py`)
+* **Bug**: `get_alerts_performance` passed `days: int` (default `30`) directly to asyncpg as query argument `$1`, but the SQL used `$1 || ' days'` string concatenation which requires a `TEXT` type. asyncpg raised `DataError: invalid input for query argument $1: 30 (expected str, got int)`, crashing the uvicorn worker and triggering the "no available server" error seen on the frontend.
+* **Fix**: Changed `""", days)` → `""", str(days))` on the fetch call.
+
+#### 2. Live Screener Full Refactor (`backend/services/live_screener.py`)
+* **Problem**: The 888-line screener had grown into a tangle of nested wrappers (`enrich_gainers_with_sparklines_and_history` → `enrich_single_gainer` → `get_minute_metrics`) with multiple cache layers, backward-walk loops for `mom_2m`, and fragile fallback chains that were producing wrong values and missing new runners like SUNE (+82%).
+* **Rewrite**: Replaced with a flat 5-step pipeline: (1) `_fetch_schwab_movers` + `_fetch_tradingview_candidates`, (2) `_fetch_quotes`, (3) `_build_gainer_rows`, (4) `_compute_minute_metrics`, (5) `_enrich_all`. ~220 lines shorter.
+* **`mom_2m`**: Simplified to `best = min(candles, key=lambda c: abs((c.get('t') or 0) - target_ts))` — one line, no fallback loops.
+* **Filters**: `MIN_GAP_PCT=5.0`, `MIN_PRICE=$0.50`, `MAX_PRICE=$100`. Watchlist tickers bypass all filters.
+
+#### 3. Massive News Integration + Retry State Machine (`backend/services/news_aggregator.py`, `backend/services/pump_classifier.py`)
+* **Problem**: The live screener news enrichment loop was using yfinance only (with 5–30 min lag) and ran on a flat 3-minute interval regardless of how new a ticker was. Massive was only used for the on-demand Catalyst Analysis report, not the live screener.
+* **`MassiveNewsSource`**: Added to `news_aggregator.py`. `get_default_aggregator()` now calls Massive first (real-time, zero indexing lag), yfinance second (fallback). `NEWS_LOOKBACK_HOURS` set to 6h for live checks.
+* **`_TickerRetryState`**: Per-ticker state machine in `pump_classifier.py`. New "Technical / No News" tickers are checked every **60 seconds** for the first **10 minutes**, then back off to every **3 minutes**. Once confirmed, no further checks. Tickers pruned when they leave the screener.
+
+---
+
 ## [2026-06-08] Screener Candidate Priority & 2-Min Momentum Fixes (Round 2)
 
 ### Summary

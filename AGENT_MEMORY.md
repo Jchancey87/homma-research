@@ -26,9 +26,10 @@ This file maintains the active decisions, architectural constraints, and persist
 * **Halt Suppression**: Suppress all momentum triggers for a symbol for 2 minutes following a volatility halt resume.
 
 ### 3. Live Screener & Momentum Calculations
-* **Timestamp-Based Lookback (Wall-Clock Anchor)**: Compute `mom_2m` in [live_screener.py](file:///home/jackc/projects/homma-research/backend/services/live_screener.py) using `time.time()` (wall-clock now in ms) minus 120,000 ms as the reference, NOT `candles[-1].get('t')`. The last candle timestamp may itself be stale on slow/gapped tickers, skewing the window backward.
-* **Fallback Candle Capping**: When no candle ≥2 min old exists, fall back to the **earliest candle within the last 5 minutes**. Never fall back to `candles[0]` (4 AM pre-market open) which made `mom_2m` reflect the entire-day move instead of 2-minute momentum.
-* **Dynamic Cache Recalculation**: Cache `price_2min_ago` in memory and dynamically update `mom_2m` within the 30-second cache window whenever a new `last_price` quote arrives, keeping the UI value responsive.
+ * **Screener Architecture**: [live_screener.py](file:///home/jackc/projects/homma-research/backend/services/live_screener.py) is a flat 5-step pipeline: (1) `_fetch_schwab_movers` + `_fetch_tradingview_candidates`, (2) `_fetch_quotes`, (3) `_build_gainer_rows`, (4) `_compute_minute_metrics`, (5) `_enrich_all`. No nested wrappers, no layered state.
+ * **mom_2m Calculation**: `best = min(candles, key=lambda c: abs((c.get('t') or 0) - target_ts))` where `target_ts = now_ms - 120_000`. Use `best['c']` as base price. Single line, no fallback loops needed.
+ * **30s Minute Cache**: `_compute_minute_metrics` caches for 30s. Within that window it updates `mom_2m`, `atr_hod`, `atr_sprd`, `atr_vwap` inline using the cached `price_2min_ago` and `atr_14` — no re-fetch needed.
+ * **Screening Filters**: `MIN_GAP_PCT=5.0`, `MIN_PRICE=$0.50`, `MAX_PRICE=$100`. Watchlist tickers bypass all filters.
 * **Schwab as Primary Discovery Source**: In [schwab_client.py](file:///home/jackc/projects/homma-research/backend/services/schwab_client.py) `get_gainers_snapshot`, Schwab Movers (NASDAQ, NYSE, EQUITY_ALL) is seeded FIRST as the primary real-time source. TradingView runs second as enrichment only (adds float/sector/market_cap). TV never overwrites Schwab change/price/volume unless it has a strictly higher absolute % change. This eliminates the ~15-min TradingView indexing lag.
 
 ### 4. Frontend & UI performance
@@ -45,15 +46,9 @@ This file maintains the active decisions, architectural constraints, and persist
 
 ## 🔱 Branch: `session` (Active Intent & Scope)
 
-### Current Session: Screener Candidate Priority & mom_2m Anchor Fix (Round 2)
-* **Goal**: Fix `mom_2m` using wrong anchor (last candle ts vs wall-clock now), fix candle[0] fallback bug, and invert Schwab/TradingView discovery priority.
-* **Bugs identified from `live_gainers.html`**:
-  - GMHS: +77.9% gap but -3.45% mom → mom was comparing vs very old candle (4 AM fallback)
-  - Discovery latency: TradingView's 15-min indexing window was the primary bottleneck
-* **Fixes applied**:
-  - `mom_2m` now anchored to wall-clock `time.time()` in ms, not `candles[-1].get('t')`
-  - Fallback capped to last 5-minute window instead of `candles[0]`
-  - Schwab Movers seeded first; TradingView runs as enrichment pass only
+### Current Session: Live Screener Full Refactor
+ * **Completed**: Full clean rewrite of [live_screener.py](file:///home/jackc/projects/homma-research/backend/services/live_screener.py) — 888 lines → flat pipeline, confirmed working.
+ * **Also fixed**: `alerts.py` `get_alerts_performance` was passing `days: int` directly to asyncpg where SQL used `$1 || ' days'` string concat — changed to `str(days)`.
 
 ---
 
