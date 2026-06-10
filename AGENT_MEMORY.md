@@ -29,8 +29,8 @@
 * **Deploy:** Run `sudo /opt/trading-journal/deploy.sh` (push from `/home/jackc/projects/homma-research` first).
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Task:** Add 1h inline sparklines (minute data) on All Live Gainers and Near HOD tables. Remove RR, HOD, NNP badges from rows and modal.
-* **Status:** Complete.
+* **Task:** Investigate and fix the deep ticker research feature, which currently returns nothing/fails when queried.
+* **Status:** In Progress. Locating files and reviewing log outputs.
 
 ## 🗑️ Rot & Pruning Log
 * Compressed all core main sections to optimize tokens.

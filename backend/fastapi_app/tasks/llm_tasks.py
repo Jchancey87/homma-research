@@ -144,6 +144,9 @@ def run_deep_research(job_id: str, ticker: str, date: str, base_url: str):
     import yfinance as yf
     _set_status(job_id, 'running')
     try:
+        import sys
+        import logging
+        logging.getLogger(__name__).info(f"CELERY WORKER sys.path: {sys.path}")
         from services.fmp_service import (
             get_company_profile, get_analyst_estimates, get_income_statement,
             get_key_metrics, get_earnings_calendar as fmp_earnings,
