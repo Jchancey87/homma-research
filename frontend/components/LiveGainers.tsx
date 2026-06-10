@@ -353,7 +353,7 @@ function GainerTable({
     )
   }
 
-  const colSpanCount = showRank ? 7 : 6
+  const colSpanCount = showRank ? 8 : 7
 
   return (
     <div className="bg-[#0b0b0f]/30 dark:bg-gray-950/10 border border-gray-800/80 rounded-2xl p-5 shadow-sm space-y-4">
@@ -373,17 +373,18 @@ function GainerTable({
         <table className="w-full text-sm table-fixed min-w-[500px]">
           <thead>
             <tr className="text-left text-xs text-gray-500 border-b border-gray-800">
-              {showRank && <Th col="rank" label="Rank" width="w-[8%]" />}
-              <Th col="ticker" label="Ticker" width={showRank ? "w-[18%]" : "w-[24%]"} />
-              <Th col="price" label="Price" align="right" width={showRank ? "w-[14%]" : "w-[16%]"} />
-              <Th col="change" label="Change(%)" align="right" width={showRank ? "w-[14%]" : "w-[16%]"} />
-              <Th col="mom_2m" label="Mom %" align="right" width={showRank ? "w-[14%]" : "w-[16%]"} />
+              {showRank && <Th col="rank" label="Rank" width="w-[7%]" />}
+              <Th col="ticker" label="Ticker" width={showRank ? "w-[15%]" : "w-[20%]"} />
+              <Th col="price" label="Price" align="right" width={showRank ? "w-[11%]" : "w-[12%]"} />
+              <Th col="change" label="Change(%)" align="right" width={showRank ? "w-[11%]" : "w-[12%]"} />
+              <Th col="mom_2m" label="Mom %" align="right" width={showRank ? "w-[11%]" : "w-[12%]"} />
+              <th className="pb-2 pr-4 font-semibold text-center select-none w-[20%]">Trend (1h)</th>
               {title === "All Live Gainers" ? (
-                <Th col="rvol" label="RVOL" align="right" width={showRank ? "w-[14%]" : "w-[16%]"} />
+                <Th col="rvol" label="RVOL" align="right" width={showRank ? "w-[11%]" : "w-[12%]"} />
               ) : (
-                <Th col="hod" label="HOD" align="right" width={showRank ? "w-[14%]" : "w-[16%]"} />
+                <Th col="hod" label="HOD" align="right" width={showRank ? "w-[11%]" : "w-[12%]"} />
               )}
-              <Th col="float" label="Float" align="right" width={showRank ? "w-[18%]" : "w-[20%]"} />
+              <Th col="float" label="Float" align="right" width={showRank ? "w-[14%]" : "w-[12%]"} />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-800/40">
@@ -497,38 +498,11 @@ function GainerTable({
                                 </span>
                               </span>
                             )}
-                            {g.is_repeat_runner && (
-                              <span className="relative group/tooltip inline-flex items-center px-1 py-0.25 rounded text-[8px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                                RR
-                                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/tooltip:block bg-gray-950 border border-gray-800 text-white text-[10px] font-medium py-1 px-2 rounded shadow-2xl whitespace-nowrap z-50">
-                                  RR = Recent Runner (24h)
-                                  <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-950" />
-                                </span>
-                              </span>
-                            )}
                             {g.is_follow_through && (
                               <span className="relative group/tooltip inline-flex items-center px-1 py-0.25 rounded text-[8px] font-black bg-blue-500/20 text-blue-400 border border-blue-500/30">
                                 FT
                                 <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/tooltip:block bg-gray-950 border border-gray-800 text-white text-[10px] font-medium py-1 px-2 rounded shadow-2xl whitespace-nowrap z-50">
                                   FT = Fast Trade (24h)
-                                  <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-950" />
-                                </span>
-                              </span>
-                            )}
-                            {g.is_hod && (
-                              <span className="relative group/tooltip inline-flex items-center px-1 py-0.25 rounded text-[8px] font-black bg-rose-500/20 text-rose-350 border border-rose-500/30">
-                                HOD
-                                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/tooltip:block bg-gray-950 border border-gray-800 text-white text-[10px] font-medium py-1 px-2 rounded shadow-2xl whitespace-nowrap z-50">
-                                  HOD = High of Day
-                                  <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-950" />
-                                </span>
-                              </span>
-                            )}
-                            {g.catalyst === 'Technical / No News' && (
-                              <span className="relative group/tooltip inline-flex items-center px-1 py-0.25 rounded text-[8px] font-black bg-orange-500/20 text-orange-400 border border-orange-500/30">
-                                ⚠️ NNP
-                                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/tooltip:block bg-gray-950 border border-gray-800 text-white text-[10px] font-medium py-1 px-2 rounded shadow-2xl whitespace-nowrap z-50">
-                                  No-News Pump — speculative volatility, no fundamental catalyst
                                   <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-950" />
                                 </span>
                               </span>
@@ -557,6 +531,21 @@ function GainerTable({
                         <span className={`font-bold transition-all duration-300 ${getMomStyle(g.mom_2m)}`}>
                           {g.mom_2m != null ? (g.mom_2m >= 0 ? `+${g.mom_2m.toFixed(2)}%` : `${g.mom_2m.toFixed(2)}%`) : '—'}
                         </span>
+                      </td>
+
+                      {/* Trend (1h) sparkline */}
+                      <td className="py-2.5 pr-4 text-center select-none">
+                        <div className="inline-flex justify-center bg-gray-900/20 px-1 py-0.5 rounded border border-gray-800/60">
+                          {g.sparkline_1h && g.sparkline_1h.length > 0 ? (
+                            <Sparkline
+                              points={g.sparkline_1h}
+                              width={70}
+                              height={18}
+                            />
+                          ) : (
+                            <span className="text-[10px] text-gray-650 font-mono">—</span>
+                          )}
+                        </div>
                       </td>
 
                       {/* 6. RVOL or HOD Column */}
@@ -1210,19 +1199,9 @@ export default function LiveGainers() {
               <div className="flex items-center gap-3">
                 <span className="text-xl font-bold text-white font-mono">{modalGainer.ticker}</span>
                 <div className="flex items-center gap-1">
-                  {modalGainer.is_repeat_runner && (
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                      RR
-                    </span>
-                  )}
                   {modalGainer.is_follow_through && (
                     <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-blue-500/20 text-blue-400 border border-blue-500/30">
                       FT
-                    </span>
-                  )}
-                  {modalGainer.is_hod && (
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-rose-500/20 text-rose-300 border border-rose-500/30">
-                      HOD
                     </span>
                   )}
                 </div>

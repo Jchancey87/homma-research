@@ -335,6 +335,8 @@ def _compute_minute_metrics(ticker: str, last_price: Optional[float],
                     # Append latest price to sparkline tail
                     if cached.get('intraday_sparkline'):
                         cached['intraday_sparkline'][-1] = last_price
+                    if cached.get('sparkline_1h'):
+                        cached['sparkline_1h'][-1] = last_price
                 return cached
 
     try:
@@ -348,7 +350,7 @@ def _compute_minute_metrics(ticker: str, last_price: Optional[float],
         'mom_2m': None, 'price_2min_ago': None,
         'atr_14': None, 'vwap': None,
         'atr_hod': None, 'atr_sprd': None, 'atr_vwap': None,
-        'zen_v': None, 'intraday_sparkline': [], 'hod': high_price or last_price,
+        'zen_v': None, 'intraday_sparkline': [], 'sparkline_1h': [], 'hod': high_price or last_price,
     }
 
     if not candles:
@@ -430,6 +432,19 @@ def _compute_minute_metrics(ticker: str, last_price: Optional[float],
     if sparkline and curr_p:
         sparkline[-1] = curr_p
 
+    # ── Sparkline of the last 1 hour (minute data, up to 60 points) ──
+    one_hour_ago_ms = now_ms - 3_600_000
+    last_1h_candles = [c for c in candles if (c.get('t') or 0) >= one_hour_ago_ms]
+    if not last_1h_candles:
+        last_1h_candles = candles[-60:]
+    closes_1h = [c.get('c') for c in last_1h_candles if c.get('c') is not None]
+    if len(closes_1h) > 60:
+        sparkline_1h = [closes_1h[int(i * (len(closes_1h) - 1) / 59)] for i in range(60)]
+    else:
+        sparkline_1h = list(closes_1h)
+    if sparkline_1h and curr_p:
+        sparkline_1h[-1] = curr_p
+
     metrics = {
         'mom_2m':            mom_2m,
         'price_2min_ago':    price_2min_ago,
@@ -440,6 +455,7 @@ def _compute_minute_metrics(ticker: str, last_price: Optional[float],
         'atr_vwap':          atr_vwap,
         'zen_v':             zen_v,
         'intraday_sparkline': sparkline,
+        'sparkline_1h':      sparkline_1h,
         'hod':               hod,
     }
 
@@ -498,6 +514,7 @@ def _enrich_ticker(g: dict) -> dict:
     g['zen_v']             = mm['zen_v']
     g['vwap']              = round(mm['vwap'], 4) if mm.get('vwap') else None
     g['sparkline_intraday'] = mm['intraday_sparkline']
+    g['sparkline_1h'] = mm['sparkline_1h']
     if mm.get('hod'):
         g['high_price'] = round(mm['hod'], 4)
 
@@ -643,7 +660,7 @@ def refresh_cache(force: bool = False) -> dict:
             g.update({
                 'mom_2m': None, 'atr_hod': None, 'atr_sprd': None,
                 'atr_vwap': None, 'zen_v': None, 'vwap': None,
-                'sparkline_intraday': [], 'sparkline_5d': [],
+                'sparkline_intraday': [], 'sparkline_5d': [], 'sparkline_1h': [],
                 'sma20': None, 'sma50': None, 'sma100': None,
                 'above_sma20': False, 'above_sma50': False, 'above_sma100': False,
             })
