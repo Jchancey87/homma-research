@@ -7,6 +7,7 @@ This file tracks major milestones, debugging struggles, architectural decisions,
 ### Summary
 * Implement Caveman Skill. Update rules. Omit agent-only filler words.
 * Write python parser. Convert md handoffs to premium HTML format.
+* Prune stale handoff documentation files.
 
 ### What Changed
 * `AGENTS.md`: Define Caveman Skill rule under Style & Formatting. Terse writing style for internal docs, devlogs, agent memory.
@@ -14,9 +15,11 @@ This file tracks major milestones, debugging struggles, architectural decisions,
 * `scripts/export_handoffs.py`: Python CLI tool. Match regex, parse Markdown to responsive premium HTML. Styles include dark mode, Inter font, custom alert boxes, code block wrapper with Copy button.
 * `handoffs/alerts_ui_handoff`: Rename to `handoffs/alerts_ui_handoff.md` for batch parsing.
 * `handoffs/html/*`: Generated HTML files. Rich styled presentation of all developer handoffs.
+* `handoffs/`: Remove 5 stale `.md` files and their generated `.html` pages. Rebuild index.
 
-### Git Commit
+### Git Commits
 `cb7962b` - feat(docs): implement caveman skill and HTML handoffs exportable script
+`bfe279d` - chore(docs): clean up stale handoffs and rebuild navigation index
 
 ---
 
