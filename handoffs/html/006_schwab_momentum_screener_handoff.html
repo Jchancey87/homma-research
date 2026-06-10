@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>006 Schwab Momentum Screener Handoff - Handoff Document</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #0b0f19;
+            --bg-surface: rgba(17, 24, 39, 0.7);
+            --bg-card: rgba(30, 41, 59, 0.4);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-primary: #6366f1;
+            --accent-glow: rgba(99, 102, 241, 0.15);
+            
+            --note-color: #3b82f6;
+            --tip-color: #10b981;
+            --important-color: #8b5cf6;
+            --warning-color: #f59e0b;
+            --caution-color: #ef4444;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            line-height: 1.625;
+            -webkit-font-smoothing: antialiased;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.1) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(168, 85, 247, 0.08) 0px, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.3);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.3);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.5);
+        }
+
+        .layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar & Navigation */
+        .sidebar {
+            width: 300px;
+            background: var(--bg-surface);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-right: 1px solid var(--border-color);
+            padding: 2.5rem 1.5rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            z-index: 10;
+        }
+
+        .logo {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #a5b4fc, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .nav-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+        }
+
+        .nav-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .nav-link {
+            display: block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--text-primary);
+            padding-left: 1rem;
+        }
+
+        .nav-link.active {
+            border-left: 3px solid var(--accent-primary);
+            font-weight: 600;
+        }
+
+        /* Main Content Panel */
+        .content-panel {
+            margin-left: 300px;
+            flex-grow: 1;
+            padding: 4rem 5% 6rem 5%;
+            max-width: 1200px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-radius: 1rem;
+            padding: 3rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Typography */
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Outfit', sans-serif;
+            color: var(--text-primary);
+            font-weight: 700;
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            letter-spacing: -0.02em;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-top: 0;
+            background: linear-gradient(to right, #f8fafc, #cbd5e1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        h2 {
+            font-size: 1.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 0.5rem;
+        }
+
+        h3 { font-size: 1.35rem; }
+        h4 { font-size: 1.15rem; }
+
+        p, ul, ol, table, pre {
+            margin-bottom: 1.5rem;
+        }
+
+        p {
+            color: var(--text-secondary);
+        }
+
+        strong {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        /* Lists */
+        ul, ol {
+            padding-left: 1.5rem;
+            color: var(--text-secondary);
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+        }
+
+        /* Inline Code */
+        code:not(pre code) {
+            font-family: 'Fira Code', monospace;
+            background: rgba(99, 102, 241, 0.12);
+            color: #a5b4fc;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-size: 0.85em;
+            border: 1px solid rgba(99, 102, 241, 0.2);
+        }
+
+        /* Code Blocks */
+        .code-container {
+            position: relative;
+            background: #070a13;
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            margin: 1.5rem 0;
+            overflow: hidden;
+        }
+
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 1rem;
+            background: rgba(15, 23, 42, 0.6);
+            border-bottom: 1px solid var(--border-color);
+            font-family: 'Fira Code', monospace;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .copy-btn {
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            color: #a5b4fc;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            border-radius: 0.25rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .copy-btn:hover {
+            background: var(--accent-primary);
+            color: #ffffff;
+        }
+
+        pre {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.875rem;
+            padding: 1.25rem;
+            overflow-x: auto;
+            color: #e2e8f0;
+            margin-bottom: 0;
+        }
+
+        /* Tables */
+        .table-container {
+            overflow-x: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            margin: 2rem 0;
+            background: rgba(15, 23, 42, 0.2);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+            text-align: left;
+            margin-bottom: 0;
+        }
+
+        th, td {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background: rgba(15, 23, 42, 0.4);
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        /* Callouts / Alerts */
+        .alert {
+            border-left: 4px solid;
+            padding: 1.25rem 1.5rem;
+            border-radius: 0.5rem;
+            background: rgba(30, 41, 59, 0.2);
+            margin: 1.5rem 0;
+        }
+
+        .alert p:last-child {
+            margin-bottom: 0;
+        }
+
+        .alert-title {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .alert.note { border-color: var(--note-color); }
+        .alert.note .alert-title { color: var(--note-color); }
+
+        .alert.tip { border-color: var(--tip-color); }
+        .alert.tip .alert-title { color: var(--tip-color); }
+
+        .alert.important { border-color: var(--important-color); }
+        .alert.important .alert-title { color: var(--important-color); }
+
+        .alert.warning { border-color: var(--warning-color); }
+        .alert.warning .alert-title { color: var(--warning-color); }
+
+        .alert.caution { border-color: var(--caution-color); }
+        .alert.caution .alert-title { color: var(--caution-color); }
+
+        /* File Links */
+        a {
+            color: #818cf8;
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        a:hover {
+            color: #a5b4fc;
+            text-decoration: underline;
+        }
+
+        /* Responsive */
+        @media (max-width: 968px) {
+            .sidebar {
+                display: none;
+            }
+            .content-panel {
+                margin-left: 0;
+                padding: 2rem 1.5rem;
+            }
+            .card {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="logo">
+                <span>🛸</span> Homma Research
+            </div>
+            <nav class="nav-section">
+                <div class="nav-title">Documents</div>
+                <ul class="nav-list">
+                    <li><a href="006_schwab_momentum_screener_handoff.html" class="nav-link" data-filename="006_schwab_momentum_screener_handoff.html" class="nav-link active">006 Schwab Momentum Screener Handoff</a></li>
+<li><a href="007_webpage_troubleshooting_cors_auth_handoff.html" class="nav-link" data-filename="007_webpage_troubleshooting_cors_auth_handoff.html">007 Webpage Troubleshooting Cors Auth Handoff</a></li>
+<li><a href="008_ui_ux_theme_onboarding_enhancements_handoff.html" class="nav-link" data-filename="008_ui_ux_theme_onboarding_enhancements_handoff.html">008 Ui Ux Theme Onboarding Enhancements Handoff</a></li>
+<li><a href="009_production_build_port_issues_handoff.html" class="nav-link" data-filename="009_production_build_port_issues_handoff.html">009 Production Build Port Issues Handoff</a></li>
+<li><a href="010_no_news_pump_classifier_handoff.html" class="nav-link" data-filename="010_no_news_pump_classifier_handoff.html">010 No News Pump Classifier Handoff</a></li>
+<li><a href="011_schwab_streamer_troubleshooting.html" class="nav-link" data-filename="011_schwab_streamer_troubleshooting.html">011 Schwab Streamer Troubleshooting</a></li>
+<li><a href="012_schwab_yfinance_gainer_enrichment_handoff.html" class="nav-link" data-filename="012_schwab_yfinance_gainer_enrichment_handoff.html">012 Schwab Yfinance Gainer Enrichment Handoff</a></li>
+<li><a href="013_sigmap_antigravity_mcp_handoff.html" class="nav-link" data-filename="013_sigmap_antigravity_mcp_handoff.html">013 Sigmap Antigravity Mcp Handoff</a></li>
+<li><a href="agent_handoff_momentum_banner.html" class="nav-link" data-filename="agent_handoff_momentum_banner.html">Agent Handoff Momentum Banner</a></li>
+<li><a href="alerts_ui_handoff.html" class="nav-link" data-filename="alerts_ui_handoff.html">Alerts Ui Handoff</a></li>
+<li><a href="questdb_postgres_handoff.html" class="nav-link" data-filename="questdb_postgres_handoff.html">Questdb Postgres Handoff</a></li>
+                </ul>
+            </nav>
+        </aside>
+        <main class="content-panel">
+            <article class="card">
+                <h1>Schwab API Momentum Screener — Coding Agent Handoff</h1>
+<h2>Overview</h2>
+<p>This document outlines the full feature set, architecture, database schema, and implementation tasks required to build a <strong>Ross Cameron-style intraday momentum stock screener</strong> using the <code>schwab-py</code> library as the primary market data source, replacing Polygon.io. The backend is Python, the database is a locally hosted PostgreSQL instance, and alerts are delivered via Discord/Telegram bot.</p>
+<p>---</p>
+<h2>Goals</h2>
+<ul><li>Eliminate the $40/month Polygon.io cost by using the free Schwab Trader API</li><li>Build a self-hosted, locally cached PostgreSQL database for fundamentals, price history, and derived analytics</li><li>Implement a pre-market morning setup routine that seeds candidates automatically by ~8:45 AM CT</li><li>Stream live Level 1 quotes and 1-min OHLCV candles via WebSocket, applying Ross Cameron criteria in real-time</li><li>Deliver formatted alerts to Discord with full context cards (price, float, rel vol, short interest, gap %)</li></ul>
+<p>---</p>
+<h2>Dependencies</h2>
+<div class="code-container">  <div class="code-header">    <span>TXT</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('schwab-py%0Aasyncio%0Aasyncpg%20%20%20%20%20%20%20%20%20%20%23%20async%20PostgreSQL%20driver%0Apsycopg2-binary%20%20%23%20sync%20fallback%20/%20migrations%0Apandas%0Anumpy%0Arequests%0Ayfinance%20%20%20%20%20%20%20%20%20%23%20supplement%3A%20earnings%20dates%2C%20SEC%20filing%20dates%0Apython-dotenv%0Adiscord.py%20%20%20%20%20%20%20%23%20or%20httpx%20for%20webhook%20calls%0Aapscheduler%20%20%20%20%20%20%23%20scheduled%20morning%20refresh%20job'))">Copy</button>  </div>  <pre><code class="language-txt">schwab-py
+asyncio
+asyncpg          # async PostgreSQL driver
+psycopg2-binary  # sync fallback / migrations
+pandas
+numpy
+requests
+yfinance         # supplement: earnings dates, SEC filing dates
+python-dotenv
+discord.py       # or httpx for webhook calls
+apscheduler      # scheduled morning refresh job</code></pre></div>
+<p>---</p>
+<h2>Environment Variables (<code>.env</code>)</h2>
+<div class="code-container">  <div class="code-header">    <span>ENV</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('SCHWAB_API_KEY%3Dyour_api_key%0ASCHWAB_API_SECRET%3Dyour_api_secret%0ASCHWAB_CALLBACK_URL%3Dhttps%3A//127.0.0.1%3A8182%0APOSTGRES_DSN%3Dpostgresql%3A//user%3Apassword%40localhost%3A5432/trading%0ADISCORD_WEBHOOK_URL%3Dhttps%3A//discord.com/api/webhooks/...%0ATELEGRAM_BOT_TOKEN%3Doptional%0ATELEGRAM_CHAT_ID%3Doptional'))">Copy</button>  </div>  <pre><code class="language-env">SCHWAB_API_KEY=your_api_key
+SCHWAB_API_SECRET=your_api_secret
+SCHWAB_CALLBACK_URL=https://127.0.0.1:8182
+POSTGRES_DSN=postgresql://user:password@localhost:5432/trading
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+TELEGRAM_BOT_TOKEN=optional
+TELEGRAM_CHAT_ID=optional</code></pre></div>
+<p>---</p>
+<h2>PostgreSQL Schema</h2>
+<h3><code>stock_fundamentals</code> — Refreshed Weekly + On-Demand</h3>
+<div class="code-container">  <div class="code-header">    <span>SQL</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('CREATE%20TABLE%20IF%20NOT%20EXISTS%20stock_fundamentals%20%28%0A%20%20%20%20symbol%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20VARCHAR%2810%29%20%20PRIMARY%20KEY%2C%0A%20%20%20%20company_name%20%20%20%20%20%20%20%20%20%20TEXT%2C%0A%20%20%20%20exchange%20%20%20%20%20%20%20%20%20%20%20%20%20%20VARCHAR%2810%29%2C%0A%0A%20%20%20%20--%20Share%20structure%0A%20%20%20%20shares_outstanding%20%20%20%20BIGINT%2C%0A%20%20%20%20market_cap_float%20%20%20%20%20%20BIGINT%2C%20%20%20%20%20%20%20--%20float%20shares%0A%20%20%20%20market_cap%20%20%20%20%20%20%20%20%20%20%20%20BIGINT%2C%0A%0A%20%20%20%20--%20Short%20interest%20%28key%20for%20momentum%29%0A%20%20%20%20short_int_float%20%20%20%20%20%20%20FLOAT%2C%20%20%20%20%20%20%20%20--%20%25%20of%20float%20short%0A%20%20%20%20short_day_cover%20%20%20%20%20%20%20FLOAT%2C%20%20%20%20%20%20%20%20--%20days%20to%20cover%0A%0A%20%20%20%20--%20Valuation%0A%20%20%20%20pe_ratio%20%20%20%20%20%20%20%20%20%20%20%20%20%20FLOAT%2C%0A%20%20%20%20peg_ratio%20%20%20%20%20%20%20%20%20%20%20%20%20FLOAT%2C%0A%20%20%20%20pb_ratio%20%20%20%20%20%20%20%20%20%20%20%20%20%20FLOAT%2C%0A%20%20%20%20eps_ttm%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20FLOAT%2C%0A%20%20%20%20eps_change_pct_ttm%20%20%20%20FLOAT%2C%0A%20%20%20%20rev_change_yoy%20%20%20%20%20%20%20%20FLOAT%2C%0A%0A%20%20%20%20--%20Balance%20sheet%0A%20%20%20%20book_value_ps%20%20%20%20%20%20%20%20%20FLOAT%2C%0A%20%20%20%20current_ratio%20%20%20%20%20%20%20%20%20FLOAT%2C%0A%20%20%20%20total_debt_equity%20%20%20%20%20FLOAT%2C%0A%0A%20%20%20%20--%20Dividends%20%28filter%3A%200%20%3D%20pure%20momentum%20candidate%29%0A%20%20%20%20dividend_yield%20%20%20%20%20%20%20%20FLOAT%2C%0A%20%20%20%20dividend_pay_date%20%20%20%20%20DATE%2C%0A%0A%20%20%20%20--%20Volatility%20%26%20volume%20profile%0A%20%20%20%20beta%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20FLOAT%2C%0A%20%20%20%20vol_1d_avg%20%20%20%20%20%20%20%20%20%20%20%20BIGINT%2C%0A%20%20%20%20vol_10d_avg%20%20%20%20%20%20%20%20%20%20%20BIGINT%2C%0A%20%20%20%20vol_3m_avg%20%20%20%20%20%20%20%20%20%20%20%20BIGINT%2C%0A%20%20%20%20high_52wk%20%20%20%20%20%20%20%20%20%20%20%20%20FLOAT%2C%0A%20%20%20%20low_52wk%20%20%20%20%20%20%20%20%20%20%20%20%20%20FLOAT%2C%0A%0A%20%20%20%20--%20Derived%20float%20classification%20%28computed%20by%20Python%20layer%29%0A%20%20%20%20float_category%20%20%20%20%20%20%20%20VARCHAR%2810%29%2C%20%20--%20%27nano%27%2C%20%27low%27%2C%20%27mid%27%2C%20%27high%27%0A%0A%20%20%20%20--%20Earnings%20calendar%20%28from%20yfinance%20supplement%29%0A%20%20%20%20next_earnings_date%20%20%20%20DATE%2C%0A%20%20%20%20last_earnings_date%20%20%20%20DATE%2C%0A%0A%20%20%20%20updated_at%20%20%20%20%20%20%20%20%20%20%20%20TIMESTAMPTZ%20%20DEFAULT%20NOW%28%29%0A%29%3B'))">Copy</button>  </div>  <pre><code class="language-sql">CREATE TABLE IF NOT EXISTS stock_fundamentals (
+    symbol                VARCHAR(10)  PRIMARY KEY,
+    company_name          TEXT,
+    exchange              VARCHAR(10),
+
+    -- Share structure
+    shares_outstanding    BIGINT,
+    market_cap_float      BIGINT,       -- float shares
+    market_cap            BIGINT,
+
+    -- Short interest (key for momentum)
+    short_int_float       FLOAT,        -- % of float short
+    short_day_cover       FLOAT,        -- days to cover
+
+    -- Valuation
+    pe_ratio              FLOAT,
+    peg_ratio             FLOAT,
+    pb_ratio              FLOAT,
+    eps_ttm               FLOAT,
+    eps_change_pct_ttm    FLOAT,
+    rev_change_yoy        FLOAT,
+
+    -- Balance sheet
+    book_value_ps         FLOAT,
+    current_ratio         FLOAT,
+    total_debt_equity     FLOAT,
+
+    -- Dividends (filter: 0 = pure momentum candidate)
+    dividend_yield        FLOAT,
+    dividend_pay_date     DATE,
+
+    -- Volatility &amp; volume profile
+    beta                  FLOAT,
+    vol_1d_avg            BIGINT,
+    vol_10d_avg           BIGINT,
+    vol_3m_avg            BIGINT,
+    high_52wk             FLOAT,
+    low_52wk              FLOAT,
+
+    -- Derived float classification (computed by Python layer)
+    float_category        VARCHAR(10),  -- &#x27;nano&#x27;, &#x27;low&#x27;, &#x27;mid&#x27;, &#x27;high&#x27;
+
+    -- Earnings calendar (from yfinance supplement)
+    next_earnings_date    DATE,
+    last_earnings_date    DATE,
+
+    updated_at            TIMESTAMPTZ  DEFAULT NOW()
+);</code></pre></div>
+<h3><code>price_history_daily</code> — 60-Day Rolling Window</h3>
+<div class="code-container">  <div class="code-header">    <span>SQL</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('CREATE%20TABLE%20IF%20NOT%20EXISTS%20price_history_daily%20%28%0A%20%20%20%20symbol%20%20%20VARCHAR%2810%29%2C%0A%20%20%20%20date%20%20%20%20%20DATE%2C%0A%20%20%20%20open%20%20%20%20%20FLOAT%2C%0A%20%20%20%20high%20%20%20%20%20FLOAT%2C%0A%20%20%20%20low%20%20%20%20%20%20FLOAT%2C%0A%20%20%20%20close%20%20%20%20FLOAT%2C%0A%20%20%20%20volume%20%20%20BIGINT%2C%0A%20%20%20%20PRIMARY%20KEY%20%28symbol%2C%20date%29%0A%29%3B%0A%0A--%20Index%20for%20fast%20avg%20volume%20lookups%0ACREATE%20INDEX%20IF%20NOT%20EXISTS%20idx_phd_symbol_date%20ON%20price_history_daily%28symbol%2C%20date%20DESC%29%3B'))">Copy</button>  </div>  <pre><code class="language-sql">CREATE TABLE IF NOT EXISTS price_history_daily (
+    symbol   VARCHAR(10),
+    date     DATE,
+    open     FLOAT,
+    high     FLOAT,
+    low      FLOAT,
+    close    FLOAT,
+    volume   BIGINT,
+    PRIMARY KEY (symbol, date)
+);
+
+-- Index for fast avg volume lookups
+CREATE INDEX IF NOT EXISTS idx_phd_symbol_date ON price_history_daily(symbol, date DESC);</code></pre></div>
+<h3><code>price_history_1min</code> — Intraday Candles (Current Session + 2 Days)</h3>
+<div class="code-container">  <div class="code-header">    <span>SQL</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('CREATE%20TABLE%20IF%20NOT%20EXISTS%20price_history_1min%20%28%0A%20%20%20%20symbol%20%20%20%20%20%20VARCHAR%2810%29%2C%0A%20%20%20%20timestamp%20%20%20TIMESTAMPTZ%2C%0A%20%20%20%20open%20%20%20%20%20%20%20%20FLOAT%2C%0A%20%20%20%20high%20%20%20%20%20%20%20%20FLOAT%2C%0A%20%20%20%20low%20%20%20%20%20%20%20%20%20FLOAT%2C%0A%20%20%20%20close%20%20%20%20%20%20%20FLOAT%2C%0A%20%20%20%20volume%20%20%20%20%20%20BIGINT%2C%0A%20%20%20%20PRIMARY%20KEY%20%28symbol%2C%20timestamp%29%0A%29%3B'))">Copy</button>  </div>  <pre><code class="language-sql">CREATE TABLE IF NOT EXISTS price_history_1min (
+    symbol      VARCHAR(10),
+    timestamp   TIMESTAMPTZ,
+    open        FLOAT,
+    high        FLOAT,
+    low         FLOAT,
+    close       FLOAT,
+    volume      BIGINT,
+    PRIMARY KEY (symbol, timestamp)
+);</code></pre></div>
+<h3><code>options_snapshot</code> — Morning Pull for High Short-Interest Candidates</h3>
+<div class="code-container">  <div class="code-header">    <span>SQL</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('CREATE%20TABLE%20IF%20NOT%20EXISTS%20options_snapshot%20%28%0A%20%20%20%20symbol%20%20%20%20%20%20%20%20%20%20%20VARCHAR%2810%29%2C%0A%20%20%20%20snapshot_time%20%20%20%20TIMESTAMPTZ%2C%0A%20%20%20%20put_call_ratio%20%20%20FLOAT%2C%0A%20%20%20%20atm_iv%20%20%20%20%20%20%20%20%20%20%20FLOAT%2C%20%20%20%20%20%20%20%20--%20at-the-money%20implied%20volatility%0A%20%20%20%20iv_percentile%20%20%20%20FLOAT%2C%20%20%20%20%20%20%20%20--%20derived%20from%20historical%20IV%20in%20this%20table%0A%20%20%20%20total_oi%20%20%20%20%20%20%20%20%20BIGINT%2C%0A%20%20%20%20PRIMARY%20KEY%20%28symbol%2C%20snapshot_time%29%0A%29%3B'))">Copy</button>  </div>  <pre><code class="language-sql">CREATE TABLE IF NOT EXISTS options_snapshot (
+    symbol           VARCHAR(10),
+    snapshot_time    TIMESTAMPTZ,
+    put_call_ratio   FLOAT,
+    atm_iv           FLOAT,        -- at-the-money implied volatility
+    iv_percentile    FLOAT,        -- derived from historical IV in this table
+    total_oi         BIGINT,
+    PRIMARY KEY (symbol, snapshot_time)
+);</code></pre></div>
+<h3><code>screener_alerts</code> — Alert Log (Avoid Duplicate Notifications)</h3>
+<div class="code-container">  <div class="code-header">    <span>SQL</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('CREATE%20TABLE%20IF%20NOT%20EXISTS%20screener_alerts%20%28%0A%20%20%20%20id%20%20%20%20%20%20%20%20%20%20%20%20%20%20SERIAL%20%20%20%20%20%20%20PRIMARY%20KEY%2C%0A%20%20%20%20symbol%20%20%20%20%20%20%20%20%20%20VARCHAR%2810%29%2C%0A%20%20%20%20alert_time%20%20%20%20%20%20TIMESTAMPTZ%20%20DEFAULT%20NOW%28%29%2C%0A%20%20%20%20trigger_price%20%20%20FLOAT%2C%0A%20%20%20%20trigger_volume%20%20BIGINT%2C%0A%20%20%20%20rel_vol%20%20%20%20%20%20%20%20%20FLOAT%2C%0A%20%20%20%20gap_pct%20%20%20%20%20%20%20%20%20FLOAT%2C%0A%20%20%20%20short_int_float%20FLOAT%2C%0A%20%20%20%20float_shares%20%20%20%20BIGINT%2C%0A%20%20%20%20alert_type%20%20%20%20%20%20VARCHAR%2830%29%2C%20%20--%20e.g.%20%27BREAKOUT%27%2C%20%27GAP_UP%27%2C%20%27SQUEEZE%27%0A%20%20%20%20sent%20%20%20%20%20%20%20%20%20%20%20%20BOOLEAN%20%20%20%20%20%20DEFAULT%20FALSE%0A%29%3B%0A%0A--%20Prevent%20re-alerting%20same%20symbol%20within%20a%20cooldown%20window%20%28handled%20in%20Python%20too%29%0ACREATE%20INDEX%20IF%20NOT%20EXISTS%20idx_alerts_symbol_time%20ON%20screener_alerts%28symbol%2C%20alert_time%20DESC%29%3B'))">Copy</button>  </div>  <pre><code class="language-sql">CREATE TABLE IF NOT EXISTS screener_alerts (
+    id              SERIAL       PRIMARY KEY,
+    symbol          VARCHAR(10),
+    alert_time      TIMESTAMPTZ  DEFAULT NOW(),
+    trigger_price   FLOAT,
+    trigger_volume  BIGINT,
+    rel_vol         FLOAT,
+    gap_pct         FLOAT,
+    short_int_float FLOAT,
+    float_shares    BIGINT,
+    alert_type      VARCHAR(30),  -- e.g. &#x27;BREAKOUT&#x27;, &#x27;GAP_UP&#x27;, &#x27;SQUEEZE&#x27;
+    sent            BOOLEAN      DEFAULT FALSE
+);
+
+-- Prevent re-alerting same symbol within a cooldown window (handled in Python too)
+CREATE INDEX IF NOT EXISTS idx_alerts_symbol_time ON screener_alerts(symbol, alert_time DESC);</code></pre></div>
+<h3><code>watchlist</code> — Persistent Symbols to Always Monitor</h3>
+<div class="code-container">  <div class="code-header">    <span>SQL</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('CREATE%20TABLE%20IF%20NOT%20EXISTS%20watchlist%20%28%0A%20%20%20%20symbol%20%20%20%20%20%20%20VARCHAR%2810%29%20%20PRIMARY%20KEY%2C%0A%20%20%20%20added_at%20%20%20%20%20TIMESTAMPTZ%20%20DEFAULT%20NOW%28%29%2C%0A%20%20%20%20notes%20%20%20%20%20%20%20%20TEXT%2C%0A%20%20%20%20active%20%20%20%20%20%20%20BOOLEAN%20%20%20%20%20%20DEFAULT%20TRUE%0A%29%3B'))">Copy</button>  </div>  <pre><code class="language-sql">CREATE TABLE IF NOT EXISTS watchlist (
+    symbol       VARCHAR(10)  PRIMARY KEY,
+    added_at     TIMESTAMPTZ  DEFAULT NOW(),
+    notes        TEXT,
+    active       BOOLEAN      DEFAULT TRUE
+);</code></pre></div>
+<p>---</p>
+<h2>Computed / Derived Fields</h2>
+<p>These are calculated in Python and either stored back to Postgres or held in-memory during the session:</p>
+<div class="table-container">  <table>    <thead><tr><th>Field</th><th>Formula</th><th>Storage</th></tr></thead>    <tbody><tr><td><code>relative_volume</code></td><td><code>total_volume / (vol_10d_avg * elapsed_pct_of_day)</code></td><td>In-memory, updated per tick</td></tr><tr><td><code>gap_pct</code></td><td><code>(today_open - prior_close) / prior_close * 100</code></td><td>Computed at open, cached in session</td></tr><tr><td><code>atr_14</code></td><td>14-day average of <code>high - low</code></td><td>Stored in <code>stock_fundamentals</code></td></tr><tr><td><code>dist_from_52wk_high</code></td><td><code>(high_52wk - close) / high_52wk * 100</code></td><td>Computed on demand</td></tr><tr><td><code>short_squeeze_score</code></td><td><code>short_int_float / short_day_cover</code></td><td>Computed in morning refresh</td></tr><tr><td><code>float_category</code></td><td><code>&lt;10M=nano, 10-50M=low, 50-100M=mid, &gt;100M=high</code></td><td>Stored in <code>stock_fundamentals</code></td></tr><tr><td><code>iv_percentile</code></td><td><code>rank(current_atm_iv) over 252-day IV history</code></td><td>Stored in <code>options_snapshot</code></td></tr><tr><td><code>vwap</code></td><td>Running sum of <code>price * volume / cumulative_volume</code></td><td>In-memory stream accumulator</td></tr></tbody>  </table></div>
+<p>---</p>
+<h2>Morning Setup Routine (8:45 AM CT)</h2>
+<p>The morning refresh should run as a scheduled APScheduler job. Tasks run in this sequence:</p>
+<p>### Step 1 — Seed Candidate List
+&lt;!--CODEBLOCK_8--&gt;</p>
+<p>### Step 2 — Bulk Fetch Fundamentals
+&lt;!--CODEBLOCK_9--&gt;</p>
+<p>### Step 3 — Pull 60-Day Daily Price History
+&lt;!--CODEBLOCK_10--&gt;</p>
+<p>### Step 4 — Options Snapshot (High Short-Interest Symbols Only)
+&lt;!--CODEBLOCK_11--&gt;</p>
+<p>### Step 5 — Supplement with yfinance (Earnings Dates)
+&lt;!--CODEBLOCK_12--&gt;</p>
+<p>### Step 6 — Open WebSocket Stream
+&lt;!--CODEBLOCK_13--&gt;</p>
+<p>---</p>
+<h2>Real-Time Filter Logic</h2>
+<p>Apply Ross Cameron criteria in <code>on_quote_update</code>:</p>
+<div class="code-container">  <div class="code-header">    <span>PYTHON</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('FILTERS%20%3D%20%7B%0A%20%20%20%20%27min_price%27%3A%20%20%20%20%20%202.0%2C%0A%20%20%20%20%27max_price%27%3A%20%20%20%20%20%2020.0%2C%0A%20%20%20%20%27min_rel_vol%27%3A%20%20%20%202.0%2C%0A%20%20%20%20%27max_float%27%3A%20%20%20%20%20%20100_000_000%2C%20%20%20%23%20100M%20shares%0A%20%20%20%20%27min_pct_gain%27%3A%20%20%2010.0%2C%20%20%20%20%20%20%20%20%20%20%23%20minimum%20%25%20gain%20from%20prior%20close%0A%20%20%20%20%27min_volume%27%3A%20%20%20%20%20500_000%2C%20%20%20%20%20%20%20%23%20absolute%20minimum%20daily%20volume%20so%20far%0A%20%20%20%20%27no_dividends%27%3A%20%20%20True%2C%20%20%20%20%20%20%20%20%20%20%23%20skip%20dividend%20payers%0A%20%20%20%20%27min_gap_pct%27%3A%20%20%20%205.0%2C%20%20%20%20%20%20%20%20%20%20%20%23%20optional%3A%20gappers%20only%0A%7D%0A%0Adef%20on_quote_update%28msg%29%3A%0A%20%20%20%20for%20item%20in%20msg%5B%27content%27%5D%3A%0A%20%20%20%20%20%20%20%20sym%20%20%20%20%3D%20item%5B%27key%27%5D%0A%20%20%20%20%20%20%20%20price%20%20%3D%20item.get%28%27LAST_PRICE%27%2C%200%29%0A%20%20%20%20%20%20%20%20volume%20%3D%20item.get%28%27TOTAL_VOLUME%27%2C%200%29%0A%20%20%20%20%20%20%20%20pct_chg%20%3D%20item.get%28%27NET_CHANGE_PERCENT%27%2C%200%29%0A%0A%20%20%20%20%20%20%20%20fund%20%20%20%3D%20fundamentals_cache%5Bsym%5D%0A%20%20%20%20%20%20%20%20avg_vol%20%3D%20avg_volume_cache.get%28sym%2C%201%29%0A%20%20%20%20%20%20%20%20elapsed%20%3D%20get_market_elapsed_pct%28%29%20%20%20%23%200.0%20-%201.0%20across%206.5hr%20session%0A%20%20%20%20%20%20%20%20rel_vol%20%3D%20volume%20/%20max%28avg_vol%20%2A%20elapsed%2C%201%29%0A%0A%20%20%20%20%20%20%20%20if%20%28FILTERS%5B%27min_price%27%5D%20%3C%3D%20price%20%3C%3D%20FILTERS%5B%27max_price%27%5D%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20and%20rel_vol%20%20%20%20%3E%3D%20FILTERS%5B%27min_rel_vol%27%5D%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20and%20fund%5B%27market_cap_float%27%5D%20%3C%3D%20FILTERS%5B%27max_float%27%5D%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20and%20pct_chg%20%20%20%20%3E%3D%20FILTERS%5B%27min_pct_gain%27%5D%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20and%20volume%20%20%20%20%20%3E%3D%20FILTERS%5B%27min_volume%27%5D%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20and%20not%20%28FILTERS%5B%27no_dividends%27%5D%20and%20fund%5B%27dividend_yield%27%5D%20%3E%200%29%29%3A%0A%0A%20%20%20%20%20%20%20%20%20%20%20%20if%20not%20recently_alerted%28sym%2C%20cooldown_minutes%3D15%29%3A%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20fire_alert%28sym%2C%20price%2C%20volume%2C%20rel_vol%2C%20pct_chg%2C%20fund%29'))">Copy</button>  </div>  <pre><code class="language-python">FILTERS = {
+    &#x27;min_price&#x27;:      2.0,
+    &#x27;max_price&#x27;:      20.0,
+    &#x27;min_rel_vol&#x27;:    2.0,
+    &#x27;max_float&#x27;:      100_000_000,   # 100M shares
+    &#x27;min_pct_gain&#x27;:   10.0,          # minimum % gain from prior close
+    &#x27;min_volume&#x27;:     500_000,       # absolute minimum daily volume so far
+    &#x27;no_dividends&#x27;:   True,          # skip dividend payers
+    &#x27;min_gap_pct&#x27;:    5.0,           # optional: gappers only
+}
+
+def on_quote_update(msg):
+    for item in msg[&#x27;content&#x27;]:
+        sym    = item[&#x27;key&#x27;]
+        price  = item.get(&#x27;LAST_PRICE&#x27;, 0)
+        volume = item.get(&#x27;TOTAL_VOLUME&#x27;, 0)
+        pct_chg = item.get(&#x27;NET_CHANGE_PERCENT&#x27;, 0)
+
+        fund   = fundamentals_cache[sym]
+        avg_vol = avg_volume_cache.get(sym, 1)
+        elapsed = get_market_elapsed_pct()   # 0.0 - 1.0 across 6.5hr session
+        rel_vol = volume / max(avg_vol * elapsed, 1)
+
+        if (FILTERS[&#x27;min_price&#x27;] &lt;= price &lt;= FILTERS[&#x27;max_price&#x27;]
+                and rel_vol    &gt;= FILTERS[&#x27;min_rel_vol&#x27;]
+                and fund[&#x27;market_cap_float&#x27;] &lt;= FILTERS[&#x27;max_float&#x27;]
+                and pct_chg    &gt;= FILTERS[&#x27;min_pct_gain&#x27;]
+                and volume     &gt;= FILTERS[&#x27;min_volume&#x27;]
+                and not (FILTERS[&#x27;no_dividends&#x27;] and fund[&#x27;dividend_yield&#x27;] &gt; 0)):
+
+            if not recently_alerted(sym, cooldown_minutes=15):
+                fire_alert(sym, price, volume, rel_vol, pct_chg, fund)</code></pre></div>
+<p>---</p>
+<h2>Alert Card Format (Discord)</h2>
+<p>Each alert should post a rich embed with:</p>
+<div class="code-container">  <div class="code-header">    <span>CODE</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('%F0%9F%9A%80%20%24TICKER%20%E2%80%94%20MOMENTUM%20ALERT%0A%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%0APrice%3A%20%20%20%20%20%20%20%20%24X.XX%20%20%28%2BXX.X%25%29%0AFloat%3A%20%20%20%20%20%20%20%20XX.XM%20shares%20%20%28nano/low/mid%29%0ARel%20Volume%3A%20%20%20X.Xx%20%20%28vs%2010d%20avg%29%0AGap%20%25%3A%20%20%20%20%20%20%20%20%2BXX.X%25%0AShort%20Float%3A%20%20XX.X%25%20%20%28X.X%20days%20to%20cover%29%0ASqueeze%20Score%3A%20X.X%0AATR%20%2814d%29%3A%20%20%20%20%24X.XX%0A52wk%20Range%3A%20%20%20%24X.XX%20%E2%80%93%20%24X.XX%0A%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%0ANext%20Earnings%3A%20YYYY-MM-DD%0AIV%20Percentile%3A%20XX%25'))">Copy</button>  </div>  <pre><code class="language-code">🚀 $TICKER — MOMENTUM ALERT
+──────────────────────────────
+Price:        $X.XX  (+XX.X%)
+Float:        XX.XM shares  (nano/low/mid)
+Rel Volume:   X.Xx  (vs 10d avg)
+Gap %:        +XX.X%
+Short Float:  XX.X%  (X.X days to cover)
+Squeeze Score: X.X
+ATR (14d):    $X.XX
+52wk Range:   $X.XX – $X.XX
+──────────────────────────────
+Next Earnings: YYYY-MM-DD
+IV Percentile: XX%</code></pre></div>
+<p>---</p>
+<h2>Dynamic Symbol Management (WebSocket)</h2>
+<p>The Schwab stream supports live add/remove without reconnecting:</p>
+<div class="code-container">  <div class="code-header">    <span>PYTHON</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('%23%20Add%20new%20screener%20hits%20to%20live%20L1%20feed%0Aasync%20def%20on_new_screener_hit%28msg%29%3A%0A%20%20%20%20new_symbols%20%3D%20%5Bitem%5B%27key%27%5D%20for%20item%20in%20msg%5B%27content%27%5D%5D%0A%20%20%20%20await%20stream.level_one_equity_add%28new_symbols%2C%20fields%3D%5B...%5D%29%0A%20%20%20%20await%20stream.chart_equity_add%28new_symbols%29%0A%0A%23%20Prune%20symbols%20that%20have%20gone%20cold%20%28low%20volume%2C%20price%20moved%20out%20of%20range%29%0Aasync%20def%20prune_cold_symbols%28%29%3A%0A%20%20%20%20cold%20%3D%20%5Bs%20for%20s%20in%20active_symbols%20if%20is_cold%28s%29%5D%0A%20%20%20%20await%20stream.level_one_equity_unsubs%28cold%29%0A%20%20%20%20await%20stream.chart_equity_unsubs%28cold%29'))">Copy</button>  </div>  <pre><code class="language-python"># Add new screener hits to live L1 feed
+async def on_new_screener_hit(msg):
+    new_symbols = [item[&#x27;key&#x27;] for item in msg[&#x27;content&#x27;]]
+    await stream.level_one_equity_add(new_symbols, fields=[...])
+    await stream.chart_equity_add(new_symbols)
+
+# Prune symbols that have gone cold (low volume, price moved out of range)
+async def prune_cold_symbols():
+    cold = [s for s in active_symbols if is_cold(s)]
+    await stream.level_one_equity_unsubs(cold)
+    await stream.chart_equity_unsubs(cold)</code></pre></div>
+<p>---</p>
+<h2>Additional Features to Implement</h2>
+<p>### VWAP Tracker (In-Memory)
+Accumulate VWAP from the 1-min candle stream. Flag alerts when price breaks above VWAP for the first time (a core Ross Cameron entry signal).</p>
+<div class="code-container">  <div class="code-header">    <span>PYTHON</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('vwap_state%20%3D%20%7B%7D%20%20%23%20%7B%20symbol%3A%20%7B%20cum_vol%3A%200%2C%20cum_vol_price%3A%200%20%7D%20%7D%0A%0Adef%20update_vwap%28sym%2C%20candle%29%3A%0A%20%20%20%20s%20%3D%20vwap_state.setdefault%28sym%2C%20%7B%27cum_vol%27%3A%200%2C%20%27cum_vp%27%3A%200%7D%29%0A%20%20%20%20typical_price%20%3D%20%28candle%5B%27high%27%5D%20%2B%20candle%5B%27low%27%5D%20%2B%20candle%5B%27close%27%5D%29%20/%203%0A%20%20%20%20s%5B%27cum_vp%27%5D%20%20%2B%3D%20typical_price%20%2A%20candle%5B%27volume%27%5D%0A%20%20%20%20s%5B%27cum_vol%27%5D%20%2B%3D%20candle%5B%27volume%27%5D%0A%20%20%20%20return%20s%5B%27cum_vp%27%5D%20/%20s%5B%27cum_vol%27%5D%20if%20s%5B%27cum_vol%27%5D%20%3E%200%20else%200'))">Copy</button>  </div>  <pre><code class="language-python">vwap_state = {}  # { symbol: { cum_vol: 0, cum_vol_price: 0 } }
+
+def update_vwap(sym, candle):
+    s = vwap_state.setdefault(sym, {&#x27;cum_vol&#x27;: 0, &#x27;cum_vp&#x27;: 0})
+    typical_price = (candle[&#x27;high&#x27;] + candle[&#x27;low&#x27;] + candle[&#x27;close&#x27;]) / 3
+    s[&#x27;cum_vp&#x27;]  += typical_price * candle[&#x27;volume&#x27;]
+    s[&#x27;cum_vol&#x27;] += candle[&#x27;volume&#x27;]
+    return s[&#x27;cum_vp&#x27;] / s[&#x27;cum_vol&#x27;] if s[&#x27;cum_vol&#x27;] &gt; 0 else 0</code></pre></div>
+<p>### Pre-Market Gap Scanner (8:00 AM CT)
+Run a separate lighter refresh at 8:00 AM using pre-market prices from <code>get_quotes()</code> to build a gap list before the open. Pre-market volume combined with a &gt;10% gap is the highest-probability Ross Cameron setup.</p>
+<div class="code-container">  <div class="code-header">    <span>PYTHON</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('pre_mkt_quotes%20%3D%20client.get_quotes%28watchlist_symbols%29%0Afor%20sym%2C%20q%20in%20pre_mkt_quotes.items%28%29%3A%0A%20%20%20%20pre_mkt_price%20%3D%20q%5B%27quote%27%5D%5B%27lastPrice%27%5D%0A%20%20%20%20prior_close%20%20%20%3D%20q%5B%27quote%27%5D%5B%27closePrice%27%5D%0A%20%20%20%20gap_pct%20%20%20%20%20%20%20%3D%20%28pre_mkt_price%20-%20prior_close%29%20/%20prior_close%20%2A%20100%0A%20%20%20%20pre_mkt_vol%20%20%20%3D%20q%5B%27quote%27%5D%5B%27totalVolume%27%5D%0A%20%20%20%20if%20gap_pct%20%3E%3D%2010%20and%20pre_mkt_vol%20%3E%3D%2050_000%3A%0A%20%20%20%20%20%20%20%20add_to_watchlist%28sym%2C%20notes%3Df%22Pre-mkt%20gap%20%7Bgap_pct%3A.1f%7D%25%22%29'))">Copy</button>  </div>  <pre><code class="language-python">pre_mkt_quotes = client.get_quotes(watchlist_symbols)
+for sym, q in pre_mkt_quotes.items():
+    pre_mkt_price = q[&#x27;quote&#x27;][&#x27;lastPrice&#x27;]
+    prior_close   = q[&#x27;quote&#x27;][&#x27;closePrice&#x27;]
+    gap_pct       = (pre_mkt_price - prior_close) / prior_close * 100
+    pre_mkt_vol   = q[&#x27;quote&#x27;][&#x27;totalVolume&#x27;]
+    if gap_pct &gt;= 10 and pre_mkt_vol &gt;= 50_000:
+        add_to_watchlist(sym, notes=f&quot;Pre-mkt gap {gap_pct:.1f}%&quot;)</code></pre></div>
+<p>### Halt &amp; Resume Detection
+The Schwab L1 stream includes a <code>TRADING_STATUS</code> field. Detect halts and resume events and post them to Discord — Ross Cameron frequently trades the resume candle after a circuit-breaker halt.</p>
+<div class="code-container">  <div class="code-header">    <span>PYTHON</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('if%20item.get%28%27TRADING_STATUS%27%29%20%3D%3D%20%27H%27%3A%20%20%20%23%20Halted%0A%20%20%20%20post_discord%28f%22%E2%8F%B8%EF%B8%8F%20%24%7Bsym%7D%20HALTED%20%E2%80%94%20watch%20for%20resume%20candle%22%29%0Aelif%20item.get%28%27TRADING_STATUS%27%29%20%3D%3D%20%27T%27%3A%20%23%20Trading%20resumed%0A%20%20%20%20post_discord%28f%22%E2%96%B6%EF%B8%8F%20%24%7Bsym%7D%20RESUMED%20%E2%80%94%20%24%7Bprice%7D%22%29'))">Copy</button>  </div>  <pre><code class="language-python">if item.get(&#x27;TRADING_STATUS&#x27;) == &#x27;H&#x27;:   # Halted
+    post_discord(f&quot;⏸️ ${sym} HALTED — watch for resume candle&quot;)
+elif item.get(&#x27;TRADING_STATUS&#x27;) == &#x27;T&#x27;: # Trading resumed
+    post_discord(f&quot;▶️ ${sym} RESUMED — ${price}&quot;)</code></pre></div>
+<p>### Daily Session Archive
+At 4:05 PM CT, archive the day&#x27;s 1-min candles and alert log:</p>
+<div class="code-container">  <div class="code-header">    <span>PYTHON</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('%23%20Compress%20old%201-min%20data%20beyond%202%20sessions%20to%20save%20disk%20space%0Adb.execute%28%22%22%22%0A%20%20%20%20DELETE%20FROM%20price_history_1min%0A%20%20%20%20WHERE%20timestamp%20%3C%20NOW%28%29%20-%20INTERVAL%20%272%20days%27%0A%22%22%22%29%0A%0A%23%20Archive%20alert%20log%20to%20a%20separate%20table%20for%20backtesting%0Adb.execute%28%22%22%22%0A%20%20%20%20INSERT%20INTO%20screener_alerts_archive%20SELECT%20%2A%20FROM%20screener_alerts%0A%20%20%20%20WHERE%20DATE%28alert_time%29%20%3D%20CURRENT_DATE%0A%22%22%22%29'))">Copy</button>  </div>  <pre><code class="language-python"># Compress old 1-min data beyond 2 sessions to save disk space
+db.execute(&quot;&quot;&quot;
+    DELETE FROM price_history_1min
+    WHERE timestamp &lt; NOW() - INTERVAL &#x27;2 days&#x27;
+&quot;&quot;&quot;)
+
+# Archive alert log to a separate table for backtesting
+db.execute(&quot;&quot;&quot;
+    INSERT INTO screener_alerts_archive SELECT * FROM screener_alerts
+    WHERE DATE(alert_time) = CURRENT_DATE
+&quot;&quot;&quot;)</code></pre></div>
+<p>### Backtesting Hook
+Since every alert is logged to <code>screener_alerts</code>, you can backtest filter changes by replaying alerts against 1-min candle data:</p>
+<div class="code-container">  <div class="code-header">    <span>PYTHON</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('def%20backtest_filter%28date%2C%20filters%29%3A%0A%20%20%20%20alerts%20%3D%20db.query%28%22%22%22%0A%20%20%20%20%20%20%20%20SELECT%20a.%2A%2C%20p.close%20as%20close_5min%0A%20%20%20%20%20%20%20%20FROM%20screener_alerts_archive%20a%0A%20%20%20%20%20%20%20%20JOIN%20price_history_1min%20p%0A%20%20%20%20%20%20%20%20%20%20ON%20a.symbol%20%3D%20p.symbol%0A%20%20%20%20%20%20%20%20%20AND%20p.timestamp%20%3D%20a.alert_time%20%2B%20INTERVAL%20%275%20minutes%27%0A%20%20%20%20%20%20%20%20WHERE%20DATE%28a.alert_time%29%20%3D%20%25s%0A%20%20%20%20%22%22%22%2C%20%5Bdate%5D%29%0A%20%20%20%20%23%20compute%20win%20rate%2C%20avg%20gain%2C%20max%20drawdown'))">Copy</button>  </div>  <pre><code class="language-python">def backtest_filter(date, filters):
+    alerts = db.query(&quot;&quot;&quot;
+        SELECT a.*, p.close as close_5min
+        FROM screener_alerts_archive a
+        JOIN price_history_1min p
+          ON a.symbol = p.symbol
+         AND p.timestamp = a.alert_time + INTERVAL &#x27;5 minutes&#x27;
+        WHERE DATE(a.alert_time) = %s
+    &quot;&quot;&quot;, [date])
+    # compute win rate, avg gain, max drawdown</code></pre></div>
+<p>---</p>
+<h2>Data Gaps &amp; Supplemental Sources</h2>
+<div class="table-container">  <table>    <thead><tr><th>Gap</th><th>Schwab Provides</th><th>Supplement With</th><th>Cost</th></tr></thead>    <tbody><tr><td>Float (direct)</td><td>Shares outstanding only</td><td><code>yfinance</code></td><td>Free</td></tr><tr><td>Earnings dates</td><td>❌</td><td><code>yfinance</code></td><td>Free</td></tr><tr><td>SEC filings</td><td>❌</td><td><code>sec-edgar-downloader</code></td><td>Free</td></tr><tr><td>Historical short interest</td><td>❌</td><td>FINRA FTP (bi-monthly)</td><td>Free</td></tr><tr><td>Institutional ownership %</td><td>❌</td><td>Finviz scrape (weekly)</td><td>Free</td></tr><tr><td>News / catalyst feed</td><td>❌</td><td>Benzinga free tier or RSS</td><td>Free</td></tr><tr><td>Level 2 order book</td><td>✅ via <code>level_two_book_subs</code></td><td>—</td><td>—</td></tr><tr><td>Pre-market quotes</td><td>✅ via <code>get_quotes()</code></td><td>—</td><td>—</td></tr><tr><td>Options chain</td><td>✅ via <code>get_option_chain()</code></td><td>—</td><td>—</td></tr></tbody>  </table></div>
+<p>---</p>
+<h2>File / Module Structure</h2>
+<div class="code-container">  <div class="code-header">    <span>CODE</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('momentum_screener/%0A%E2%94%9C%E2%94%80%E2%94%80%20main.py%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%23%20Entry%20point%2C%20APScheduler%20setup%2C%20starts%20stream%0A%E2%94%9C%E2%94%80%E2%94%80%20config.py%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%23%20Loads%20.env%2C%20constants%2C%20filter%20thresholds%0A%E2%94%9C%E2%94%80%E2%94%80%20db/%0A%E2%94%82%20%20%20%E2%94%9C%E2%94%80%E2%94%80%20__init__.py%0A%E2%94%82%20%20%20%E2%94%9C%E2%94%80%E2%94%80%20connection.py%20%20%20%20%20%20%20%20%20%20%23%20asyncpg%20pool%20setup%0A%E2%94%82%20%20%20%E2%94%9C%E2%94%80%E2%94%80%20schema.sql%20%20%20%20%20%20%20%20%20%20%20%20%20%23%20Full%20CREATE%20TABLE%20statements%0A%E2%94%82%20%20%20%E2%94%94%E2%94%80%E2%94%80%20upsert.py%20%20%20%20%20%20%20%20%20%20%20%20%20%20%23%20Upsert%20helpers%20for%20all%20tables%0A%E2%94%9C%E2%94%80%E2%94%80%20schwab/%0A%E2%94%82%20%20%20%E2%94%9C%E2%94%80%E2%94%80%20__init__.py%0A%E2%94%82%20%20%20%E2%94%9C%E2%94%80%E2%94%80%20auth.py%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%23%20Token%20management%2C%20OAuth%20flow%0A%E2%94%82%20%20%20%E2%94%9C%E2%94%80%E2%94%80%20http_client.py%20%20%20%20%20%20%20%20%20%23%20Fundamentals%2C%20history%2C%20movers%2C%20options%0A%E2%94%82%20%20%20%E2%94%94%E2%94%80%E2%94%80%20stream_client.py%20%20%20%20%20%20%20%23%20WebSocket%20subscriptions%20%2B%20handlers%0A%E2%94%9C%E2%94%80%E2%94%80%20screener/%0A%E2%94%82%20%20%20%E2%94%9C%E2%94%80%E2%94%80%20__init__.py%0A%E2%94%82%20%20%20%E2%94%9C%E2%94%80%E2%94%80%20filters.py%20%20%20%20%20%20%20%20%20%20%20%20%20%23%20Ross%20Cameron%20filter%20logic%0A%E2%94%82%20%20%20%E2%94%9C%E2%94%80%E2%94%80%20vwap.py%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%23%20In-memory%20VWAP%20accumulator%0A%E2%94%82%20%20%20%E2%94%94%E2%94%80%E2%94%80%20derived.py%20%20%20%20%20%20%20%20%20%20%20%20%20%23%20Rel%20vol%2C%20gap%20%25%2C%20squeeze%20score%2C%20ATR%0A%E2%94%9C%E2%94%80%E2%94%80%20alerts/%0A%E2%94%82%20%20%20%E2%94%9C%E2%94%80%E2%94%80%20__init__.py%0A%E2%94%82%20%20%20%E2%94%9C%E2%94%80%E2%94%80%20discord.py%20%20%20%20%20%20%20%20%20%20%20%20%20%23%20Webhook%20embed%20formatter%20%2B%20sender%0A%E2%94%82%20%20%20%E2%94%94%E2%94%80%E2%94%80%20dedup.py%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%23%20Cooldown%20/%20deduplication%20logic%0A%E2%94%9C%E2%94%80%E2%94%80%20morning/%0A%E2%94%82%20%20%20%E2%94%9C%E2%94%80%E2%94%80%20__init__.py%0A%E2%94%82%20%20%20%E2%94%9C%E2%94%80%E2%94%80%20refresh.py%20%20%20%20%20%20%20%20%20%20%20%20%20%23%20Full%20morning%20refresh%20orchestration%0A%E2%94%82%20%20%20%E2%94%9C%E2%94%80%E2%94%80%20premarkt_gap.py%20%20%20%20%20%20%20%20%23%208%3A00%20AM%20pre-market%20gap%20scanner%0A%E2%94%82%20%20%20%E2%94%94%E2%94%80%E2%94%80%20supplement.py%20%20%20%20%20%20%20%20%20%20%23%20yfinance%2C%20FINRA%2C%20Finviz%20supplemental%20pulls%0A%E2%94%94%E2%94%80%E2%94%80%20backtest/%0A%20%20%20%20%E2%94%9C%E2%94%80%E2%94%80%20__init__.py%0A%20%20%20%20%E2%94%94%E2%94%80%E2%94%80%20replay.py%20%20%20%20%20%20%20%20%20%20%20%20%20%20%23%20Alert%20replay%20against%201-min%20candle%20archive'))">Copy</button>  </div>  <pre><code class="language-code">momentum_screener/
+├── main.py                    # Entry point, APScheduler setup, starts stream
+├── config.py                  # Loads .env, constants, filter thresholds
+├── db/
+│   ├── __init__.py
+│   ├── connection.py          # asyncpg pool setup
+│   ├── schema.sql             # Full CREATE TABLE statements
+│   └── upsert.py              # Upsert helpers for all tables
+├── schwab/
+│   ├── __init__.py
+│   ├── auth.py                # Token management, OAuth flow
+│   ├── http_client.py         # Fundamentals, history, movers, options
+│   └── stream_client.py       # WebSocket subscriptions + handlers
+├── screener/
+│   ├── __init__.py
+│   ├── filters.py             # Ross Cameron filter logic
+│   ├── vwap.py                # In-memory VWAP accumulator
+│   └── derived.py             # Rel vol, gap %, squeeze score, ATR
+├── alerts/
+│   ├── __init__.py
+│   ├── discord.py             # Webhook embed formatter + sender
+│   └── dedup.py               # Cooldown / deduplication logic
+├── morning/
+│   ├── __init__.py
+│   ├── refresh.py             # Full morning refresh orchestration
+│   ├── premarkt_gap.py        # 8:00 AM pre-market gap scanner
+│   └── supplement.py          # yfinance, FINRA, Finviz supplemental pulls
+└── backtest/
+    ├── __init__.py
+    └── replay.py              # Alert replay against 1-min candle archive</code></pre></div>
+<p>---</p>
+<h2>Morning Routine Timeline</h2>
+<div class="table-container">  <table>    <thead><tr><th>Time (CT)</th><th>Task</th></tr></thead>    <tbody><tr><td>8:00 AM</td><td>Pre-market gap scanner runs — identifies gap &gt;10% + pre-mkt vol candidates</td></tr><tr><td>8:45 AM</td><td>Full morning refresh: movers seeded, fundamentals upserted, avg vol cached</td></tr><tr><td>8:50 AM</td><td>Options snapshots pulled for high short-interest symbols</td></tr><tr><td>8:55 AM</td><td>yfinance earnings calendar supplement runs</td></tr><tr><td>9:00 AM</td><td>WebSocket stream opens, all candidates subscribed</td></tr><tr><td>9:30 AM</td><td>Market open — real-time filters active, alerts live</td></tr><tr><td>9:30–10:30 AM</td><td>Primary momentum window (highest alert sensitivity)</td></tr><tr><td>10:30 AM</td><td>Optional: tighten rel vol threshold to 3.0x for second-hour quality filter</td></tr><tr><td>4:05 PM</td><td>Session archive + 1-min candle cleanup</td></tr><tr><td>4:15 PM</td><td>Optional: end-of-day report posted to Discord (top alerts, win rate)</td></tr></tbody>  </table></div>
+<p>---</p>
+<h2>Notes for Coding Agent</h2>
+<ul><li>All Schwab API calls should use <code>try/except</code> with exponential backoff — the OAuth token expires every 30 minutes and must be refreshed automatically via <code>schwab-py</code>&#x27;s built-in token handler</li><li>Batch symbol requests to <code>get_instruments()</code> in groups of ≤50 to avoid rate limits</li><li>The WebSocket stream is async — use <code>asyncio.gather()</code> to run the stream alongside the APScheduler event loop</li><li>Postgres upserts should use <code>INSERT ... ON CONFLICT (symbol) DO UPDATE SET ...</code> for idempotency</li><li>Store all timestamps in UTC, convert to CT only at the display/alert layer</li><li>The <code>screener_equity_subs</code> stream gives the <strong>top 10</strong> per category — use it as a seed, not an exhaustive list; the L1 quote stream on your full candidate pool does the real filtering</li></ul>
+            </article>
+        </main>
+    </div>
+
+    <script>
+        async function copyToClipboard(button, text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                button.style.background = 'var(--tip-color)';
+                button.style.borderColor = 'var(--tip-color)';
+                button.style.color = '#ffffff';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.style.background = 'rgba(99, 102, 241, 0.15)';
+                    button.style.borderColor = 'rgba(99, 102, 241, 0.3)';
+                    button.style.color = '#a5b4fc';
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy text: ', err);
+            }
+        }
+    </script>
+</body>
+</html>

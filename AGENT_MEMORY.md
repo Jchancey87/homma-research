@@ -29,8 +29,11 @@
 * **Deploy:** Run `sudo /opt/trading-journal/deploy.sh` (push from `/home/jackc/projects/homma-research` first).
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Task:** Investigate and fix the deep ticker research feature, which currently returns nothing/fails when queried.
-* **Status:** In Progress. Locating files and reviewing log outputs.
+* **Goal:** Implement Caveman Skill. Update `AGENTS.md` & `devlogs.md`.
+* **Goal:** Create HTML handoff exportable script. Convert `.md` handoffs to premium `.html` files.
+* **Status:** Commencing implementation.
 
 ## 🗑️ Rot & Pruning Log
-* Compressed all core main sections to optimize tokens.
+* Pruned debug ticker research goal. Completed.
+* Applied Caveman Style rules.
+

@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>013 Sigmap Antigravity Mcp Handoff - Handoff Document</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #0b0f19;
+            --bg-surface: rgba(17, 24, 39, 0.7);
+            --bg-card: rgba(30, 41, 59, 0.4);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-primary: #6366f1;
+            --accent-glow: rgba(99, 102, 241, 0.15);
+            
+            --note-color: #3b82f6;
+            --tip-color: #10b981;
+            --important-color: #8b5cf6;
+            --warning-color: #f59e0b;
+            --caution-color: #ef4444;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            line-height: 1.625;
+            -webkit-font-smoothing: antialiased;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.1) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(168, 85, 247, 0.08) 0px, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.3);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.3);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.5);
+        }
+
+        .layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar & Navigation */
+        .sidebar {
+            width: 300px;
+            background: var(--bg-surface);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-right: 1px solid var(--border-color);
+            padding: 2.5rem 1.5rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            z-index: 10;
+        }
+
+        .logo {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #a5b4fc, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .nav-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+        }
+
+        .nav-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .nav-link {
+            display: block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--text-primary);
+            padding-left: 1rem;
+        }
+
+        .nav-link.active {
+            border-left: 3px solid var(--accent-primary);
+            font-weight: 600;
+        }
+
+        /* Main Content Panel */
+        .content-panel {
+            margin-left: 300px;
+            flex-grow: 1;
+            padding: 4rem 5% 6rem 5%;
+            max-width: 1200px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-radius: 1rem;
+            padding: 3rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Typography */
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Outfit', sans-serif;
+            color: var(--text-primary);
+            font-weight: 700;
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            letter-spacing: -0.02em;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-top: 0;
+            background: linear-gradient(to right, #f8fafc, #cbd5e1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        h2 {
+            font-size: 1.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 0.5rem;
+        }
+
+        h3 { font-size: 1.35rem; }
+        h4 { font-size: 1.15rem; }
+
+        p, ul, ol, table, pre {
+            margin-bottom: 1.5rem;
+        }
+
+        p {
+            color: var(--text-secondary);
+        }
+
+        strong {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        /* Lists */
+        ul, ol {
+            padding-left: 1.5rem;
+            color: var(--text-secondary);
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+        }
+
+        /* Inline Code */
+        code:not(pre code) {
+            font-family: 'Fira Code', monospace;
+            background: rgba(99, 102, 241, 0.12);
+            color: #a5b4fc;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-size: 0.85em;
+            border: 1px solid rgba(99, 102, 241, 0.2);
+        }
+
+        /* Code Blocks */
+        .code-container {
+            position: relative;
+            background: #070a13;
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            margin: 1.5rem 0;
+            overflow: hidden;
+        }
+
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 1rem;
+            background: rgba(15, 23, 42, 0.6);
+            border-bottom: 1px solid var(--border-color);
+            font-family: 'Fira Code', monospace;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .copy-btn {
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            color: #a5b4fc;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            border-radius: 0.25rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .copy-btn:hover {
+            background: var(--accent-primary);
+            color: #ffffff;
+        }
+
+        pre {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.875rem;
+            padding: 1.25rem;
+            overflow-x: auto;
+            color: #e2e8f0;
+            margin-bottom: 0;
+        }
+
+        /* Tables */
+        .table-container {
+            overflow-x: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            margin: 2rem 0;
+            background: rgba(15, 23, 42, 0.2);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+            text-align: left;
+            margin-bottom: 0;
+        }
+
+        th, td {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background: rgba(15, 23, 42, 0.4);
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        /* Callouts / Alerts */
+        .alert {
+            border-left: 4px solid;
+            padding: 1.25rem 1.5rem;
+            border-radius: 0.5rem;
+            background: rgba(30, 41, 59, 0.2);
+            margin: 1.5rem 0;
+        }
+
+        .alert p:last-child {
+            margin-bottom: 0;
+        }
+
+        .alert-title {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .alert.note { border-color: var(--note-color); }
+        .alert.note .alert-title { color: var(--note-color); }
+
+        .alert.tip { border-color: var(--tip-color); }
+        .alert.tip .alert-title { color: var(--tip-color); }
+
+        .alert.important { border-color: var(--important-color); }
+        .alert.important .alert-title { color: var(--important-color); }
+
+        .alert.warning { border-color: var(--warning-color); }
+        .alert.warning .alert-title { color: var(--warning-color); }
+
+        .alert.caution { border-color: var(--caution-color); }
+        .alert.caution .alert-title { color: var(--caution-color); }
+
+        /* File Links */
+        a {
+            color: #818cf8;
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        a:hover {
+            color: #a5b4fc;
+            text-decoration: underline;
+        }
+
+        /* Responsive */
+        @media (max-width: 968px) {
+            .sidebar {
+                display: none;
+            }
+            .content-panel {
+                margin-left: 0;
+                padding: 2rem 1.5rem;
+            }
+            .card {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="logo">
+                <span>🛸</span> Homma Research
+            </div>
+            <nav class="nav-section">
+                <div class="nav-title">Documents</div>
+                <ul class="nav-list">
+                    <li><a href="006_schwab_momentum_screener_handoff.html" class="nav-link" data-filename="006_schwab_momentum_screener_handoff.html">006 Schwab Momentum Screener Handoff</a></li>
+<li><a href="007_webpage_troubleshooting_cors_auth_handoff.html" class="nav-link" data-filename="007_webpage_troubleshooting_cors_auth_handoff.html">007 Webpage Troubleshooting Cors Auth Handoff</a></li>
+<li><a href="008_ui_ux_theme_onboarding_enhancements_handoff.html" class="nav-link" data-filename="008_ui_ux_theme_onboarding_enhancements_handoff.html">008 Ui Ux Theme Onboarding Enhancements Handoff</a></li>
+<li><a href="009_production_build_port_issues_handoff.html" class="nav-link" data-filename="009_production_build_port_issues_handoff.html">009 Production Build Port Issues Handoff</a></li>
+<li><a href="010_no_news_pump_classifier_handoff.html" class="nav-link" data-filename="010_no_news_pump_classifier_handoff.html">010 No News Pump Classifier Handoff</a></li>
+<li><a href="011_schwab_streamer_troubleshooting.html" class="nav-link" data-filename="011_schwab_streamer_troubleshooting.html">011 Schwab Streamer Troubleshooting</a></li>
+<li><a href="012_schwab_yfinance_gainer_enrichment_handoff.html" class="nav-link" data-filename="012_schwab_yfinance_gainer_enrichment_handoff.html">012 Schwab Yfinance Gainer Enrichment Handoff</a></li>
+<li><a href="013_sigmap_antigravity_mcp_handoff.html" class="nav-link" data-filename="013_sigmap_antigravity_mcp_handoff.html" class="nav-link active">013 Sigmap Antigravity Mcp Handoff</a></li>
+<li><a href="agent_handoff_momentum_banner.html" class="nav-link" data-filename="agent_handoff_momentum_banner.html">Agent Handoff Momentum Banner</a></li>
+<li><a href="alerts_ui_handoff.html" class="nav-link" data-filename="alerts_ui_handoff.html">Alerts Ui Handoff</a></li>
+<li><a href="questdb_postgres_handoff.html" class="nav-link" data-filename="questdb_postgres_handoff.html">Questdb Postgres Handoff</a></li>
+                </ul>
+            </nav>
+        </aside>
+        <main class="content-panel">
+            <article class="card">
+                <h1>⚡ Handoff Guide: SigMap &amp; Antigravity MCP Server Integration</h1>
+<p>This guide provides step-by-step instructions to integrate <a href="https://github.com/manojmallick/sigmap">SigMap</a> as an MCP (Model Context Protocol) server for <strong>Antigravity</strong> across other web applications.</p>
+<p>Implementing this configuration resolves the challenge of high token usage during agentic coding sessions by providing <strong>Antigravity</strong> with a compact codebase signature map (~97.5% prompt size reduction) and enabling it to query codebase structures on-demand.</p>
+<p>---</p>
+<p>## 📋 Prerequisites
+Ensure the target web application has Node.js and <code>npm</code> installed. No local package installations are required since the server runs via <code>npx</code>.</p>
+<p>---</p>
+<h2>🚀 Step-by-Step Setup Guide</h2>
+<p>### Step 1: Initialize SigMap in the Target Codebase
+Navigate to the root directory of your target web application and generate the default SigMap configuration and ignore file scaffold:</p>
+<div class="code-container">  <div class="code-header">    <span>BASH</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('npx%20-y%20sigmap%20--init'))">Copy</button>  </div>  <pre><code class="language-bash">npx -y sigmap --init</code></pre></div>
+<p>This creates two files in your project root:
+1. <code>gen-context.config.json</code> — The main configuration parameters.
+2. <code>.contextignore</code> — Defines which files and folders SigMap should ignore when scanning (e.g., node modules, build files, lockfiles).</p>
+<p>### Step 2: Configure Exclusions and Strategies
+Edit <code>gen-context.config.json</code> to optimize the scanning process for your application stack. Here is a recommended configuration for standard web apps (Next.js/React/Node):</p>
+<div class="code-container">  <div class="code-header">    <span>JSON</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('%7B%0A%20%20%22strategy%22%3A%20%22hot-cold%22%2C%0A%20%20%22autoMaxTokens%22%3A%20true%2C%0A%20%20%22maxTokens%22%3A%2010000%2C%0A%20%20%22exclude%22%3A%20%5B%0A%20%20%20%20%22node_modules/%2A%2A%22%2C%0A%20%20%20%20%22.next/%2A%2A%22%2C%0A%20%20%20%20%22out/%2A%2A%22%2C%0A%20%20%20%20%22build/%2A%2A%22%2C%0A%20%20%20%20%22dist/%2A%2A%22%2C%0A%20%20%20%20%22.git/%2A%2A%22%2C%0A%20%20%20%20%22%2A.log%22%2C%0A%20%20%20%20%22package-lock.json%22%2C%0A%20%20%20%20%22pnpm-lock.yaml%22%2C%0A%20%20%20%20%22yarn.lock%22%0A%20%20%5D%2C%0A%20%20%22adapters%22%3A%20%5B%22copilot%22%2C%20%22gemini%22%5D%0A%7D'))">Copy</button>  </div>  <pre><code class="language-json">{
+  &quot;strategy&quot;: &quot;hot-cold&quot;,
+  &quot;autoMaxTokens&quot;: true,
+  &quot;maxTokens&quot;: 10000,
+  &quot;exclude&quot;: [
+    &quot;node_modules/**&quot;,
+    &quot;.next/**&quot;,
+    &quot;out/**&quot;,
+    &quot;build/**&quot;,
+    &quot;dist/**&quot;,
+    &quot;.git/**&quot;,
+    &quot;*.log&quot;,
+    &quot;package-lock.json&quot;,
+    &quot;pnpm-lock.yaml&quot;,
+    &quot;yarn.lock&quot;
+  ],
+  &quot;adapters&quot;: [&quot;copilot&quot;, &quot;gemini&quot;]
+}</code></pre></div>
+<ul><li><code>strategy: &quot;hot-cold&quot;</code>: Instructs SigMap to prioritize recently modified files (&quot;hot&quot;) and archive older code (&quot;cold&quot;), reducing prompt sizes by another 70–90%.</li><li><code>exclude</code>: List all large, compiled, or dependency directories to prevent them from wasting token budget.</li></ul>
+<p>### Step 3: Run the Initial Scan
+Generate the initial signature map of the codebase once to verify it scans correctly:</p>
+<div class="code-container">  <div class="code-header">    <span>BASH</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('npx%20sigmap%20--report'))">Copy</button>  </div>  <pre><code class="language-bash">npx sigmap --report</code></pre></div>
+<p>This generates <code>.github/copilot-instructions.md</code> containing the signature map and logs a token reduction report. You should expect a ~95% to 98% reduction from your baseline codebase size.</p>
+<p>---</p>
+<h2>🛠️ Configuring Antigravity MCP Server</h2>
+<p>To enable <strong>Antigravity</strong> to query your new signature map on-demand, register SigMap as an MCP server for <strong>Antigravity</strong>.</p>
+<ol><li>Locate the configuration directory for the <strong>antigravity-cli</strong> command. This is typically located at:</li><li>   <code>~/.gemini/antigravity-cli/</code></li><li>Create or edit the configuration file named <code>mcp_config.json</code> within that directory:</li><li>   <code>~/.gemini/antigravity-cli/mcp_config.json</code></li><li>Add the following JSON structure:</li></ol>
+<div class="code-container">  <div class="code-header">    <span>JSON</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('%7B%0A%20%20%22mcpServers%22%3A%20%7B%0A%20%20%20%20%22sigmap%22%3A%20%7B%0A%20%20%20%20%20%20%22command%22%3A%20%22npx%22%2C%0A%20%20%20%20%20%20%22args%22%3A%20%5B%0A%20%20%20%20%20%20%20%20%22-y%22%2C%0A%20%20%20%20%20%20%20%20%22sigmap%22%2C%0A%20%20%20%20%20%20%20%20%22--mcp%22%0A%20%20%20%20%20%20%5D%0A%20%20%20%20%7D%0A%20%20%7D%0A%7D'))">Copy</button>  </div>  <pre><code class="language-json">{
+  &quot;mcpServers&quot;: {
+    &quot;sigmap&quot;: {
+      &quot;command&quot;: &quot;npx&quot;,
+      &quot;args&quot;: [
+        &quot;-y&quot;,
+        &quot;sigmap&quot;,
+        &quot;--mcp&quot;
+      ]
+    }
+  }
+}</code></pre></div>
+<p>Whenever you start an <strong>Antigravity</strong> session in your target codebase, <strong>Antigravity</strong> will automatically initialize this MCP server.</p>
+<p>---</p>
+<h2>🔍 Verification &amp; Usage</h2>
+<p>### 1. Verification of the MCP Server
+When <strong>Antigravity</strong> launches, it starts the <code>sigmap</code> MCP server in the background over <code>stdio</code> JSON-RPC. To manually verify the TF-IDF query engine is working, run a local query from the project root:</p>
+<div class="code-container">  <div class="code-header">    <span>BASH</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('npx%20sigmap%20--query%20%22auth%20context%20logic%22'))">Copy</button>  </div>  <pre><code class="language-bash">npx sigmap --query &quot;auth context logic&quot;</code></pre></div>
+<p>This should return a ranked list of relevant files and their respective signatures.</p>
+<p>### 2. Instructing Antigravity
+With the MCP server registered, <strong>Antigravity</strong> can use the following tools natively:
+<em>   <code>query</code>: Rank files by relevance to a natural language query.
+</em>   <code>get_signatures</code>: Get signatures of specific classes or files.
+*   <code>impact</code>: Map out transitive dependencies and impact of modifying a specific file.</p>
+<p>---</p>
+<h2>🔄 Maintenance &amp; Best Practices</h2>
+<p>To ensure <strong>Antigravity</strong> always has access to an up-to-date signature map, automate context generation:</p>
+<ul><li><strong>Git Commit Hook</strong>: Run <code>npx sigmap --setup</code> to automatically install a git commit hook that rebuilds the signature map whenever changes are committed.</li><li><strong>Watch Mode</strong>: During active development, you can run <code>npx sigmap --watch</code> in a separate terminal to dynamically regenerate signatures on file save.</li></ul>
+<p>---</p>
+<p>## 🔗 Reference Examples (homma-research)
+For reference, you can check how this is set up in our current repository:
+<em>   Local MCP Config: <a href="file:///home/jackc/.gemini/antigravity-cli/mcp_config.json">mcp_config.json</a>
+</em>   Generated Signatures File: <a href="file:///home/jackc/projects/homma-research/.github/copilot-instructions.md">.github/copilot-instructions.md</a>
+*   Detailed Evaluation: <a href="file:///home/jackc/.gemini/antigravity-cli/brain/369290e9-ddcc-4f92-bafe-be2fd4d9f76a/sigmap_analysis.md">sigmap_analysis.md</a></p>
+            </article>
+        </main>
+    </div>
+
+    <script>
+        async function copyToClipboard(button, text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                button.style.background = 'var(--tip-color)';
+                button.style.borderColor = 'var(--tip-color)';
+                button.style.color = '#ffffff';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.style.background = 'rgba(99, 102, 241, 0.15)';
+                    button.style.borderColor = 'rgba(99, 102, 241, 0.3)';
+                    button.style.color = '#a5b4fc';
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy text: ', err);
+            }
+        }
+    </script>
+</body>
+</html>

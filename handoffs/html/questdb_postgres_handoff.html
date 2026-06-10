@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Questdb Postgres Handoff - Handoff Document</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #0b0f19;
+            --bg-surface: rgba(17, 24, 39, 0.7);
+            --bg-card: rgba(30, 41, 59, 0.4);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-primary: #6366f1;
+            --accent-glow: rgba(99, 102, 241, 0.15);
+            
+            --note-color: #3b82f6;
+            --tip-color: #10b981;
+            --important-color: #8b5cf6;
+            --warning-color: #f59e0b;
+            --caution-color: #ef4444;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            line-height: 1.625;
+            -webkit-font-smoothing: antialiased;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.1) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(168, 85, 247, 0.08) 0px, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.3);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.3);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.5);
+        }
+
+        .layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar & Navigation */
+        .sidebar {
+            width: 300px;
+            background: var(--bg-surface);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-right: 1px solid var(--border-color);
+            padding: 2.5rem 1.5rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            z-index: 10;
+        }
+
+        .logo {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #a5b4fc, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .nav-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+        }
+
+        .nav-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .nav-link {
+            display: block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--text-primary);
+            padding-left: 1rem;
+        }
+
+        .nav-link.active {
+            border-left: 3px solid var(--accent-primary);
+            font-weight: 600;
+        }
+
+        /* Main Content Panel */
+        .content-panel {
+            margin-left: 300px;
+            flex-grow: 1;
+            padding: 4rem 5% 6rem 5%;
+            max-width: 1200px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-radius: 1rem;
+            padding: 3rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Typography */
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Outfit', sans-serif;
+            color: var(--text-primary);
+            font-weight: 700;
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            letter-spacing: -0.02em;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-top: 0;
+            background: linear-gradient(to right, #f8fafc, #cbd5e1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        h2 {
+            font-size: 1.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 0.5rem;
+        }
+
+        h3 { font-size: 1.35rem; }
+        h4 { font-size: 1.15rem; }
+
+        p, ul, ol, table, pre {
+            margin-bottom: 1.5rem;
+        }
+
+        p {
+            color: var(--text-secondary);
+        }
+
+        strong {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        /* Lists */
+        ul, ol {
+            padding-left: 1.5rem;
+            color: var(--text-secondary);
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+        }
+
+        /* Inline Code */
+        code:not(pre code) {
+            font-family: 'Fira Code', monospace;
+            background: rgba(99, 102, 241, 0.12);
+            color: #a5b4fc;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-size: 0.85em;
+            border: 1px solid rgba(99, 102, 241, 0.2);
+        }
+
+        /* Code Blocks */
+        .code-container {
+            position: relative;
+            background: #070a13;
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            margin: 1.5rem 0;
+            overflow: hidden;
+        }
+
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 1rem;
+            background: rgba(15, 23, 42, 0.6);
+            border-bottom: 1px solid var(--border-color);
+            font-family: 'Fira Code', monospace;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .copy-btn {
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            color: #a5b4fc;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            border-radius: 0.25rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .copy-btn:hover {
+            background: var(--accent-primary);
+            color: #ffffff;
+        }
+
+        pre {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.875rem;
+            padding: 1.25rem;
+            overflow-x: auto;
+            color: #e2e8f0;
+            margin-bottom: 0;
+        }
+
+        /* Tables */
+        .table-container {
+            overflow-x: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            margin: 2rem 0;
+            background: rgba(15, 23, 42, 0.2);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+            text-align: left;
+            margin-bottom: 0;
+        }
+
+        th, td {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background: rgba(15, 23, 42, 0.4);
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        /* Callouts / Alerts */
+        .alert {
+            border-left: 4px solid;
+            padding: 1.25rem 1.5rem;
+            border-radius: 0.5rem;
+            background: rgba(30, 41, 59, 0.2);
+            margin: 1.5rem 0;
+        }
+
+        .alert p:last-child {
+            margin-bottom: 0;
+        }
+
+        .alert-title {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .alert.note { border-color: var(--note-color); }
+        .alert.note .alert-title { color: var(--note-color); }
+
+        .alert.tip { border-color: var(--tip-color); }
+        .alert.tip .alert-title { color: var(--tip-color); }
+
+        .alert.important { border-color: var(--important-color); }
+        .alert.important .alert-title { color: var(--important-color); }
+
+        .alert.warning { border-color: var(--warning-color); }
+        .alert.warning .alert-title { color: var(--warning-color); }
+
+        .alert.caution { border-color: var(--caution-color); }
+        .alert.caution .alert-title { color: var(--caution-color); }
+
+        /* File Links */
+        a {
+            color: #818cf8;
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        a:hover {
+            color: #a5b4fc;
+            text-decoration: underline;
+        }
+
+        /* Responsive */
+        @media (max-width: 968px) {
+            .sidebar {
+                display: none;
+            }
+            .content-panel {
+                margin-left: 0;
+                padding: 2rem 1.5rem;
+            }
+            .card {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="logo">
+                <span>🛸</span> Homma Research
+            </div>
+            <nav class="nav-section">
+                <div class="nav-title">Documents</div>
+                <ul class="nav-list">
+                    <li><a href="006_schwab_momentum_screener_handoff.html" class="nav-link" data-filename="006_schwab_momentum_screener_handoff.html">006 Schwab Momentum Screener Handoff</a></li>
+<li><a href="007_webpage_troubleshooting_cors_auth_handoff.html" class="nav-link" data-filename="007_webpage_troubleshooting_cors_auth_handoff.html">007 Webpage Troubleshooting Cors Auth Handoff</a></li>
+<li><a href="008_ui_ux_theme_onboarding_enhancements_handoff.html" class="nav-link" data-filename="008_ui_ux_theme_onboarding_enhancements_handoff.html">008 Ui Ux Theme Onboarding Enhancements Handoff</a></li>
+<li><a href="009_production_build_port_issues_handoff.html" class="nav-link" data-filename="009_production_build_port_issues_handoff.html">009 Production Build Port Issues Handoff</a></li>
+<li><a href="010_no_news_pump_classifier_handoff.html" class="nav-link" data-filename="010_no_news_pump_classifier_handoff.html">010 No News Pump Classifier Handoff</a></li>
+<li><a href="011_schwab_streamer_troubleshooting.html" class="nav-link" data-filename="011_schwab_streamer_troubleshooting.html">011 Schwab Streamer Troubleshooting</a></li>
+<li><a href="012_schwab_yfinance_gainer_enrichment_handoff.html" class="nav-link" data-filename="012_schwab_yfinance_gainer_enrichment_handoff.html">012 Schwab Yfinance Gainer Enrichment Handoff</a></li>
+<li><a href="013_sigmap_antigravity_mcp_handoff.html" class="nav-link" data-filename="013_sigmap_antigravity_mcp_handoff.html">013 Sigmap Antigravity Mcp Handoff</a></li>
+<li><a href="agent_handoff_momentum_banner.html" class="nav-link" data-filename="agent_handoff_momentum_banner.html">Agent Handoff Momentum Banner</a></li>
+<li><a href="alerts_ui_handoff.html" class="nav-link" data-filename="alerts_ui_handoff.html">Alerts Ui Handoff</a></li>
+<li><a href="questdb_postgres_handoff.html" class="nav-link" data-filename="questdb_postgres_handoff.html" class="nav-link active">Questdb Postgres Handoff</a></li>
+                </ul>
+            </nav>
+        </aside>
+        <main class="content-panel">
+            <article class="card">
+                <p># QuestDB + PostgreSQL Dual-Database Architecture
+## AI Agent Implementation Handoff — Algorithmic Trading System</p>
+<p><strong>Project Owner:</strong> Jack Chancey  
+<strong>Stack Context:</strong> Proxmox homelab, Python, n8n, TradeStation/TradingView data feeds  
+<strong>Architecture Decision:</strong> QuestDB for all time-series data (OHLCV, ticks, indicators, signals) · PostgreSQL for everything else (users, strategies, config, metadata, backtest results)</p>
+<p>---</p>
+<h2>1. Architecture Overview</h2>
+<p>The system uses two purpose-built databases in a <strong>polyglot persistence</strong> pattern. No single DB does everything; each does what it&#x27;s best at.</p>
+<div class="code-container">  <div class="code-header">    <span>CODE</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('%E2%94%8C%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%90%0A%E2%94%82%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20Trading%20System%20Services%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%E2%94%82%0A%E2%94%82%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%E2%94%82%0A%E2%94%82%20%20%20Data%20Ingestor%20%20%20Strategy%20Engine%20%20%20Backtest%20Runner%20%20%20Dashboard%20%20%E2%94%82%0A%E2%94%82%20%20%20%20%20%20%20%E2%94%82%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%E2%94%82%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%E2%94%82%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%E2%94%82%20%20%20%20%20%20%E2%94%82%0A%E2%94%82%20%20%20%20%20%20%20%E2%96%BC%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%E2%96%BC%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%E2%96%BC%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%E2%96%BC%20%20%20%20%20%20%E2%94%82%0A%E2%94%82%20%20%E2%94%8C%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%90%20%20%20%20%20%E2%94%8C%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%90%20%20%20%20%20%E2%94%8C%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%90%20%20%E2%94%82%0A%E2%94%82%20%20%E2%94%82%20QuestDB%20%E2%94%82%20%20%20%20%20%E2%94%82QuestDB%20%2B%20%E2%94%82%20%20%20%20%20%E2%94%82%20%20%20%20%20%20PostgreSQL%20%20%20%20%20%20%20%20%20%20%20%E2%94%82%20%20%E2%94%82%0A%E2%94%82%20%20%E2%94%82%20%20%3A9000%20%20%E2%94%82%20%20%20%20%20%E2%94%82Postgres%20%20%E2%94%82%20%20%20%20%20%E2%94%82%20%20%20%20%20%20%20%20%3A5432%20%20%20%20%20%20%20%20%20%20%20%20%20%E2%94%82%20%20%E2%94%82%0A%E2%94%82%20%20%E2%94%82%20%20%3A8812%20%20%E2%94%82%20%20%20%20%20%E2%94%82%20%20%28join%29%20%20%E2%94%82%20%20%20%20%20%E2%94%82%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%E2%94%82%20%20%E2%94%82%0A%E2%94%82%20%20%E2%94%82%20%20%3A9009%20%20%E2%94%82%20%20%20%20%20%E2%94%94%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%98%20%20%20%20%20%E2%94%94%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%98%20%20%E2%94%82%0A%E2%94%82%20%20%E2%94%94%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%98%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%E2%94%82%0A%E2%94%94%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%80%E2%94%98'))">Copy</button>  </div>  <pre><code class="language-code">┌─────────────────────────────────────────────────────────────────┐
+│                     Trading System Services                      │
+│                                                                  │
+│   Data Ingestor   Strategy Engine   Backtest Runner   Dashboard  │
+│       │                │                  │               │      │
+│       ▼                ▼                  ▼               ▼      │
+│  ┌─────────┐     ┌──────────┐     ┌──────────────────────────┐  │
+│  │ QuestDB │     │QuestDB + │     │      PostgreSQL           │  │
+│  │  :9000  │     │Postgres  │     │        :5432             │  │
+│  │  :8812  │     │  (join)  │     │                          │  │
+│  │  :9009  │     └──────────┘     └──────────────────────────┘  │
+│  └─────────┘                                                     │
+└─────────────────────────────────────────────────────────────────┘</code></pre></div>
+<h3>Data Routing Rules</h3>
+<div class="table-container">  <table>    <thead><tr><th>Data Type</th><th>Database</th><th>Reason</th></tr></thead>    <tbody><tr><td>OHLCV bars (1m, 5m, daily)</td><td>QuestDB</td><td>High-volume, time-partitioned, SIMD queries</td></tr><tr><td>Tick/trade data</td><td>QuestDB</td><td>Ultra-high write throughput via ILP</td></tr><tr><td>Technical indicators</td><td>QuestDB</td><td>Time-indexed, bulk append, columnar reads</td></tr><tr><td>Signal events / alerts</td><td>QuestDB</td><td>Timestamped events with fast range queries</td></tr><tr><td>Strategy definitions</td><td>PostgreSQL</td><td>Relational, versioned, low-write CRUD</td></tr><tr><td>Backtest run results</td><td>PostgreSQL</td><td>JSONB config, relational metrics, FK integrity</td></tr><tr><td>User/account settings</td><td>PostgreSQL</td><td>Transactional, referential integrity required</td></tr><tr><td>Watchlists / symbols master</td><td>PostgreSQL</td><td>Metadata, joins with strategies</td></tr><tr><td>n8n workflow state</td><td>PostgreSQL</td><td>Third-party integration, existing PG connector</td></tr><tr><td>Discord webhook configs</td><td>PostgreSQL</td><td>Config store, rarely updated</td></tr></tbody>  </table></div>
+<p>---</p>
+<h2>2. QuestDB Setup</h2>
+<h3>2.1 Docker Deployment (Recommended for Homelab)</h3>
+<div class="code-container">  <div class="code-header">    <span>YAML</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('%23%20docker-compose.questdb.yml%0Aversion%3A%20%223.9%22%0Aservices%3A%0A%20%20questdb%3A%0A%20%20%20%20image%3A%20questdb/questdb%3Alatest%0A%20%20%20%20container_name%3A%20questdb%0A%20%20%20%20restart%3A%20unless-stopped%0A%20%20%20%20ports%3A%0A%20%20%20%20%20%20-%20%229000%3A9000%22%20%20%20%23%20HTTP%20REST%20API%20%2B%20Web%20Console%0A%20%20%20%20%20%20-%20%229009%3A9009%22%20%20%20%23%20InfluxDB%20Line%20Protocol%20%28ILP%29%20TCP%0A%20%20%20%20%20%20-%20%228812%3A8812%22%20%20%20%23%20PostgreSQL%20wire%20protocol%20%28queries%20only%29%0A%20%20%20%20volumes%3A%0A%20%20%20%20%20%20-%20questdb_data%3A/var/lib/questdb%0A%20%20%20%20environment%3A%0A%20%20%20%20%20%20-%20QDB_CAIRO_COMMIT_LAG%3D1000%20%20%20%20%20%20%20%20%20%23%20ms%20%E2%80%94%20tune%20for%20ingestion%20latency%0A%20%20%20%20%20%20-%20QDB_CAIRO_MAX_UNCOMMITTED_ROWS%3D500000%0A%20%20%20%20%20%20-%20QDB_LINE_TCP_MAINTENANCE_JOB_INTERVAL%3D100%0A%20%20%20%20%20%20-%20QDB_HTTP_WORKER_COUNT%3D2%0A%20%20%20%20%20%20-%20QDB_PG_WORKER_COUNT%3D2%0A%20%20%20%20mem_limit%3A%204g%0A%0Avolumes%3A%0A%20%20questdb_data%3A'))">Copy</button>  </div>  <pre><code class="language-yaml"># docker-compose.questdb.yml
+version: &quot;3.9&quot;
+services:
+  questdb:
+    image: questdb/questdb:latest
+    container_name: questdb
+    restart: unless-stopped
+    ports:
+      - &quot;9000:9000&quot;   # HTTP REST API + Web Console
+      - &quot;9009:9009&quot;   # InfluxDB Line Protocol (ILP) TCP
+      - &quot;8812:8812&quot;   # PostgreSQL wire protocol (queries only)
+    volumes:
+      - questdb_data:/var/lib/questdb
+    environment:
+      - QDB_CAIRO_COMMIT_LAG=1000         # ms — tune for ingestion latency
+      - QDB_CAIRO_MAX_UNCOMMITTED_ROWS=500000
+      - QDB_LINE_TCP_MAINTENANCE_JOB_INTERVAL=100
+      - QDB_HTTP_WORKER_COUNT=2
+      - QDB_PG_WORKER_COUNT=2
+    mem_limit: 4g
+
+volumes:
+  questdb_data:</code></pre></div>
+<p><strong>Key Ports:</strong>
+- <code>9000</code> → Web Console UI + REST HTTP API (queries via <code>/exec?query=...</code>)
+- <code>9009</code> → ILP TCP ingestion (highest throughput — use for live data feeds)
+- <code>8812</code> → PostgreSQL wire protocol <strong>for reads only</strong> — connect with <code>psycopg2</code> or <code>asyncpg</code></p>
+<h3>2.2 QuestDB Core Concepts</h3>
+<ul><li><strong>Designated Timestamp</strong>: Every QuestDB table MUST have one timestamp column declared as the <code>DESIGNATED TIMESTAMP</code>. This is the partition key — not optional for performance.</li><li><strong>Partitioning</strong>: Declare <code>PARTITION BY DAY</code> (intraday) or <code>PARTITION BY MONTH</code> (historical). QuestDB physically separates data into partition folders.</li><li><strong>WAL Tables</strong>: Default as of v7+. Write-Ahead Log ensures durability. Use <code>WAL</code> mode (default) for all production tables.</li><li><strong>Symbol Type</strong>: Use <code>SYMBOL</code> (not <code>STRING</code>) for low-cardinality repeating strings like ticker symbols. It&#x27;s dictionary-encoded and indexed.</li><li><strong>ILP vs PostgreSQL Wire</strong>: ILP (port 9009/HTTP) is for <strong>ingestion</strong>. The PostgreSQL wire (port 8812) is for <strong>queries</strong>. Never mix them.</li></ul>
+<h3>2.3 Schema: OHLCV Bars</h3>
+<div class="code-container">  <div class="code-header">    <span>SQL</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('--%20Run%20in%20QuestDB%20Web%20Console%20%28http%3A//localhost%3A9000%29%0ACREATE%20TABLE%20IF%20NOT%20EXISTS%20ohlcv_bars%20%28%0A%20%20%20%20ts%20%20%20%20%20%20%20%20%20%20TIMESTAMP%2C%0A%20%20%20%20symbol%20%20%20%20%20%20SYMBOL%20CAPACITY%20512%20CACHE%2C%0A%20%20%20%20timeframe%20%20%20SYMBOL%20CAPACITY%2016%20CACHE%2C%20%20%20--%20%271m%27%2C%20%275m%27%2C%20%271h%27%2C%20%271D%27%0A%20%20%20%20open%20%20%20%20%20%20%20%20DOUBLE%2C%0A%20%20%20%20high%20%20%20%20%20%20%20%20DOUBLE%2C%0A%20%20%20%20low%20%20%20%20%20%20%20%20%20DOUBLE%2C%0A%20%20%20%20close%20%20%20%20%20%20%20DOUBLE%2C%0A%20%20%20%20volume%20%20%20%20%20%20LONG%2C%0A%20%20%20%20vwap%20%20%20%20%20%20%20%20DOUBLE%2C%0A%20%20%20%20num_trades%20%20INT%0A%29%20TIMESTAMP%28ts%29%20PARTITION%20BY%20DAY%20WAL%3B%0A%0A--%20Index%20for%20fast%20symbol%20%2B%20range%20lookups%0ACREATE%20INDEX%20ON%20ohlcv_bars%28symbol%29%3B'))">Copy</button>  </div>  <pre><code class="language-sql">-- Run in QuestDB Web Console (http://localhost:9000)
+CREATE TABLE IF NOT EXISTS ohlcv_bars (
+    ts          TIMESTAMP,
+    symbol      SYMBOL CAPACITY 512 CACHE,
+    timeframe   SYMBOL CAPACITY 16 CACHE,   -- &#x27;1m&#x27;, &#x27;5m&#x27;, &#x27;1h&#x27;, &#x27;1D&#x27;
+    open        DOUBLE,
+    high        DOUBLE,
+    low         DOUBLE,
+    close       DOUBLE,
+    volume      LONG,
+    vwap        DOUBLE,
+    num_trades  INT
+) TIMESTAMP(ts) PARTITION BY DAY WAL;
+
+-- Index for fast symbol + range lookups
+CREATE INDEX ON ohlcv_bars(symbol);</code></pre></div>
+<h3>2.4 Schema: Tick Data</h3>
+<div class="code-container">  <div class="code-header">    <span>SQL</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('CREATE%20TABLE%20IF%20NOT%20EXISTS%20ticks%20%28%0A%20%20%20%20ts%20%20%20%20%20%20%20%20%20%20TIMESTAMP%2C%0A%20%20%20%20symbol%20%20%20%20%20%20SYMBOL%20CAPACITY%20512%20CACHE%2C%0A%20%20%20%20price%20%20%20%20%20%20%20DOUBLE%2C%0A%20%20%20%20size%20%20%20%20%20%20%20%20INT%2C%0A%20%20%20%20side%20%20%20%20%20%20%20%20SYMBOL%20CAPACITY%204%20CACHE%2C%20%20%20--%20%27B%27%2C%20%27S%27%2C%20%27U%27%0A%20%20%20%20exchange%20%20%20%20SYMBOL%20CAPACITY%2032%20CACHE%0A%29%20TIMESTAMP%28ts%29%20PARTITION%20BY%20DAY%20WAL%3B'))">Copy</button>  </div>  <pre><code class="language-sql">CREATE TABLE IF NOT EXISTS ticks (
+    ts          TIMESTAMP,
+    symbol      SYMBOL CAPACITY 512 CACHE,
+    price       DOUBLE,
+    size        INT,
+    side        SYMBOL CAPACITY 4 CACHE,   -- &#x27;B&#x27;, &#x27;S&#x27;, &#x27;U&#x27;
+    exchange    SYMBOL CAPACITY 32 CACHE
+) TIMESTAMP(ts) PARTITION BY DAY WAL;</code></pre></div>
+<h3>2.5 Schema: Indicator Values</h3>
+<div class="code-container">  <div class="code-header">    <span>SQL</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('CREATE%20TABLE%20IF%20NOT%20EXISTS%20indicators%20%28%0A%20%20%20%20ts%20%20%20%20%20%20%20%20%20%20%20%20%20%20TIMESTAMP%2C%0A%20%20%20%20symbol%20%20%20%20%20%20%20%20%20%20SYMBOL%20CAPACITY%20512%20CACHE%2C%0A%20%20%20%20timeframe%20%20%20%20%20%20%20SYMBOL%20CAPACITY%2016%20CACHE%2C%0A%20%20%20%20indicator_name%20%20SYMBOL%20CAPACITY%20256%20CACHE%2C%20%20--%20%27EMA_20%27%2C%20%27RSI_14%27%2C%20%27ATR_14%27%0A%20%20%20%20value%20%20%20%20%20%20%20%20%20%20%20DOUBLE%2C%0A%20%20%20%20value2%20%20%20%20%20%20%20%20%20%20DOUBLE%2C%20%20%20--%20for%20indicators%20with%20multiple%20outputs%20%28MACD%20signal%29%0A%20%20%20%20value3%20%20%20%20%20%20%20%20%20%20DOUBLE%0A%29%20TIMESTAMP%28ts%29%20PARTITION%20BY%20DAY%20WAL%3B'))">Copy</button>  </div>  <pre><code class="language-sql">CREATE TABLE IF NOT EXISTS indicators (
+    ts              TIMESTAMP,
+    symbol          SYMBOL CAPACITY 512 CACHE,
+    timeframe       SYMBOL CAPACITY 16 CACHE,
+    indicator_name  SYMBOL CAPACITY 256 CACHE,  -- &#x27;EMA_20&#x27;, &#x27;RSI_14&#x27;, &#x27;ATR_14&#x27;
+    value           DOUBLE,
+    value2          DOUBLE,   -- for indicators with multiple outputs (MACD signal)
+    value3          DOUBLE
+) TIMESTAMP(ts) PARTITION BY DAY WAL;</code></pre></div>
+<h3>2.6 Schema: Trade Signals / Alerts</h3>
+<div class="code-container">  <div class="code-header">    <span>SQL</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('CREATE%20TABLE%20IF%20NOT%20EXISTS%20signals%20%28%0A%20%20%20%20ts%20%20%20%20%20%20%20%20%20%20%20%20%20%20TIMESTAMP%2C%0A%20%20%20%20symbol%20%20%20%20%20%20%20%20%20%20SYMBOL%20CAPACITY%20512%20CACHE%2C%0A%20%20%20%20strategy_id%20%20%20%20%20LONG%2C%20%20%20%20%20%20%20--%20FK%20to%20PostgreSQL%20strategies.id%20%28soft%20reference%29%0A%20%20%20%20signal_type%20%20%20%20%20SYMBOL%20CAPACITY%2032%20CACHE%2C%20%20--%20%27ENTRY_LONG%27%2C%20%27ENTRY_SHORT%27%2C%20%27EXIT%27%2C%20%27ALERT%27%0A%20%20%20%20timeframe%20%20%20%20%20%20%20SYMBOL%20CAPACITY%2016%20CACHE%2C%0A%20%20%20%20price%20%20%20%20%20%20%20%20%20%20%20DOUBLE%2C%0A%20%20%20%20stop_loss%20%20%20%20%20%20%20DOUBLE%2C%0A%20%20%20%20take_profit%20%20%20%20%20DOUBLE%2C%0A%20%20%20%20confidence%20%20%20%20%20%20FLOAT%2C%0A%20%20%20%20metadata%20%20%20%20%20%20%20%20VARCHAR%20%20%20%20%20--%20JSON%20string%20for%20extra%20fields%0A%29%20TIMESTAMP%28ts%29%20PARTITION%20BY%20DAY%20WAL%3B'))">Copy</button>  </div>  <pre><code class="language-sql">CREATE TABLE IF NOT EXISTS signals (
+    ts              TIMESTAMP,
+    symbol          SYMBOL CAPACITY 512 CACHE,
+    strategy_id     LONG,       -- FK to PostgreSQL strategies.id (soft reference)
+    signal_type     SYMBOL CAPACITY 32 CACHE,  -- &#x27;ENTRY_LONG&#x27;, &#x27;ENTRY_SHORT&#x27;, &#x27;EXIT&#x27;, &#x27;ALERT&#x27;
+    timeframe       SYMBOL CAPACITY 16 CACHE,
+    price           DOUBLE,
+    stop_loss       DOUBLE,
+    take_profit     DOUBLE,
+    confidence      FLOAT,
+    metadata        VARCHAR     -- JSON string for extra fields
+) TIMESTAMP(ts) PARTITION BY DAY WAL;</code></pre></div>
+<blockquote><strong>Note on <code>strategy_id</code></strong>: This is a soft foreign key — QuestDB does not enforce FK constraints. Join logic must be handled at the application layer by querying PostgreSQL for strategy metadata separately.</blockquote>
+<p>---</p>
+<h2>3. PostgreSQL Setup</h2>
+<h3>3.1 Docker Deployment</h3>
+<div class="code-container">  <div class="code-header">    <span>YAML</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('%23%20docker-compose.postgres.yml%20%20%28or%20add%20to%20existing%20stack%29%0Aversion%3A%20%223.9%22%0Aservices%3A%0A%20%20postgres%3A%0A%20%20%20%20image%3A%20postgres%3A16-alpine%0A%20%20%20%20container_name%3A%20trading_postgres%0A%20%20%20%20restart%3A%20unless-stopped%0A%20%20%20%20ports%3A%0A%20%20%20%20%20%20-%20%225432%3A5432%22%0A%20%20%20%20volumes%3A%0A%20%20%20%20%20%20-%20postgres_data%3A/var/lib/postgresql/data%0A%20%20%20%20%20%20-%20./init.sql%3A/docker-entrypoint-initdb.d/init.sql%0A%20%20%20%20environment%3A%0A%20%20%20%20%20%20POSTGRES_USER%3A%20trading%0A%20%20%20%20%20%20POSTGRES_PASSWORD%3A%20%24%7BPOSTGRES_PASSWORD%7D%0A%20%20%20%20%20%20POSTGRES_DB%3A%20trading_db%0A%20%20%20%20mem_limit%3A%202g%0A%0Avolumes%3A%0A%20%20postgres_data%3A'))">Copy</button>  </div>  <pre><code class="language-yaml"># docker-compose.postgres.yml  (or add to existing stack)
+version: &quot;3.9&quot;
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: trading_postgres
+    restart: unless-stopped
+    ports:
+      - &quot;5432:5432&quot;
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      POSTGRES_USER: trading
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: trading_db
+    mem_limit: 2g
+
+volumes:
+  postgres_data:</code></pre></div>
+<h3>3.2 Schema: Strategies</h3>
+<div class="code-container">  <div class="code-header">    <span>SQL</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('--%20init.sql%20or%20Alembic%20migration%0ACREATE%20TABLE%20strategies%20%28%0A%20%20%20%20id%20%20%20%20%20%20%20%20%20%20%20%20%20%20SERIAL%20PRIMARY%20KEY%2C%0A%20%20%20%20name%20%20%20%20%20%20%20%20%20%20%20%20VARCHAR%28128%29%20NOT%20NULL%20UNIQUE%2C%0A%20%20%20%20description%20%20%20%20%20TEXT%2C%0A%20%20%20%20version%20%20%20%20%20%20%20%20%20VARCHAR%2832%29%20DEFAULT%20%271.0.0%27%2C%0A%20%20%20%20author%20%20%20%20%20%20%20%20%20%20VARCHAR%2864%29%20DEFAULT%20%27jack%27%2C%0A%20%20%20%20asset_class%20%20%20%20%20VARCHAR%2832%29%2C%20%20%20--%20%27equity%27%2C%20%27futures%27%2C%20%27crypto%27%0A%20%20%20%20timeframes%20%20%20%20%20%20TEXT%5B%5D%2C%20%20%20%20%20%20%20%20--%20ARRAY%3A%20ARRAY%5B%271m%27%2C%275m%27%5D%0A%20%20%20%20parameters%20%20%20%20%20%20JSONB%20NOT%20NULL%20DEFAULT%20%27%7B%7D%27%2C%0A%20%20%20%20is_active%20%20%20%20%20%20%20BOOLEAN%20DEFAULT%20FALSE%2C%0A%20%20%20%20created_at%20%20%20%20%20%20TIMESTAMPTZ%20DEFAULT%20NOW%28%29%2C%0A%20%20%20%20updated_at%20%20%20%20%20%20TIMESTAMPTZ%20DEFAULT%20NOW%28%29%0A%29%3B%0A%0ACREATE%20INDEX%20idx_strategies_active%20ON%20strategies%28is_active%29%3B'))">Copy</button>  </div>  <pre><code class="language-sql">-- init.sql or Alembic migration
+CREATE TABLE strategies (
+    id              SERIAL PRIMARY KEY,
+    name            VARCHAR(128) NOT NULL UNIQUE,
+    description     TEXT,
+    version         VARCHAR(32) DEFAULT &#x27;1.0.0&#x27;,
+    author          VARCHAR(64) DEFAULT &#x27;jack&#x27;,
+    asset_class     VARCHAR(32),   -- &#x27;equity&#x27;, &#x27;futures&#x27;, &#x27;crypto&#x27;
+    timeframes      TEXT[],        -- ARRAY: ARRAY[&#x27;1m&#x27;,&#x27;5m&#x27;]
+    parameters      JSONB NOT NULL DEFAULT &#x27;{}&#x27;,
+    is_active       BOOLEAN DEFAULT FALSE,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_strategies_active ON strategies(is_active);</code></pre></div>
+<h3>3.3 Schema: Backtest Results</h3>
+<div class="code-container">  <div class="code-header">    <span>SQL</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('CREATE%20TABLE%20backtest_runs%20%28%0A%20%20%20%20id%20%20%20%20%20%20%20%20%20%20%20%20%20%20SERIAL%20PRIMARY%20KEY%2C%0A%20%20%20%20strategy_id%20%20%20%20%20INT%20REFERENCES%20strategies%28id%29%20ON%20DELETE%20CASCADE%2C%0A%20%20%20%20run_at%20%20%20%20%20%20%20%20%20%20TIMESTAMPTZ%20DEFAULT%20NOW%28%29%2C%0A%20%20%20%20symbol%20%20%20%20%20%20%20%20%20%20VARCHAR%2832%29%20NOT%20NULL%2C%0A%20%20%20%20timeframe%20%20%20%20%20%20%20VARCHAR%2816%29%20NOT%20NULL%2C%0A%20%20%20%20start_date%20%20%20%20%20%20DATE%20NOT%20NULL%2C%0A%20%20%20%20end_date%20%20%20%20%20%20%20%20DATE%20NOT%20NULL%2C%0A%20%20%20%20parameters%20%20%20%20%20%20JSONB%20NOT%20NULL%20DEFAULT%20%27%7B%7D%27%2C%20%20%20--%20snapshot%20of%20params%20used%0A%20%20%20%20--%20Core%20metrics%0A%20%20%20%20total_trades%20%20%20%20INT%2C%0A%20%20%20%20win_rate%20%20%20%20%20%20%20%20NUMERIC%285%2C4%29%2C%0A%20%20%20%20profit_factor%20%20%20NUMERIC%288%2C4%29%2C%0A%20%20%20%20net_pnl%20%20%20%20%20%20%20%20%20NUMERIC%2814%2C4%29%2C%0A%20%20%20%20max_drawdown%20%20%20%20NUMERIC%288%2C4%29%2C%0A%20%20%20%20sharpe_ratio%20%20%20%20NUMERIC%288%2C4%29%2C%0A%20%20%20%20sortino_ratio%20%20%20NUMERIC%288%2C4%29%2C%0A%20%20%20%20avg_win%20%20%20%20%20%20%20%20%20NUMERIC%2814%2C4%29%2C%0A%20%20%20%20avg_loss%20%20%20%20%20%20%20%20NUMERIC%2814%2C4%29%2C%0A%20%20%20%20--%20Full%20trade%20log%0A%20%20%20%20trades%20%20%20%20%20%20%20%20%20%20JSONB%2C%0A%20%20%20%20equity_curve%20%20%20%20JSONB%2C%20%20%20--%20%5B%7Bts%2C%20equity%7D%2C%20...%5D%20%E2%80%94%20or%20store%20in%20QuestDB%20for%20large%20sets%0A%20%20%20%20notes%20%20%20%20%20%20%20%20%20%20%20TEXT%0A%29%3B%0A%0ACREATE%20INDEX%20idx_backtest_strategy%20ON%20backtest_runs%28strategy_id%29%3B%0ACREATE%20INDEX%20idx_backtest_symbol%20ON%20backtest_runs%28symbol%29%3B'))">Copy</button>  </div>  <pre><code class="language-sql">CREATE TABLE backtest_runs (
+    id              SERIAL PRIMARY KEY,
+    strategy_id     INT REFERENCES strategies(id) ON DELETE CASCADE,
+    run_at          TIMESTAMPTZ DEFAULT NOW(),
+    symbol          VARCHAR(32) NOT NULL,
+    timeframe       VARCHAR(16) NOT NULL,
+    start_date      DATE NOT NULL,
+    end_date        DATE NOT NULL,
+    parameters      JSONB NOT NULL DEFAULT &#x27;{}&#x27;,   -- snapshot of params used
+    -- Core metrics
+    total_trades    INT,
+    win_rate        NUMERIC(5,4),
+    profit_factor   NUMERIC(8,4),
+    net_pnl         NUMERIC(14,4),
+    max_drawdown    NUMERIC(8,4),
+    sharpe_ratio    NUMERIC(8,4),
+    sortino_ratio   NUMERIC(8,4),
+    avg_win         NUMERIC(14,4),
+    avg_loss        NUMERIC(14,4),
+    -- Full trade log
+    trades          JSONB,
+    equity_curve    JSONB,   -- [{ts, equity}, ...] — or store in QuestDB for large sets
+    notes           TEXT
+);
+
+CREATE INDEX idx_backtest_strategy ON backtest_runs(strategy_id);
+CREATE INDEX idx_backtest_symbol ON backtest_runs(symbol);</code></pre></div>
+<h3>3.4 Schema: Watchlists &amp; Symbols</h3>
+<div class="code-container">  <div class="code-header">    <span>SQL</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('CREATE%20TABLE%20symbols%20%28%0A%20%20%20%20id%20%20%20%20%20%20%20%20%20%20SERIAL%20PRIMARY%20KEY%2C%0A%20%20%20%20ticker%20%20%20%20%20%20VARCHAR%2832%29%20NOT%20NULL%20UNIQUE%2C%0A%20%20%20%20name%20%20%20%20%20%20%20%20VARCHAR%28256%29%2C%0A%20%20%20%20exchange%20%20%20%20VARCHAR%2832%29%2C%0A%20%20%20%20asset_type%20%20VARCHAR%2832%29%2C%20%20%20--%20%27stock%27%2C%20%27etf%27%2C%20%27future%27%2C%20%27crypto%27%0A%20%20%20%20sector%20%20%20%20%20%20VARCHAR%2864%29%2C%0A%20%20%20%20is_active%20%20%20BOOLEAN%20DEFAULT%20TRUE%2C%0A%20%20%20%20metadata%20%20%20%20JSONB%20DEFAULT%20%27%7B%7D%27%0A%29%3B%0A%0ACREATE%20TABLE%20watchlists%20%28%0A%20%20%20%20id%20%20%20%20%20%20%20%20%20%20SERIAL%20PRIMARY%20KEY%2C%0A%20%20%20%20name%20%20%20%20%20%20%20%20VARCHAR%28128%29%20NOT%20NULL%2C%0A%20%20%20%20description%20TEXT%2C%0A%20%20%20%20symbol_ids%20%20INT%5B%5D%2C%20%20%20%20%20%20%20%20%20--%20ARRAY%20of%20symbol%20IDs%0A%20%20%20%20created_at%20%20TIMESTAMPTZ%20DEFAULT%20NOW%28%29%0A%29%3B'))">Copy</button>  </div>  <pre><code class="language-sql">CREATE TABLE symbols (
+    id          SERIAL PRIMARY KEY,
+    ticker      VARCHAR(32) NOT NULL UNIQUE,
+    name        VARCHAR(256),
+    exchange    VARCHAR(32),
+    asset_type  VARCHAR(32),   -- &#x27;stock&#x27;, &#x27;etf&#x27;, &#x27;future&#x27;, &#x27;crypto&#x27;
+    sector      VARCHAR(64),
+    is_active   BOOLEAN DEFAULT TRUE,
+    metadata    JSONB DEFAULT &#x27;{}&#x27;
+);
+
+CREATE TABLE watchlists (
+    id          SERIAL PRIMARY KEY,
+    name        VARCHAR(128) NOT NULL,
+    description TEXT,
+    symbol_ids  INT[],         -- ARRAY of symbol IDs
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);</code></pre></div>
+<h3>3.5 Schema: Alert / Notification Config</h3>
+<div class="code-container">  <div class="code-header">    <span>SQL</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('CREATE%20TABLE%20alert_configs%20%28%0A%20%20%20%20id%20%20%20%20%20%20%20%20%20%20%20%20%20%20SERIAL%20PRIMARY%20KEY%2C%0A%20%20%20%20strategy_id%20%20%20%20%20INT%20REFERENCES%20strategies%28id%29%2C%0A%20%20%20%20channel%20%20%20%20%20%20%20%20%20VARCHAR%2832%29%20NOT%20NULL%2C%20%20%20--%20%27discord%27%2C%20%27email%27%2C%20%27sms%27%0A%20%20%20%20webhook_url%20%20%20%20%20TEXT%2C%0A%20%20%20%20template%20%20%20%20%20%20%20%20TEXT%2C%0A%20%20%20%20is_enabled%20%20%20%20%20%20BOOLEAN%20DEFAULT%20TRUE%2C%0A%20%20%20%20created_at%20%20%20%20%20%20TIMESTAMPTZ%20DEFAULT%20NOW%28%29%0A%29%3B'))">Copy</button>  </div>  <pre><code class="language-sql">CREATE TABLE alert_configs (
+    id              SERIAL PRIMARY KEY,
+    strategy_id     INT REFERENCES strategies(id),
+    channel         VARCHAR(32) NOT NULL,   -- &#x27;discord&#x27;, &#x27;email&#x27;, &#x27;sms&#x27;
+    webhook_url     TEXT,
+    template        TEXT,
+    is_enabled      BOOLEAN DEFAULT TRUE,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);</code></pre></div>
+<p>---</p>
+<h2>4. Python Client Implementation</h2>
+<h3>4.1 Install Dependencies</h3>
+<div class="code-container">  <div class="code-header">    <span>BASH</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('pip%20install%20questdb%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%23%20Official%20QuestDB%20ILP%20client%0Apip%20install%20psycopg2-binary%20%20%20%20%20%20%20%20%20%20%23%20QuestDB%20queries%20via%20PG%20wire%0Apip%20install%20asyncpg%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%23%20Async%20PostgreSQL%20driver%0Apip%20install%20sqlalchemy%5Basyncio%5D%20%20%20%20%20%20%23%20ORM%20%2B%20async%20engine%0Apip%20install%20alembic%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%23%20PostgreSQL%20migrations%0Apip%20install%20pandas%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%23%20DataFrame%20support'))">Copy</button>  </div>  <pre><code class="language-bash">pip install questdb                  # Official QuestDB ILP client
+pip install psycopg2-binary          # QuestDB queries via PG wire
+pip install asyncpg                  # Async PostgreSQL driver
+pip install sqlalchemy[asyncio]      # ORM + async engine
+pip install alembic                  # PostgreSQL migrations
+pip install pandas                   # DataFrame support</code></pre></div>
+<h3>4.2 QuestDB Ingestion Client (ILP)</h3>
+<div class="code-container">  <div class="code-header">    <span>PYTHON</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('%23%20db/questdb_writer.py%0Afrom%20questdb.ingress%20import%20Sender%2C%20IngressError%2C%20TimestampNanos%0Afrom%20datetime%20import%20datetime%2C%20timezone%0Aimport%20pandas%20as%20pd%0Afrom%20typing%20import%20Optional%0A%0AQUESTDB_ILP_HOST%20%3D%20%22localhost%22%0AQUESTDB_ILP_PORT%20%3D%209009%0A%0Aclass%20QuestDBWriter%3A%0A%20%20%20%20%22%22%22%0A%20%20%20%20High-throughput%20ingestion%20to%20QuestDB%20via%20ILP.%0A%20%20%20%20Use%20this%20for%20all%20WRITES.%20Never%20use%20the%20PG%20wire%20for%20writes.%0A%20%20%20%20%22%22%22%0A%20%20%20%20def%20__init__%28self%2C%20host%3A%20str%20%3D%20QUESTDB_ILP_HOST%2C%20port%3A%20int%20%3D%20QUESTDB_ILP_PORT%29%3A%0A%20%20%20%20%20%20%20%20self.conf%20%3D%20f%22tcp%3A%3Aaddr%3D%7Bhost%7D%3A%7Bport%7D%3B%22%0A%0A%20%20%20%20def%20write_ohlcv%28self%2C%20symbol%3A%20str%2C%20timeframe%3A%20str%2C%20bars%3A%20list%5Bdict%5D%29%20-%3E%20None%3A%0A%20%20%20%20%20%20%20%20%22%22%22%0A%20%20%20%20%20%20%20%20bars%3A%20list%20of%20dicts%20with%20keys%3A%20ts%2C%20open%2C%20high%2C%20low%2C%20close%2C%20volume%0A%20%20%20%20%20%20%20%20ts%20must%20be%20a%20timezone-aware%20datetime%20or%20a%20nanosecond%20int.%0A%20%20%20%20%20%20%20%20%22%22%22%0A%20%20%20%20%20%20%20%20with%20Sender.from_conf%28self.conf%29%20as%20sender%3A%0A%20%20%20%20%20%20%20%20%20%20%20%20for%20bar%20in%20bars%3A%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20sender.row%28%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%22ohlcv_bars%22%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20symbols%3D%7B%22symbol%22%3A%20symbol%2C%20%22timeframe%22%3A%20timeframe%7D%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20columns%3D%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%22open%22%3A%20float%28bar%5B%22open%22%5D%29%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%22high%22%3A%20float%28bar%5B%22high%22%5D%29%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%22low%22%3A%20float%28bar%5B%22low%22%5D%29%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%22close%22%3A%20float%28bar%5B%22close%22%5D%29%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%22volume%22%3A%20int%28bar%5B%22volume%22%5D%29%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%7D%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20at%3Dbar%5B%22ts%22%5D%20%20%23%20datetime%20with%20tzinfo%3DUTC%20or%20ns%20int%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%29%0A%20%20%20%20%20%20%20%20%20%20%20%20sender.flush%28%29%0A%0A%20%20%20%20def%20write_signal%28%0A%20%20%20%20%20%20%20%20self%2C%0A%20%20%20%20%20%20%20%20symbol%3A%20str%2C%0A%20%20%20%20%20%20%20%20strategy_id%3A%20int%2C%0A%20%20%20%20%20%20%20%20signal_type%3A%20str%2C%0A%20%20%20%20%20%20%20%20timeframe%3A%20str%2C%0A%20%20%20%20%20%20%20%20price%3A%20float%2C%0A%20%20%20%20%20%20%20%20stop_loss%3A%20Optional%5Bfloat%5D%20%3D%20None%2C%0A%20%20%20%20%20%20%20%20take_profit%3A%20Optional%5Bfloat%5D%20%3D%20None%2C%0A%20%20%20%20%20%20%20%20confidence%3A%20Optional%5Bfloat%5D%20%3D%20None%2C%0A%20%20%20%20%20%20%20%20ts%3A%20Optional%5Bdatetime%5D%20%3D%20None%0A%20%20%20%20%29%20-%3E%20None%3A%0A%20%20%20%20%20%20%20%20if%20ts%20is%20None%3A%0A%20%20%20%20%20%20%20%20%20%20%20%20ts%20%3D%20datetime.now%28tz%3Dtimezone.utc%29%0A%20%20%20%20%20%20%20%20with%20Sender.from_conf%28self.conf%29%20as%20sender%3A%0A%20%20%20%20%20%20%20%20%20%20%20%20sender.row%28%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%22signals%22%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20symbols%3D%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%22symbol%22%3A%20symbol%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%22signal_type%22%3A%20signal_type%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%22timeframe%22%3A%20timeframe%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%7D%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20columns%3D%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%22strategy_id%22%3A%20strategy_id%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%22price%22%3A%20price%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%22stop_loss%22%3A%20stop_loss%20or%200.0%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%22take_profit%22%3A%20take_profit%20or%200.0%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%22confidence%22%3A%20confidence%20or%200.0%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%7D%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20%20at%3Dts%0A%20%20%20%20%20%20%20%20%20%20%20%20%29%0A%20%20%20%20%20%20%20%20%20%20%20%20sender.flush%28%29%0A%0A%20%20%20%20def%20write_dataframe%28self%2C%20table%3A%20str%2C%20df%3A%20pd.DataFrame%2C%20ts_col%3A%20str%20%3D%20%22ts%22%29%20-%3E%20None%3A%0A%20%20%20%20%20%20%20%20%22%22%22%0A%20%20%20%20%20%20%20%20Bulk-write%20a%20pandas%20DataFrame%20to%20a%20QuestDB%20table.%0A%20%20%20%20%20%20%20%20DataFrame%20must%20have%20a%20column%20named%20ts_col%20with%20UTC-aware%20timestamps.%0A%20%20%20%20%20%20%20%20Column%20names%20must%20match%20the%20QuestDB%20schema%20exactly.%0A%20%20%20%20%20%20%20%20%22%22%22%0A%20%20%20%20%20%20%20%20with%20Sender.from_conf%28self.conf%29%20as%20sender%3A%0A%20%20%20%20%20%20%20%20%20%20%20%20sender.dataframe%28df%2C%20table_name%3Dtable%2C%20at%3Dts_col%29%0A%20%20%20%20%20%20%20%20%20%20%20%20sender.flush%28%29'))">Copy</button>  </div>  <pre><code class="language-python"># db/questdb_writer.py
+from questdb.ingress import Sender, IngressError, TimestampNanos
+from datetime import datetime, timezone
+import pandas as pd
+from typing import Optional
+
+QUESTDB_ILP_HOST = &quot;localhost&quot;
+QUESTDB_ILP_PORT = 9009
+
+class QuestDBWriter:
+    &quot;&quot;&quot;
+    High-throughput ingestion to QuestDB via ILP.
+    Use this for all WRITES. Never use the PG wire for writes.
+    &quot;&quot;&quot;
+    def __init__(self, host: str = QUESTDB_ILP_HOST, port: int = QUESTDB_ILP_PORT):
+        self.conf = f&quot;tcp::addr={host}:{port};&quot;
+
+    def write_ohlcv(self, symbol: str, timeframe: str, bars: list[dict]) -&gt; None:
+        &quot;&quot;&quot;
+        bars: list of dicts with keys: ts, open, high, low, close, volume
+        ts must be a timezone-aware datetime or a nanosecond int.
+        &quot;&quot;&quot;
+        with Sender.from_conf(self.conf) as sender:
+            for bar in bars:
+                sender.row(
+                    &quot;ohlcv_bars&quot;,
+                    symbols={&quot;symbol&quot;: symbol, &quot;timeframe&quot;: timeframe},
+                    columns={
+                        &quot;open&quot;: float(bar[&quot;open&quot;]),
+                        &quot;high&quot;: float(bar[&quot;high&quot;]),
+                        &quot;low&quot;: float(bar[&quot;low&quot;]),
+                        &quot;close&quot;: float(bar[&quot;close&quot;]),
+                        &quot;volume&quot;: int(bar[&quot;volume&quot;]),
+                    },
+                    at=bar[&quot;ts&quot;]  # datetime with tzinfo=UTC or ns int
+                )
+            sender.flush()
+
+    def write_signal(
+        self,
+        symbol: str,
+        strategy_id: int,
+        signal_type: str,
+        timeframe: str,
+        price: float,
+        stop_loss: Optional[float] = None,
+        take_profit: Optional[float] = None,
+        confidence: Optional[float] = None,
+        ts: Optional[datetime] = None
+    ) -&gt; None:
+        if ts is None:
+            ts = datetime.now(tz=timezone.utc)
+        with Sender.from_conf(self.conf) as sender:
+            sender.row(
+                &quot;signals&quot;,
+                symbols={
+                    &quot;symbol&quot;: symbol,
+                    &quot;signal_type&quot;: signal_type,
+                    &quot;timeframe&quot;: timeframe,
+                },
+                columns={
+                    &quot;strategy_id&quot;: strategy_id,
+                    &quot;price&quot;: price,
+                    &quot;stop_loss&quot;: stop_loss or 0.0,
+                    &quot;take_profit&quot;: take_profit or 0.0,
+                    &quot;confidence&quot;: confidence or 0.0,
+                },
+                at=ts
+            )
+            sender.flush()
+
+    def write_dataframe(self, table: str, df: pd.DataFrame, ts_col: str = &quot;ts&quot;) -&gt; None:
+        &quot;&quot;&quot;
+        Bulk-write a pandas DataFrame to a QuestDB table.
+        DataFrame must have a column named ts_col with UTC-aware timestamps.
+        Column names must match the QuestDB schema exactly.
+        &quot;&quot;&quot;
+        with Sender.from_conf(self.conf) as sender:
+            sender.dataframe(df, table_name=table, at=ts_col)
+            sender.flush()</code></pre></div>
+<h3>4.3 QuestDB Query Client (PostgreSQL Wire)</h3>
+<div class="code-container">  <div class="code-header">    <span>PYTHON</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('%23%20db/questdb_reader.py%0Aimport%20psycopg2%0Aimport%20pandas%20as%20pd%0Afrom%20contextlib%20import%20contextmanager%0A%0AQUESTDB_PG_HOST%20%3D%20%22localhost%22%0AQUESTDB_PG_PORT%20%3D%208812%0AQUESTDB_PG_USER%20%3D%20%22admin%22%0AQUESTDB_PG_PASS%20%3D%20%22%22%20%20%20%20%20%20%20%23%20empty%20string%20by%20default%0AQUESTDB_PG_DB%20%20%20%3D%20%22qdb%22%0A%0A%40contextmanager%0Adef%20questdb_conn%28%29%3A%0A%20%20%20%20conn%20%3D%20psycopg2.connect%28%0A%20%20%20%20%20%20%20%20host%3DQUESTDB_PG_HOST%2C%0A%20%20%20%20%20%20%20%20port%3DQUESTDB_PG_PORT%2C%0A%20%20%20%20%20%20%20%20user%3DQUESTDB_PG_USER%2C%0A%20%20%20%20%20%20%20%20password%3DQUESTDB_PG_PASS%2C%0A%20%20%20%20%20%20%20%20database%3DQUESTDB_PG_DB%2C%0A%20%20%20%20%29%0A%20%20%20%20try%3A%0A%20%20%20%20%20%20%20%20yield%20conn%0A%20%20%20%20finally%3A%0A%20%20%20%20%20%20%20%20conn.close%28%29%0A%0Adef%20get_ohlcv%28%0A%20%20%20%20symbol%3A%20str%2C%0A%20%20%20%20timeframe%3A%20str%2C%0A%20%20%20%20start%3A%20str%2C%0A%20%20%20%20end%3A%20str%2C%0A%20%20%20%20limit%3A%20int%20%3D%2010000%0A%29%20-%3E%20pd.DataFrame%3A%0A%20%20%20%20%22%22%22%0A%20%20%20%20Fetch%20OHLCV%20bars%20for%20a%20symbol/timeframe%20between%20start%20and%20end%20%28ISO%208601%20strings%29.%0A%20%20%20%20Uses%20QuestDB%27s%20designated%20timestamp%20range%20filtering%20%E2%80%94%20extremely%20fast.%0A%20%20%20%20%22%22%22%0A%20%20%20%20query%20%3D%20%22%22%22%0A%20%20%20%20%20%20%20%20SELECT%20ts%2C%20open%2C%20high%2C%20low%2C%20close%2C%20volume%0A%20%20%20%20%20%20%20%20FROM%20ohlcv_bars%0A%20%20%20%20%20%20%20%20WHERE%20symbol%20%3D%20%25%28symbol%29s%0A%20%20%20%20%20%20%20%20%20%20AND%20timeframe%20%3D%20%25%28timeframe%29s%0A%20%20%20%20%20%20%20%20%20%20AND%20ts%20BETWEEN%20%25%28start%29s%20AND%20%25%28end%29s%0A%20%20%20%20%20%20%20%20ORDER%20BY%20ts%20ASC%0A%20%20%20%20%20%20%20%20LIMIT%20%25%28limit%29s%0A%20%20%20%20%22%22%22%0A%20%20%20%20with%20questdb_conn%28%29%20as%20conn%3A%0A%20%20%20%20%20%20%20%20return%20pd.read_sql_query%28%0A%20%20%20%20%20%20%20%20%20%20%20%20query%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20conn%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20params%3D%7B%22symbol%22%3A%20symbol%2C%20%22timeframe%22%3A%20timeframe%2C%20%22start%22%3A%20start%2C%20%22end%22%3A%20end%2C%20%22limit%22%3A%20limit%7D%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20parse_dates%3D%5B%22ts%22%5D%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20index_col%3D%22ts%22%0A%20%20%20%20%20%20%20%20%29%0A%0Adef%20get_latest_signals%28symbol%3A%20str%2C%20limit%3A%20int%20%3D%2050%29%20-%3E%20pd.DataFrame%3A%0A%20%20%20%20query%20%3D%20%22%22%22%0A%20%20%20%20%20%20%20%20SELECT%20ts%2C%20signal_type%2C%20timeframe%2C%20price%2C%20stop_loss%2C%20take_profit%2C%20confidence%2C%20strategy_id%0A%20%20%20%20%20%20%20%20FROM%20signals%0A%20%20%20%20%20%20%20%20WHERE%20symbol%20%3D%20%25%28symbol%29s%0A%20%20%20%20%20%20%20%20ORDER%20BY%20ts%20DESC%0A%20%20%20%20%20%20%20%20LIMIT%20%25%28limit%29s%0A%20%20%20%20%22%22%22%0A%20%20%20%20with%20questdb_conn%28%29%20as%20conn%3A%0A%20%20%20%20%20%20%20%20return%20pd.read_sql_query%28query%2C%20conn%2C%20params%3D%7B%22symbol%22%3A%20symbol%2C%20%22limit%22%3A%20limit%7D%29%0A%0Adef%20run_sample_agg%28symbol%3A%20str%2C%20timeframe%3A%20str%29%20-%3E%20pd.DataFrame%3A%0A%20%20%20%20%22%22%22%0A%20%20%20%20QuestDB%20SAMPLE%20BY%20%E2%80%94%20resamples%20to%20a%20higher%20timeframe%20natively.%0A%20%20%20%20Example%3A%20aggregate%201m%20bars%20to%201h.%0A%20%20%20%20%22%22%22%0A%20%20%20%20query%20%3D%20%22%22%22%0A%20%20%20%20%20%20%20%20SELECT%0A%20%20%20%20%20%20%20%20%20%20%20%20ts%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20first%28open%29%20%20AS%20open%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20max%28high%29%20%20%20%20AS%20high%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20min%28low%29%20%20%20%20%20AS%20low%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20last%28close%29%20%20AS%20close%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20sum%28volume%29%20%20AS%20volume%0A%20%20%20%20%20%20%20%20FROM%20ohlcv_bars%0A%20%20%20%20%20%20%20%20WHERE%20symbol%20%3D%20%25%28symbol%29s%0A%20%20%20%20%20%20%20%20%20%20AND%20timeframe%20%3D%20%25%28timeframe%29s%0A%20%20%20%20%20%20%20%20SAMPLE%20BY%201h%20ALIGN%20TO%20CALENDAR%0A%20%20%20%20%22%22%22%0A%20%20%20%20with%20questdb_conn%28%29%20as%20conn%3A%0A%20%20%20%20%20%20%20%20return%20pd.read_sql_query%28query%2C%20conn%2C%20params%3D%7B%22symbol%22%3A%20symbol%2C%20%22timeframe%22%3A%20timeframe%7D%29'))">Copy</button>  </div>  <pre><code class="language-python"># db/questdb_reader.py
+import psycopg2
+import pandas as pd
+from contextlib import contextmanager
+
+QUESTDB_PG_HOST = &quot;localhost&quot;
+QUESTDB_PG_PORT = 8812
+QUESTDB_PG_USER = &quot;admin&quot;
+QUESTDB_PG_PASS = &quot;&quot;       # empty string by default
+QUESTDB_PG_DB   = &quot;qdb&quot;
+
+@contextmanager
+def questdb_conn():
+    conn = psycopg2.connect(
+        host=QUESTDB_PG_HOST,
+        port=QUESTDB_PG_PORT,
+        user=QUESTDB_PG_USER,
+        password=QUESTDB_PG_PASS,
+        database=QUESTDB_PG_DB,
+    )
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+def get_ohlcv(
+    symbol: str,
+    timeframe: str,
+    start: str,
+    end: str,
+    limit: int = 10000
+) -&gt; pd.DataFrame:
+    &quot;&quot;&quot;
+    Fetch OHLCV bars for a symbol/timeframe between start and end (ISO 8601 strings).
+    Uses QuestDB&#x27;s designated timestamp range filtering — extremely fast.
+    &quot;&quot;&quot;
+    query = &quot;&quot;&quot;
+        SELECT ts, open, high, low, close, volume
+        FROM ohlcv_bars
+        WHERE symbol = %(symbol)s
+          AND timeframe = %(timeframe)s
+          AND ts BETWEEN %(start)s AND %(end)s
+        ORDER BY ts ASC
+        LIMIT %(limit)s
+    &quot;&quot;&quot;
+    with questdb_conn() as conn:
+        return pd.read_sql_query(
+            query,
+            conn,
+            params={&quot;symbol&quot;: symbol, &quot;timeframe&quot;: timeframe, &quot;start&quot;: start, &quot;end&quot;: end, &quot;limit&quot;: limit},
+            parse_dates=[&quot;ts&quot;],
+            index_col=&quot;ts&quot;
+        )
+
+def get_latest_signals(symbol: str, limit: int = 50) -&gt; pd.DataFrame:
+    query = &quot;&quot;&quot;
+        SELECT ts, signal_type, timeframe, price, stop_loss, take_profit, confidence, strategy_id
+        FROM signals
+        WHERE symbol = %(symbol)s
+        ORDER BY ts DESC
+        LIMIT %(limit)s
+    &quot;&quot;&quot;
+    with questdb_conn() as conn:
+        return pd.read_sql_query(query, conn, params={&quot;symbol&quot;: symbol, &quot;limit&quot;: limit})
+
+def run_sample_agg(symbol: str, timeframe: str) -&gt; pd.DataFrame:
+    &quot;&quot;&quot;
+    QuestDB SAMPLE BY — resamples to a higher timeframe natively.
+    Example: aggregate 1m bars to 1h.
+    &quot;&quot;&quot;
+    query = &quot;&quot;&quot;
+        SELECT
+            ts,
+            first(open)  AS open,
+            max(high)    AS high,
+            min(low)     AS low,
+            last(close)  AS close,
+            sum(volume)  AS volume
+        FROM ohlcv_bars
+        WHERE symbol = %(symbol)s
+          AND timeframe = %(timeframe)s
+        SAMPLE BY 1h ALIGN TO CALENDAR
+    &quot;&quot;&quot;
+    with questdb_conn() as conn:
+        return pd.read_sql_query(query, conn, params={&quot;symbol&quot;: symbol, &quot;timeframe&quot;: timeframe})</code></pre></div>
+<h3>4.4 PostgreSQL Async Client (SQLAlchemy)</h3>
+<div class="code-container">  <div class="code-header">    <span>PYTHON</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('%23%20db/postgres.py%0Afrom%20sqlalchemy.ext.asyncio%20import%20create_async_engine%2C%20AsyncSession%0Afrom%20sqlalchemy.orm%20import%20sessionmaker%2C%20DeclarativeBase%0Afrom%20sqlalchemy%20import%20Column%2C%20Integer%2C%20String%2C%20Boolean%2C%20DateTime%2C%20JSON%2C%20Numeric%2C%20Text%2C%20ARRAY%0Afrom%20sqlalchemy.sql%20import%20func%0Aimport%20os%0A%0APG_URL%20%3D%20os.getenv%28%0A%20%20%20%20%22POSTGRES_URL%22%2C%0A%20%20%20%20%22postgresql%2Basyncpg%3A//trading%3Apassword%40localhost%3A5432/trading_db%22%0A%29%0A%0Aengine%20%3D%20create_async_engine%28PG_URL%2C%20echo%3DFalse%2C%20pool_size%3D10%2C%20max_overflow%3D20%29%0AAsyncSessionLocal%20%3D%20sessionmaker%28engine%2C%20class_%3DAsyncSession%2C%20expire_on_commit%3DFalse%29%0A%0Aclass%20Base%28DeclarativeBase%29%3A%0A%20%20%20%20pass%0A%0A%23%20---%20ORM%20Models%20---%0A%0Aclass%20Strategy%28Base%29%3A%0A%20%20%20%20__tablename__%20%3D%20%22strategies%22%0A%20%20%20%20id%20%20%20%20%20%20%20%20%20%20%3D%20Column%28Integer%2C%20primary_key%3DTrue%29%0A%20%20%20%20name%20%20%20%20%20%20%20%20%3D%20Column%28String%28128%29%2C%20nullable%3DFalse%2C%20unique%3DTrue%29%0A%20%20%20%20description%20%3D%20Column%28Text%29%0A%20%20%20%20version%20%20%20%20%20%3D%20Column%28String%2832%29%2C%20default%3D%221.0.0%22%29%0A%20%20%20%20asset_class%20%3D%20Column%28String%2832%29%29%0A%20%20%20%20timeframes%20%20%3D%20Column%28ARRAY%28String%29%29%0A%20%20%20%20parameters%20%20%3D%20Column%28JSON%2C%20default%3D%7B%7D%29%0A%20%20%20%20is_active%20%20%20%3D%20Column%28Boolean%2C%20default%3DFalse%29%0A%20%20%20%20created_at%20%20%3D%20Column%28DateTime%28timezone%3DTrue%29%2C%20server_default%3Dfunc.now%28%29%29%0A%20%20%20%20updated_at%20%20%3D%20Column%28DateTime%28timezone%3DTrue%29%2C%20server_default%3Dfunc.now%28%29%2C%20onupdate%3Dfunc.now%28%29%29%0A%0Aclass%20BacktestRun%28Base%29%3A%0A%20%20%20%20__tablename__%20%3D%20%22backtest_runs%22%0A%20%20%20%20id%20%20%20%20%20%20%20%20%20%20%20%3D%20Column%28Integer%2C%20primary_key%3DTrue%29%0A%20%20%20%20strategy_id%20%20%3D%20Column%28Integer%2C%20nullable%3DFalse%29%0A%20%20%20%20symbol%20%20%20%20%20%20%20%3D%20Column%28String%2832%29%2C%20nullable%3DFalse%29%0A%20%20%20%20timeframe%20%20%20%20%3D%20Column%28String%2816%29%2C%20nullable%3DFalse%29%0A%20%20%20%20start_date%20%20%20%3D%20Column%28String%2816%29%29%0A%20%20%20%20end_date%20%20%20%20%20%3D%20Column%28String%2816%29%29%0A%20%20%20%20parameters%20%20%20%3D%20Column%28JSON%2C%20default%3D%7B%7D%29%0A%20%20%20%20total_trades%20%3D%20Column%28Integer%29%0A%20%20%20%20win_rate%20%20%20%20%20%3D%20Column%28Numeric%285%2C%204%29%29%0A%20%20%20%20profit_factor%3D%20Column%28Numeric%288%2C%204%29%29%0A%20%20%20%20net_pnl%20%20%20%20%20%20%3D%20Column%28Numeric%2814%2C%204%29%29%0A%20%20%20%20max_drawdown%20%3D%20Column%28Numeric%288%2C%204%29%29%0A%20%20%20%20sharpe_ratio%20%3D%20Column%28Numeric%288%2C%204%29%29%0A%20%20%20%20trades%20%20%20%20%20%20%20%3D%20Column%28JSON%29%0A%20%20%20%20run_at%20%20%20%20%20%20%20%3D%20Column%28DateTime%28timezone%3DTrue%29%2C%20server_default%3Dfunc.now%28%29%29%0A%0A%23%20---%20Session%20Helper%20---%0Afrom%20contextlib%20import%20asynccontextmanager%0A%0A%40asynccontextmanager%0Aasync%20def%20get_db_session%28%29%3A%0A%20%20%20%20async%20with%20AsyncSessionLocal%28%29%20as%20session%3A%0A%20%20%20%20%20%20%20%20try%3A%0A%20%20%20%20%20%20%20%20%20%20%20%20yield%20session%0A%20%20%20%20%20%20%20%20%20%20%20%20await%20session.commit%28%29%0A%20%20%20%20%20%20%20%20except%20Exception%3A%0A%20%20%20%20%20%20%20%20%20%20%20%20await%20session.rollback%28%29%0A%20%20%20%20%20%20%20%20%20%20%20%20raise%0A%20%20%20%20%20%20%20%20finally%3A%0A%20%20%20%20%20%20%20%20%20%20%20%20await%20session.close%28%29%0A%0A%23%20---%20Example%20Usage%20---%0Aasync%20def%20save_backtest%28data%3A%20dict%29%20-%3E%20int%3A%0A%20%20%20%20async%20with%20get_db_session%28%29%20as%20session%3A%0A%20%20%20%20%20%20%20%20run%20%3D%20BacktestRun%28%2A%2Adata%29%0A%20%20%20%20%20%20%20%20session.add%28run%29%0A%20%20%20%20%20%20%20%20await%20session.flush%28%29%0A%20%20%20%20%20%20%20%20return%20run.id%0A%0Aasync%20def%20get_active_strategies%28%29%20-%3E%20list%5Bdict%5D%3A%0A%20%20%20%20from%20sqlalchemy%20import%20select%0A%20%20%20%20async%20with%20get_db_session%28%29%20as%20session%3A%0A%20%20%20%20%20%20%20%20result%20%3D%20await%20session.execute%28%0A%20%20%20%20%20%20%20%20%20%20%20%20select%28Strategy%29.where%28Strategy.is_active%20%3D%3D%20True%29%0A%20%20%20%20%20%20%20%20%29%0A%20%20%20%20%20%20%20%20strategies%20%3D%20result.scalars%28%29.all%28%29%0A%20%20%20%20%20%20%20%20return%20%5B%7B%22id%22%3A%20s.id%2C%20%22name%22%3A%20s.name%2C%20%22parameters%22%3A%20s.parameters%7D%20for%20s%20in%20strategies%5D'))">Copy</button>  </div>  <pre><code class="language-python"># db/postgres.py
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON, Numeric, Text, ARRAY
+from sqlalchemy.sql import func
+import os
+
+PG_URL = os.getenv(
+    &quot;POSTGRES_URL&quot;,
+    &quot;postgresql+asyncpg://trading:password@localhost:5432/trading_db&quot;
+)
+
+engine = create_async_engine(PG_URL, echo=False, pool_size=10, max_overflow=20)
+AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+class Base(DeclarativeBase):
+    pass
+
+# --- ORM Models ---
+
+class Strategy(Base):
+    __tablename__ = &quot;strategies&quot;
+    id          = Column(Integer, primary_key=True)
+    name        = Column(String(128), nullable=False, unique=True)
+    description = Column(Text)
+    version     = Column(String(32), default=&quot;1.0.0&quot;)
+    asset_class = Column(String(32))
+    timeframes  = Column(ARRAY(String))
+    parameters  = Column(JSON, default={})
+    is_active   = Column(Boolean, default=False)
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at  = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+class BacktestRun(Base):
+    __tablename__ = &quot;backtest_runs&quot;
+    id           = Column(Integer, primary_key=True)
+    strategy_id  = Column(Integer, nullable=False)
+    symbol       = Column(String(32), nullable=False)
+    timeframe    = Column(String(16), nullable=False)
+    start_date   = Column(String(16))
+    end_date     = Column(String(16))
+    parameters   = Column(JSON, default={})
+    total_trades = Column(Integer)
+    win_rate     = Column(Numeric(5, 4))
+    profit_factor= Column(Numeric(8, 4))
+    net_pnl      = Column(Numeric(14, 4))
+    max_drawdown = Column(Numeric(8, 4))
+    sharpe_ratio = Column(Numeric(8, 4))
+    trades       = Column(JSON)
+    run_at       = Column(DateTime(timezone=True), server_default=func.now())
+
+# --- Session Helper ---
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def get_db_session():
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+
+# --- Example Usage ---
+async def save_backtest(data: dict) -&gt; int:
+    async with get_db_session() as session:
+        run = BacktestRun(**data)
+        session.add(run)
+        await session.flush()
+        return run.id
+
+async def get_active_strategies() -&gt; list[dict]:
+    from sqlalchemy import select
+    async with get_db_session() as session:
+        result = await session.execute(
+            select(Strategy).where(Strategy.is_active == True)
+        )
+        strategies = result.scalars().all()
+        return [{&quot;id&quot;: s.id, &quot;name&quot;: s.name, &quot;parameters&quot;: s.parameters} for s in strategies]</code></pre></div>
+<p>---</p>
+<h2>5. Alembic Migrations (PostgreSQL)</h2>
+<div class="code-container">  <div class="code-header">    <span>BASH</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('%23%20Initialize%20Alembic%20in%20your%20project%20root%0Aalembic%20init%20alembic%0A%0A%23%20Edit%20alembic/env.py%20%E2%80%94%20add%20this%20near%20the%20top%3A%0A%23%20from%20db.postgres%20import%20Base%0A%23%20target_metadata%20%3D%20Base.metadata%0A%0A%23%20Edit%20alembic.ini%20%E2%80%94%20set%20sqlalchemy.url%3A%0A%23%20sqlalchemy.url%20%3D%20postgresql%2Basyncpg%3A//trading%3Apassword%40localhost%3A5432/trading_db%0A%0A%23%20Generate%20initial%20migration%20from%20models%0Aalembic%20revision%20--autogenerate%20-m%20%22initial%20schema%22%0A%0A%23%20Apply%20migration%0Aalembic%20upgrade%20head%0A%0A%23%20Roll%20back%20one%20step%0Aalembic%20downgrade%20-1'))">Copy</button>  </div>  <pre><code class="language-bash"># Initialize Alembic in your project root
+alembic init alembic
+
+# Edit alembic/env.py — add this near the top:
+# from db.postgres import Base
+# target_metadata = Base.metadata
+
+# Edit alembic.ini — set sqlalchemy.url:
+# sqlalchemy.url = postgresql+asyncpg://trading:password@localhost:5432/trading_db
+
+# Generate initial migration from models
+alembic revision --autogenerate -m &quot;initial schema&quot;
+
+# Apply migration
+alembic upgrade head
+
+# Roll back one step
+alembic downgrade -1</code></pre></div>
+<blockquote><strong>Note:</strong> Alembic requires a synchronous URL for migration generation. In <code>env.py</code> use <code>postgresql://</code> (not <code>+asyncpg</code>) for the <code>run_migrations_offline</code> path, and configure the async runner for <code>run_migrations_online</code>. See: https://alembic.sqlalchemy.org/en/latest/cookbook.html#using-asyncio-with-alembic</blockquote>
+<p>---</p>
+<h2>6. QuestDB SQL Reference Cheatsheet</h2>
+<p>QuestDB is SQL-compatible with PostgreSQL extensions, but has unique time-series functions.</p>
+<div class="code-container">  <div class="code-header">    <span>SQL</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('--%20SAMPLE%20BY%3A%20resample%20time%20series%20to%20any%20interval%0ASELECT%20ts%2C%20avg%28close%29%20AS%20avg_close%0AFROM%20ohlcv_bars%0AWHERE%20symbol%20%3D%20%27AAPL%27%20AND%20timeframe%20%3D%20%271m%27%0ASAMPLE%20BY%205m%20FILL%28PREV%29%20%20%20%20%20%20%20--%20fill%20missing%20bars%20with%20previous%20value%0AALIGN%20TO%20CALENDAR%3B%20%20%20%20%20%20%20%20%20%20%20%20%20--%20align%20to%20clock%20boundaries%0A%0A--%20LATEST%20ON%3A%20get%20the%20most%20recent%20row%20per%20symbol%20group%0ASELECT%20%2A%20FROM%20ohlcv_bars%0ALATEST%20ON%20ts%20PARTITION%20BY%20symbol%3B%0A%0A--%20ASOF%20JOIN%3A%20join%20two%20time%20series%20on%20nearest%20timestamp%0ASELECT%0A%20%20%20%20b.ts%2C%20b.symbol%2C%20b.close%2C%0A%20%20%20%20i.value%20AS%20rsi%0AFROM%20ohlcv_bars%20b%0AASOF%20JOIN%20indicators%20i%20ON%20%28b.symbol%20%3D%20i.symbol%29%0AWHERE%20b.timeframe%20%3D%20%275m%27%20AND%20i.indicator_name%20%3D%20%27RSI_14%27%3B%0A%0A--%20LT%20JOIN%3A%20join%20where%20time%20series%20B%20is%20strictly%20BEFORE%20A%0ASELECT%20b.ts%2C%20b.close%2C%20s.signal_type%0AFROM%20ohlcv_bars%20b%0ALT%20JOIN%20signals%20s%20ON%20%28b.symbol%20%3D%20s.symbol%29%3B%0A%0A--%20Timestamp%20range%20filtering%20%28use%20ISO%208601%20strings%29%0ASELECT%20%2A%20FROM%20ohlcv_bars%0AWHERE%20ts%20IN%20%272025-01-01T09%3A30%3A00Z%3B6h%27%20%20%20--%20from%2009%3A30%20UTC%20for%206%20hours%0A%20%20AND%20symbol%20%3D%20%27SPY%27%3B%0A%0A--%20Dynamic%20partition%20pruning%20%28fast%29%0ASELECT%20%2A%20FROM%20ohlcv_bars%0AWHERE%20ts%20%3E%3D%20dateadd%28%27d%27%2C%20-7%2C%20now%28%29%29%20%20%20%20%20--%20last%207%20days%0A%20%20AND%20symbol%20%3D%20%27QQQ%27%0A%20%20AND%20timeframe%20%3D%20%271D%27%3B'))">Copy</button>  </div>  <pre><code class="language-sql">-- SAMPLE BY: resample time series to any interval
+SELECT ts, avg(close) AS avg_close
+FROM ohlcv_bars
+WHERE symbol = &#x27;AAPL&#x27; AND timeframe = &#x27;1m&#x27;
+SAMPLE BY 5m FILL(PREV)       -- fill missing bars with previous value
+ALIGN TO CALENDAR;             -- align to clock boundaries
+
+-- LATEST ON: get the most recent row per symbol group
+SELECT * FROM ohlcv_bars
+LATEST ON ts PARTITION BY symbol;
+
+-- ASOF JOIN: join two time series on nearest timestamp
+SELECT
+    b.ts, b.symbol, b.close,
+    i.value AS rsi
+FROM ohlcv_bars b
+ASOF JOIN indicators i ON (b.symbol = i.symbol)
+WHERE b.timeframe = &#x27;5m&#x27; AND i.indicator_name = &#x27;RSI_14&#x27;;
+
+-- LT JOIN: join where time series B is strictly BEFORE A
+SELECT b.ts, b.close, s.signal_type
+FROM ohlcv_bars b
+LT JOIN signals s ON (b.symbol = s.symbol);
+
+-- Timestamp range filtering (use ISO 8601 strings)
+SELECT * FROM ohlcv_bars
+WHERE ts IN &#x27;2025-01-01T09:30:00Z;6h&#x27;   -- from 09:30 UTC for 6 hours
+  AND symbol = &#x27;SPY&#x27;;
+
+-- Dynamic partition pruning (fast)
+SELECT * FROM ohlcv_bars
+WHERE ts &gt;= dateadd(&#x27;d&#x27;, -7, now())     -- last 7 days
+  AND symbol = &#x27;QQQ&#x27;
+  AND timeframe = &#x27;1D&#x27;;</code></pre></div>
+<p><strong>Key SQL differences from standard PostgreSQL:</strong>
+- <code>SAMPLE BY</code> — unique to QuestDB, replaces <code>DATE_TRUNC</code> + <code>GROUP BY</code> for resampling
+- <code>LATEST ON ... PARTITION BY</code> — replaces <code>DISTINCT ON</code> in PostgreSQL
+- <code>ASOF JOIN</code> / <code>LT JOIN</code> — time-aware joins not available in standard SQL
+- Timestamp literals: use single quotes <code>&#x27;2025-01-01T00:00:00Z&#x27;</code> or <code>dateadd()</code>
+- No <code>UPDATE</code> or <code>DELETE</code> on WAL tables (append-only). Use <code>ALTER TABLE DROP PARTITION BY</code> to purge old data.</p>
+<p>---</p>
+<h2>7. Data Pipeline Patterns</h2>
+<h3>7.1 Live Feed Ingestor (TradeStation / TradingView Webhook)</h3>
+<div class="code-container">  <div class="code-header">    <span>PYTHON</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('%23%20ingestor/webhook_handler.py%0A%23%20Receives%20TradingView%20alert%20webhooks%20and%20writes%20to%20QuestDB%0A%0Afrom%20fastapi%20import%20FastAPI%2C%20Request%0Afrom%20db.questdb_writer%20import%20QuestDBWriter%0Afrom%20db.postgres%20import%20get_db_session%0Afrom%20datetime%20import%20datetime%2C%20timezone%0Aimport%20json%0A%0Aapp%20%3D%20FastAPI%28%29%0Awriter%20%3D%20QuestDBWriter%28%29%0A%0A%40app.post%28%22/webhook/signal%22%29%0Aasync%20def%20receive_signal%28request%3A%20Request%29%3A%0A%20%20%20%20body%20%3D%20await%20request.json%28%29%0A%20%20%20%20%23%20Expected%20body%20from%20TradingView%20alert%3A%0A%20%20%20%20%23%20%7B%22symbol%22%3A%20%22AAPL%22%2C%20%22action%22%3A%20%22BUY%22%2C%20%22price%22%3A%20195.50%2C%20%22strategy%22%3A%20%22EMA_Cross%22%7D%0A%20%20%20%20%0A%20%20%20%20symbol%20%20%20%20%20%20%3D%20body%5B%22symbol%22%5D%0A%20%20%20%20signal_type%20%3D%20%22ENTRY_LONG%22%20if%20body%5B%22action%22%5D%20%3D%3D%20%22BUY%22%20else%20%22ENTRY_SHORT%22%0A%20%20%20%20price%20%20%20%20%20%20%20%3D%20float%28body%5B%22price%22%5D%29%0A%20%20%20%20ts%20%20%20%20%20%20%20%20%20%20%3D%20datetime.now%28tz%3Dtimezone.utc%29%0A%0A%20%20%20%20%23%20Get%20strategy_id%20from%20PostgreSQL%20%28soft%20FK%29%0A%20%20%20%20strategy_id%20%3D%20await%20get_strategy_id%28body.get%28%22strategy%22%2C%20%22unknown%22%29%29%0A%0A%20%20%20%20%23%20Write%20signal%20to%20QuestDB%0A%20%20%20%20writer.write_signal%28%0A%20%20%20%20%20%20%20%20symbol%3Dsymbol%2C%0A%20%20%20%20%20%20%20%20strategy_id%3Dstrategy_id%2C%0A%20%20%20%20%20%20%20%20signal_type%3Dsignal_type%2C%0A%20%20%20%20%20%20%20%20timeframe%3Dbody.get%28%22timeframe%22%2C%20%22unknown%22%29%2C%0A%20%20%20%20%20%20%20%20price%3Dprice%2C%0A%20%20%20%20%20%20%20%20ts%3Dts%0A%20%20%20%20%29%0A%20%20%20%20return%20%7B%22status%22%3A%20%22ok%22%2C%20%22ts%22%3A%20ts.isoformat%28%29%7D%0A%0Aasync%20def%20get_strategy_id%28name%3A%20str%29%20-%3E%20int%3A%0A%20%20%20%20from%20sqlalchemy%20import%20select%0A%20%20%20%20from%20db.postgres%20import%20Strategy%0A%20%20%20%20async%20with%20get_db_session%28%29%20as%20session%3A%0A%20%20%20%20%20%20%20%20result%20%3D%20await%20session.execute%28select%28Strategy%29.where%28Strategy.name%20%3D%3D%20name%29%29%0A%20%20%20%20%20%20%20%20strategy%20%3D%20result.scalar_one_or_none%28%29%0A%20%20%20%20%20%20%20%20return%20strategy.id%20if%20strategy%20else%20-1'))">Copy</button>  </div>  <pre><code class="language-python"># ingestor/webhook_handler.py
+# Receives TradingView alert webhooks and writes to QuestDB
+
+from fastapi import FastAPI, Request
+from db.questdb_writer import QuestDBWriter
+from db.postgres import get_db_session
+from datetime import datetime, timezone
+import json
+
+app = FastAPI()
+writer = QuestDBWriter()
+
+@app.post(&quot;/webhook/signal&quot;)
+async def receive_signal(request: Request):
+    body = await request.json()
+    # Expected body from TradingView alert:
+    # {&quot;symbol&quot;: &quot;AAPL&quot;, &quot;action&quot;: &quot;BUY&quot;, &quot;price&quot;: 195.50, &quot;strategy&quot;: &quot;EMA_Cross&quot;}
+    
+    symbol      = body[&quot;symbol&quot;]
+    signal_type = &quot;ENTRY_LONG&quot; if body[&quot;action&quot;] == &quot;BUY&quot; else &quot;ENTRY_SHORT&quot;
+    price       = float(body[&quot;price&quot;])
+    ts          = datetime.now(tz=timezone.utc)
+
+    # Get strategy_id from PostgreSQL (soft FK)
+    strategy_id = await get_strategy_id(body.get(&quot;strategy&quot;, &quot;unknown&quot;))
+
+    # Write signal to QuestDB
+    writer.write_signal(
+        symbol=symbol,
+        strategy_id=strategy_id,
+        signal_type=signal_type,
+        timeframe=body.get(&quot;timeframe&quot;, &quot;unknown&quot;),
+        price=price,
+        ts=ts
+    )
+    return {&quot;status&quot;: &quot;ok&quot;, &quot;ts&quot;: ts.isoformat()}
+
+async def get_strategy_id(name: str) -&gt; int:
+    from sqlalchemy import select
+    from db.postgres import Strategy
+    async with get_db_session() as session:
+        result = await session.execute(select(Strategy).where(Strategy.name == name))
+        strategy = result.scalar_one_or_none()
+        return strategy.id if strategy else -1</code></pre></div>
+<h3>7.2 Historical Data Backfill</h3>
+<div class="code-container">  <div class="code-header">    <span>PYTHON</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('%23%20scripts/backfill_ohlcv.py%0A%23%20Backfill%20historical%20OHLCV%20from%20yfinance%20or%20a%20CSV%20export%0A%0Aimport%20yfinance%20as%20yf%0Aimport%20pandas%20as%20pd%0Afrom%20db.questdb_writer%20import%20QuestDBWriter%0Afrom%20datetime%20import%20timezone%0A%0Adef%20backfill_symbol%28symbol%3A%20str%2C%20period%3A%20str%20%3D%20%222y%22%2C%20interval%3A%20str%20%3D%20%221d%22%29%3A%0A%20%20%20%20writer%20%3D%20QuestDBWriter%28%29%0A%20%20%20%20df%20%3D%20yf.download%28symbol%2C%20period%3Dperiod%2C%20interval%3Dinterval%2C%20auto_adjust%3DTrue%29%0A%20%20%20%20df.index%20%3D%20pd.to_datetime%28df.index%2C%20utc%3DTrue%29%0A%20%20%20%20df.index.name%20%3D%20%22ts%22%0A%20%20%20%20df.columns%20%3D%20%5Bc.lower%28%29%20for%20c%20in%20df.columns%5D%0A%20%20%20%20df%20%3D%20df.rename%28columns%3D%7B%22adj%20close%22%3A%20%22close%22%7D%29%5B%5B%22open%22%2C%20%22high%22%2C%20%22low%22%2C%20%22close%22%2C%20%22volume%22%5D%5D%0A%20%20%20%20df%5B%22symbol%22%5D%20%20%20%20%3D%20symbol%0A%20%20%20%20df%5B%22timeframe%22%5D%20%3D%20interval.replace%28%22d%22%2C%20%221D%22%29.replace%28%22h%22%2C%20%221h%22%29%0A%20%20%20%20df%20%3D%20df.reset_index%28%29%0A%20%20%20%20writer.write_dataframe%28%22ohlcv_bars%22%2C%20df%2C%20ts_col%3D%22ts%22%29%0A%20%20%20%20print%28f%22Backfilled%20%7Blen%28df%29%7D%20bars%20for%20%7Bsymbol%7D%22%29%0A%0Aif%20__name__%20%3D%3D%20%22__main__%22%3A%0A%20%20%20%20symbols%20%3D%20%5B%22SPY%22%2C%20%22QQQ%22%2C%20%22AAPL%22%2C%20%22TSLA%22%2C%20%22NQ%3DF%22%5D%0A%20%20%20%20for%20sym%20in%20symbols%3A%0A%20%20%20%20%20%20%20%20backfill_symbol%28sym%2C%20period%3D%225y%22%2C%20interval%3D%221d%22%29%0A%20%20%20%20%20%20%20%20backfill_symbol%28sym%2C%20period%3D%2260d%22%2C%20interval%3D%221h%22%29%0A%20%20%20%20%20%20%20%20backfill_symbol%28sym%2C%20period%3D%227d%22%2C%20interval%3D%221m%22%29'))">Copy</button>  </div>  <pre><code class="language-python"># scripts/backfill_ohlcv.py
+# Backfill historical OHLCV from yfinance or a CSV export
+
+import yfinance as yf
+import pandas as pd
+from db.questdb_writer import QuestDBWriter
+from datetime import timezone
+
+def backfill_symbol(symbol: str, period: str = &quot;2y&quot;, interval: str = &quot;1d&quot;):
+    writer = QuestDBWriter()
+    df = yf.download(symbol, period=period, interval=interval, auto_adjust=True)
+    df.index = pd.to_datetime(df.index, utc=True)
+    df.index.name = &quot;ts&quot;
+    df.columns = [c.lower() for c in df.columns]
+    df = df.rename(columns={&quot;adj close&quot;: &quot;close&quot;})[[&quot;open&quot;, &quot;high&quot;, &quot;low&quot;, &quot;close&quot;, &quot;volume&quot;]]
+    df[&quot;symbol&quot;]    = symbol
+    df[&quot;timeframe&quot;] = interval.replace(&quot;d&quot;, &quot;1D&quot;).replace(&quot;h&quot;, &quot;1h&quot;)
+    df = df.reset_index()
+    writer.write_dataframe(&quot;ohlcv_bars&quot;, df, ts_col=&quot;ts&quot;)
+    print(f&quot;Backfilled {len(df)} bars for {symbol}&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    symbols = [&quot;SPY&quot;, &quot;QQQ&quot;, &quot;AAPL&quot;, &quot;TSLA&quot;, &quot;NQ=F&quot;]
+    for sym in symbols:
+        backfill_symbol(sym, period=&quot;5y&quot;, interval=&quot;1d&quot;)
+        backfill_symbol(sym, period=&quot;60d&quot;, interval=&quot;1h&quot;)
+        backfill_symbol(sym, period=&quot;7d&quot;, interval=&quot;1m&quot;)</code></pre></div>
+<h3>7.3 Cross-DB Query Pattern (Application-Side Join)</h3>
+<p>Since QuestDB and PostgreSQL don&#x27;t natively join across instances, use this pattern:</p>
+<div class="code-container">  <div class="code-header">    <span>PYTHON</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('%23%20services/strategy_signal_service.py%0A%23%20Combines%20QuestDB%20signals%20with%20PostgreSQL%20strategy%20metadata%0A%0Aimport%20asyncio%0Afrom%20db.questdb_reader%20import%20get_latest_signals%0Afrom%20db.postgres%20import%20get_active_strategies%0A%0Aasync%20def%20get_enriched_signals%28symbol%3A%20str%29%20-%3E%20list%5Bdict%5D%3A%0A%20%20%20%20%23%201.%20Fetch%20signals%20from%20QuestDB%0A%20%20%20%20signals_df%20%3D%20get_latest_signals%28symbol%2C%20limit%3D100%29%0A%20%20%20%20%0A%20%20%20%20%23%202.%20Fetch%20strategy%20metadata%20from%20PostgreSQL%0A%20%20%20%20strategies%20%3D%20await%20get_active_strategies%28%29%0A%20%20%20%20strategy_map%20%3D%20%7Bs%5B%22id%22%5D%3A%20s%20for%20s%20in%20strategies%7D%0A%20%20%20%20%0A%20%20%20%20%23%203.%20Merge%20at%20application%20layer%0A%20%20%20%20enriched%20%3D%20%5B%5D%0A%20%20%20%20for%20_%2C%20row%20in%20signals_df.iterrows%28%29%3A%0A%20%20%20%20%20%20%20%20strategy%20%3D%20strategy_map.get%28int%28row%5B%22strategy_id%22%5D%29%2C%20%7B%7D%29%0A%20%20%20%20%20%20%20%20enriched.append%28%7B%0A%20%20%20%20%20%20%20%20%20%20%20%20%22ts%22%3A%20%20%20%20%20%20%20%20%20%20%20%20row%5B%22ts%22%5D.isoformat%28%29%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%22signal_type%22%3A%20%20%20row%5B%22signal_type%22%5D%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%22price%22%3A%20%20%20%20%20%20%20%20%20row%5B%22price%22%5D%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%22strategy_name%22%3A%20strategy.get%28%22name%22%2C%20%22unknown%22%29%2C%0A%20%20%20%20%20%20%20%20%20%20%20%20%22parameters%22%3A%20%20%20%20strategy.get%28%22parameters%22%2C%20%7B%7D%29%2C%0A%20%20%20%20%20%20%20%20%7D%29%0A%20%20%20%20return%20enriched'))">Copy</button>  </div>  <pre><code class="language-python"># services/strategy_signal_service.py
+# Combines QuestDB signals with PostgreSQL strategy metadata
+
+import asyncio
+from db.questdb_reader import get_latest_signals
+from db.postgres import get_active_strategies
+
+async def get_enriched_signals(symbol: str) -&gt; list[dict]:
+    # 1. Fetch signals from QuestDB
+    signals_df = get_latest_signals(symbol, limit=100)
+    
+    # 2. Fetch strategy metadata from PostgreSQL
+    strategies = await get_active_strategies()
+    strategy_map = {s[&quot;id&quot;]: s for s in strategies}
+    
+    # 3. Merge at application layer
+    enriched = []
+    for _, row in signals_df.iterrows():
+        strategy = strategy_map.get(int(row[&quot;strategy_id&quot;]), {})
+        enriched.append({
+            &quot;ts&quot;:            row[&quot;ts&quot;].isoformat(),
+            &quot;signal_type&quot;:   row[&quot;signal_type&quot;],
+            &quot;price&quot;:         row[&quot;price&quot;],
+            &quot;strategy_name&quot;: strategy.get(&quot;name&quot;, &quot;unknown&quot;),
+            &quot;parameters&quot;:    strategy.get(&quot;parameters&quot;, {}),
+        })
+    return enriched</code></pre></div>
+<p>---</p>
+<h2>8. Docker Compose — Full Stack</h2>
+<div class="code-container">  <div class="code-header">    <span>YAML</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('%23%20docker-compose.yml%20%E2%80%94%20full%20trading%20stack%0Aversion%3A%20%223.9%22%0A%0Aservices%3A%0A%0A%20%20questdb%3A%0A%20%20%20%20image%3A%20questdb/questdb%3Alatest%0A%20%20%20%20container_name%3A%20questdb%0A%20%20%20%20restart%3A%20unless-stopped%0A%20%20%20%20ports%3A%0A%20%20%20%20%20%20-%20%229000%3A9000%22%0A%20%20%20%20%20%20-%20%229009%3A9009%22%0A%20%20%20%20%20%20-%20%228812%3A8812%22%0A%20%20%20%20volumes%3A%0A%20%20%20%20%20%20-%20questdb_data%3A/var/lib/questdb%0A%20%20%20%20environment%3A%0A%20%20%20%20%20%20-%20QDB_CAIRO_COMMIT_LAG%3D1000%0A%20%20%20%20%20%20-%20QDB_CAIRO_MAX_UNCOMMITTED_ROWS%3D500000%0A%20%20%20%20mem_limit%3A%204g%0A%0A%20%20postgres%3A%0A%20%20%20%20image%3A%20postgres%3A16-alpine%0A%20%20%20%20container_name%3A%20trading_postgres%0A%20%20%20%20restart%3A%20unless-stopped%0A%20%20%20%20ports%3A%0A%20%20%20%20%20%20-%20%225432%3A5432%22%0A%20%20%20%20volumes%3A%0A%20%20%20%20%20%20-%20postgres_data%3A/var/lib/postgresql/data%0A%20%20%20%20environment%3A%0A%20%20%20%20%20%20POSTGRES_USER%3A%20trading%0A%20%20%20%20%20%20POSTGRES_PASSWORD%3A%20%24%7BPOSTGRES_PASSWORD%7D%0A%20%20%20%20%20%20POSTGRES_DB%3A%20trading_db%0A%20%20%20%20mem_limit%3A%202g%0A%0A%20%20trading_api%3A%0A%20%20%20%20build%3A%20.%0A%20%20%20%20container_name%3A%20trading_api%0A%20%20%20%20restart%3A%20unless-stopped%0A%20%20%20%20ports%3A%0A%20%20%20%20%20%20-%20%228000%3A8000%22%0A%20%20%20%20depends_on%3A%0A%20%20%20%20%20%20-%20questdb%0A%20%20%20%20%20%20-%20postgres%0A%20%20%20%20environment%3A%0A%20%20%20%20%20%20-%20QUESTDB_ILP_HOST%3Dquestdb%0A%20%20%20%20%20%20-%20QUESTDB_PG_HOST%3Dquestdb%0A%20%20%20%20%20%20-%20POSTGRES_URL%3Dpostgresql%2Basyncpg%3A//trading%3A%24%7BPOSTGRES_PASSWORD%7D%40postgres%3A5432/trading_db%0A%20%20%20%20volumes%3A%0A%20%20%20%20%20%20-%20./%3A/app%0A%0Avolumes%3A%0A%20%20questdb_data%3A%0A%20%20postgres_data%3A'))">Copy</button>  </div>  <pre><code class="language-yaml"># docker-compose.yml — full trading stack
+version: &quot;3.9&quot;
+
+services:
+
+  questdb:
+    image: questdb/questdb:latest
+    container_name: questdb
+    restart: unless-stopped
+    ports:
+      - &quot;9000:9000&quot;
+      - &quot;9009:9009&quot;
+      - &quot;8812:8812&quot;
+    volumes:
+      - questdb_data:/var/lib/questdb
+    environment:
+      - QDB_CAIRO_COMMIT_LAG=1000
+      - QDB_CAIRO_MAX_UNCOMMITTED_ROWS=500000
+    mem_limit: 4g
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: trading_postgres
+    restart: unless-stopped
+    ports:
+      - &quot;5432:5432&quot;
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: trading
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: trading_db
+    mem_limit: 2g
+
+  trading_api:
+    build: .
+    container_name: trading_api
+    restart: unless-stopped
+    ports:
+      - &quot;8000:8000&quot;
+    depends_on:
+      - questdb
+      - postgres
+    environment:
+      - QUESTDB_ILP_HOST=questdb
+      - QUESTDB_PG_HOST=questdb
+      - POSTGRES_URL=postgresql+asyncpg://trading:${POSTGRES_PASSWORD}@postgres:5432/trading_db
+    volumes:
+      - ./:/app
+
+volumes:
+  questdb_data:
+  postgres_data:</code></pre></div>
+<p>---</p>
+<h2>9. Environment Variables</h2>
+<div class="code-container">  <div class="code-header">    <span>BASH</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('%23%20.env%0APOSTGRES_PASSWORD%3Dyour_secure_password_here%0APOSTGRES_URL%3Dpostgresql%2Basyncpg%3A//trading%3Ayour_secure_password_here%40localhost%3A5432/trading_db%0A%0AQUESTDB_ILP_HOST%3Dlocalhost%0AQUESTDB_ILP_PORT%3D9009%0AQUESTDB_PG_HOST%3Dlocalhost%0AQUESTDB_PG_PORT%3D8812%0AQUESTDB_PG_USER%3Dadmin%0AQUESTDB_PG_PASS%3D%0A%0ADISCORD_WEBHOOK_URL%3Dhttps%3A//discord.com/api/webhooks/...'))">Copy</button>  </div>  <pre><code class="language-bash"># .env
+POSTGRES_PASSWORD=your_secure_password_here
+POSTGRES_URL=postgresql+asyncpg://trading:your_secure_password_here@localhost:5432/trading_db
+
+QUESTDB_ILP_HOST=localhost
+QUESTDB_ILP_PORT=9009
+QUESTDB_PG_HOST=localhost
+QUESTDB_PG_PORT=8812
+QUESTDB_PG_USER=admin
+QUESTDB_PG_PASS=
+
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...</code></pre></div>
+<p>---</p>
+<h2>10. Performance &amp; Operational Notes</h2>
+<p>### QuestDB Tuning
+- <strong>Commit lag</strong>: <code>QDB_CAIRO_COMMIT_LAG=1000</code> (1 second) balances write latency vs. throughput. Lower = more visible for queries, higher = better batch ingestion performance.
+- <strong>Partition maintenance</strong>: Old partitions can be dropped: <code>ALTER TABLE ohlcv_bars DROP PARTITION LIST &#x27;2020-01-01&#x27;, &#x27;2020-01-02&#x27;;</code>
+- <strong>No UPDATEs</strong>: QuestDB WAL tables are append-only. For corrections, append a new row with the corrected data and filter in queries by <code>LATEST ON</code>.
+- <strong>Memory</strong>: QuestDB is JVM-based. Allocate at minimum 2GB, ideally 4GB+ for production workloads.</p>
+<p>### PostgreSQL Tuning
+- Use <code>JSONB</code> (not <code>JSON</code>) for all JSON columns — it&#x27;s indexed and binary-stored.
+- Add <code>GIN</code> indexes for JSONB columns queried with <code>-&gt;</code> operators: <code>CREATE INDEX idx_strategies_params ON strategies USING GIN (parameters);</code>
+- Use <code>TIMESTAMPTZ</code> (not <code>TIMESTAMP</code>) for all datetimes — always store UTC.</p>
+<p>### Connection Pooling
+- For production, put <strong>PgBouncer</strong> in front of PostgreSQL to manage connection limits.
+- QuestDB&#x27;s PostgreSQL wire protocol is not compatible with PgBouncer — connect directly or use HTTP REST API for queries.</p>
+<p>---</p>
+<h2>11. Key Documentation Links</h2>
+<div class="table-container">  <table>    <thead><tr><th>Resource</th><th>URL</th></tr></thead>    <tbody><tr><td>QuestDB Official Docs</td><td>https://questdb.com/docs/</td></tr><tr><td>QuestDB Python Client (ILP)</td><td>https://py-questdb-client.readthedocs.io/en/latest/</td></tr><tr><td>QuestDB SQL Reference</td><td>https://questdb.com/docs/reference/sql/overview/</td></tr><tr><td>QuestDB SAMPLE BY</td><td>https://questdb.com/docs/reference/sql/sample-by/</td></tr><tr><td>QuestDB ASOF JOIN</td><td>https://questdb.com/docs/reference/sql/asof-join/</td></tr><tr><td>QuestDB Docker Hub</td><td>https://hub.docker.com/r/questdb/questdb</td></tr><tr><td>QuestDB GitHub</td><td>https://github.com/questdb/questdb</td></tr><tr><td>SQLAlchemy Async Docs</td><td>https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html</td></tr><tr><td>asyncpg Docs</td><td>https://magicstack.github.io/asyncpg/current/</td></tr><tr><td>Alembic Async Cookbook</td><td>https://alembic.sqlalchemy.org/en/latest/cookbook.html</td></tr><tr><td>psycopg2 Docs</td><td>https://www.psycopg.org/docs/</td></tr><tr><td>FastAPI + SQLAlchemy Guide</td><td>https://fastapi.tiangolo.com/tutorial/sql-databases/</td></tr><tr><td>QuestDB Community Forum</td><td>https://community.questdb.com/</td></tr></tbody>  </table></div>
+<p>---</p>
+<h2>12. Implementation Checklist for AI Agent</h2>
+<p>### Phase 1 — Infrastructure
+- [ ] Deploy QuestDB via Docker Compose, verify Web Console at <code>:9000</code>
+- [ ] Deploy PostgreSQL via Docker Compose
+- [ ] Create <code>.env</code> with all credentials
+- [ ] Verify QuestDB ILP connection on port <code>9009</code>
+- [ ] Verify QuestDB PG wire connection on port <code>8812</code> (psycopg2)
+- [ ] Verify PostgreSQL connection on port <code>5432</code> (asyncpg)</p>
+<p>### Phase 2 — Schema
+- [ ] Create QuestDB tables: <code>ohlcv_bars</code>, <code>ticks</code>, <code>indicators</code>, <code>signals</code>
+- [ ] Initialize Alembic in project
+- [ ] Create PostgreSQL models: <code>Strategy</code>, <code>BacktestRun</code>, <code>Symbol</code>, <code>Watchlist</code>, <code>AlertConfig</code>
+- [ ] Run <code>alembic upgrade head</code> to apply migrations</p>
+<p>### Phase 3 — Python Clients
+- [ ] Implement <code>QuestDBWriter</code> (ILP ingestion)
+- [ ] Implement <code>QuestDBReader</code> (PG wire queries)
+- [ ] Implement async PostgreSQL session factory
+- [ ] Write unit tests for each client with sample data</p>
+<p>### Phase 4 — Data Pipeline
+- [ ] Build historical backfill script (yfinance or CSV)
+- [ ] Verify backfilled data in QuestDB Web Console
+- [ ] Build webhook ingestor (FastAPI) for TradingView alerts
+- [ ] Connect alert configs to Discord webhook via PostgreSQL <code>alert_configs</code> table</p>
+<p>### Phase 5 — Integration
+- [ ] Implement cross-DB enrichment service (QuestDB signals + PG strategy metadata)
+- [ ] Build n8n workflow to trigger on new signals (n8n has a native PostgreSQL node)
+- [ ] Dashboard: query QuestDB via HTTP REST API (<code>GET /exec?query=...</code>) for chart data</p>
+            </article>
+        </main>
+    </div>
+
+    <script>
+        async function copyToClipboard(button, text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                button.style.background = 'var(--tip-color)';
+                button.style.borderColor = 'var(--tip-color)';
+                button.style.color = '#ffffff';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.style.background = 'rgba(99, 102, 241, 0.15)';
+                    button.style.borderColor = 'rgba(99, 102, 241, 0.3)';
+                    button.style.color = '#a5b4fc';
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy text: ', err);
+            }
+        }
+    </script>
+</body>
+</html>

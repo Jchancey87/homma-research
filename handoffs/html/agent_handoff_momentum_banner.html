@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Handoff Momentum Banner - Handoff Document</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #0b0f19;
+            --bg-surface: rgba(17, 24, 39, 0.7);
+            --bg-card: rgba(30, 41, 59, 0.4);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-primary: #6366f1;
+            --accent-glow: rgba(99, 102, 241, 0.15);
+            
+            --note-color: #3b82f6;
+            --tip-color: #10b981;
+            --important-color: #8b5cf6;
+            --warning-color: #f59e0b;
+            --caution-color: #ef4444;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            line-height: 1.625;
+            -webkit-font-smoothing: antialiased;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.1) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(168, 85, 247, 0.08) 0px, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.3);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.3);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.5);
+        }
+
+        .layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar & Navigation */
+        .sidebar {
+            width: 300px;
+            background: var(--bg-surface);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-right: 1px solid var(--border-color);
+            padding: 2.5rem 1.5rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            z-index: 10;
+        }
+
+        .logo {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #a5b4fc, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .nav-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+        }
+
+        .nav-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .nav-link {
+            display: block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--text-primary);
+            padding-left: 1rem;
+        }
+
+        .nav-link.active {
+            border-left: 3px solid var(--accent-primary);
+            font-weight: 600;
+        }
+
+        /* Main Content Panel */
+        .content-panel {
+            margin-left: 300px;
+            flex-grow: 1;
+            padding: 4rem 5% 6rem 5%;
+            max-width: 1200px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-radius: 1rem;
+            padding: 3rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Typography */
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Outfit', sans-serif;
+            color: var(--text-primary);
+            font-weight: 700;
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            letter-spacing: -0.02em;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-top: 0;
+            background: linear-gradient(to right, #f8fafc, #cbd5e1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        h2 {
+            font-size: 1.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 0.5rem;
+        }
+
+        h3 { font-size: 1.35rem; }
+        h4 { font-size: 1.15rem; }
+
+        p, ul, ol, table, pre {
+            margin-bottom: 1.5rem;
+        }
+
+        p {
+            color: var(--text-secondary);
+        }
+
+        strong {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        /* Lists */
+        ul, ol {
+            padding-left: 1.5rem;
+            color: var(--text-secondary);
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+        }
+
+        /* Inline Code */
+        code:not(pre code) {
+            font-family: 'Fira Code', monospace;
+            background: rgba(99, 102, 241, 0.12);
+            color: #a5b4fc;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-size: 0.85em;
+            border: 1px solid rgba(99, 102, 241, 0.2);
+        }
+
+        /* Code Blocks */
+        .code-container {
+            position: relative;
+            background: #070a13;
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            margin: 1.5rem 0;
+            overflow: hidden;
+        }
+
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 1rem;
+            background: rgba(15, 23, 42, 0.6);
+            border-bottom: 1px solid var(--border-color);
+            font-family: 'Fira Code', monospace;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .copy-btn {
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            color: #a5b4fc;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            border-radius: 0.25rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .copy-btn:hover {
+            background: var(--accent-primary);
+            color: #ffffff;
+        }
+
+        pre {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.875rem;
+            padding: 1.25rem;
+            overflow-x: auto;
+            color: #e2e8f0;
+            margin-bottom: 0;
+        }
+
+        /* Tables */
+        .table-container {
+            overflow-x: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            margin: 2rem 0;
+            background: rgba(15, 23, 42, 0.2);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+            text-align: left;
+            margin-bottom: 0;
+        }
+
+        th, td {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background: rgba(15, 23, 42, 0.4);
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        /* Callouts / Alerts */
+        .alert {
+            border-left: 4px solid;
+            padding: 1.25rem 1.5rem;
+            border-radius: 0.5rem;
+            background: rgba(30, 41, 59, 0.2);
+            margin: 1.5rem 0;
+        }
+
+        .alert p:last-child {
+            margin-bottom: 0;
+        }
+
+        .alert-title {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .alert.note { border-color: var(--note-color); }
+        .alert.note .alert-title { color: var(--note-color); }
+
+        .alert.tip { border-color: var(--tip-color); }
+        .alert.tip .alert-title { color: var(--tip-color); }
+
+        .alert.important { border-color: var(--important-color); }
+        .alert.important .alert-title { color: var(--important-color); }
+
+        .alert.warning { border-color: var(--warning-color); }
+        .alert.warning .alert-title { color: var(--warning-color); }
+
+        .alert.caution { border-color: var(--caution-color); }
+        .alert.caution .alert-title { color: var(--caution-color); }
+
+        /* File Links */
+        a {
+            color: #818cf8;
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        a:hover {
+            color: #a5b4fc;
+            text-decoration: underline;
+        }
+
+        /* Responsive */
+        @media (max-width: 968px) {
+            .sidebar {
+                display: none;
+            }
+            .content-panel {
+                margin-left: 0;
+                padding: 2rem 1.5rem;
+            }
+            .card {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="logo">
+                <span>🛸</span> Homma Research
+            </div>
+            <nav class="nav-section">
+                <div class="nav-title">Documents</div>
+                <ul class="nav-list">
+                    <li><a href="006_schwab_momentum_screener_handoff.html" class="nav-link" data-filename="006_schwab_momentum_screener_handoff.html">006 Schwab Momentum Screener Handoff</a></li>
+<li><a href="007_webpage_troubleshooting_cors_auth_handoff.html" class="nav-link" data-filename="007_webpage_troubleshooting_cors_auth_handoff.html">007 Webpage Troubleshooting Cors Auth Handoff</a></li>
+<li><a href="008_ui_ux_theme_onboarding_enhancements_handoff.html" class="nav-link" data-filename="008_ui_ux_theme_onboarding_enhancements_handoff.html">008 Ui Ux Theme Onboarding Enhancements Handoff</a></li>
+<li><a href="009_production_build_port_issues_handoff.html" class="nav-link" data-filename="009_production_build_port_issues_handoff.html">009 Production Build Port Issues Handoff</a></li>
+<li><a href="010_no_news_pump_classifier_handoff.html" class="nav-link" data-filename="010_no_news_pump_classifier_handoff.html">010 No News Pump Classifier Handoff</a></li>
+<li><a href="011_schwab_streamer_troubleshooting.html" class="nav-link" data-filename="011_schwab_streamer_troubleshooting.html">011 Schwab Streamer Troubleshooting</a></li>
+<li><a href="012_schwab_yfinance_gainer_enrichment_handoff.html" class="nav-link" data-filename="012_schwab_yfinance_gainer_enrichment_handoff.html">012 Schwab Yfinance Gainer Enrichment Handoff</a></li>
+<li><a href="013_sigmap_antigravity_mcp_handoff.html" class="nav-link" data-filename="013_sigmap_antigravity_mcp_handoff.html">013 Sigmap Antigravity Mcp Handoff</a></li>
+<li><a href="agent_handoff_momentum_banner.html" class="nav-link" data-filename="agent_handoff_momentum_banner.html" class="nav-link active">Agent Handoff Momentum Banner</a></li>
+<li><a href="alerts_ui_handoff.html" class="nav-link" data-filename="alerts_ui_handoff.html">Alerts Ui Handoff</a></li>
+<li><a href="questdb_postgres_handoff.html" class="nav-link" data-filename="questdb_postgres_handoff.html">Questdb Postgres Handoff</a></li>
+                </ul>
+            </nav>
+        </aside>
+        <main class="content-panel">
+            <article class="card">
+                <p># AGENT HANDOFF SPECIFICATION
+<strong>Component:</strong> Momentum Breadth &amp; Market Health Banner  
+<strong>Target Location:</strong> Empty sub-header slot (directly beneath the SPY/QQQ/IWM index ticker line and above the &quot;LIVE GAINER SCREENER&quot; section)  
+<strong>Parent Application:</strong> TradeJournal Dashboard</p>
+<p>---</p>
+<p>## 1. Context &amp; Objectives
+The goal is to populate the blank <code>flex</code> row space in the dashboard header with high-utility, real-time macro-momentum data. Because this dashboard serves a low-float, high-velocity momentum strategy (Ross Cameron style), broad market indexes (SPY/QQQ) are insufficient indicators of small-cap liquidity and retail participation.</p>
+<p>This new component must aggregate live data from the underlying PostgreSQL database to give the trader an instant, 3-second read on whether small-cap momentum has &quot;juice&quot; today.</p>
+<p>---</p>
+<p>## 2. UI &amp; Aesthetic Requirements (Matching image_3b9d44.png)
+<em> <strong>Layout:</strong> A single horizontal <code>flex</code> container matching the width of the main content cards. Divide the space into 4 evenly spaced KPI grid blocks or borderless micro-cards.
+</em> <strong>Typography:</strong> Maintain the existing clean sans-serif stack. Use the crisp white styling for primary metrics and the muted gray/blue for labels.
+<em> <strong>Color-Coding (Badges):</strong> </em> Match the bright green (<code>#22c55e</code> or similar active green seen on the &quot;Market Open&quot; badge) for bullish momentum triggers.
+    <em> Use the existing warm orange/yellow tint (seen in the <code>RR</code> and <code>NNP</code> badges) for high-alert volatility metrics like active halts.
+</em> <strong>Responsiveness:</strong> Elements should scale down gracefully or wrap on smaller viewports, though primary focus is a widescreen desktop dashboard.</p>
+<p>---</p>
+<p>## 3. Data Requirements &amp; Backend Logic
+The agent should implement four distinct data components within that row. Source these metrics by filtering the active market data stream using the criteria from the global <strong>$2-$25 Filter</strong> toggled in the UI.</p>
+<p>### Block 1: Small-Cap Market Breadth (Advance/Decline)
+<em> <strong>Label:</strong> Small-Cap A/D Ratio
+</em> <strong>Logic:</strong> Query active tickers where Price is between $2 and $25 and Volume &gt; 0.
+<em> <strong>Primary Stat:</strong> Ratio format (e.g., <code>4.1 : 1</code> or <code>78 G / 19 R</code>).
+</em> <strong>Color Logic:</strong> Text color turns bright green if the ratio is $&gt; 3:1$ (indicating high systemic small-cap long interest).</p>
+<p>### Block 2: Aggregated Relative Volume (RVOL) Factor
+<em> <strong>Label:</strong> Top-5 Avg RVOL
+</em> <strong>Logic:</strong> Take the top 5 gainers by <code>% Change</code> currently in the database, calculate their individual RVOL (Current Volume / Avg Historical Volume at this time of day), and average them.
+<em> <strong>Primary Stat:</strong> Multiplier format (e.g., <code>6.4x</code>).
+</em> <strong>Subtext:</strong> &quot;High Liquidity Active&quot; or &quot;Low Liquidity/Dry&quot; based on a threshold of $3.0x$.</p>
+<p>### Block 3: Float Theme Identifier
+<em> <strong>Label:</strong> Dominant Float Theme
+</em> <strong>Logic:</strong> Look at the top 5 leading gainers. Determine if the majority of the float types fall under <code>Small (&lt;2M)</code>, <code>Medium (2M-20M)</code>, or <code>Large (&gt;20M)</code>. <em>(Matches the existing tag system in column 6 of the gainer screener).</em>
+<em> <strong>Primary Stat:</strong> Dynamic Badge text (e.g., <code>MICRO-FLOAT (&lt;2M)</code> or <code>MID-FLOAT</code>).
+</em> <strong>Value:</strong> Instantly informs the trader if micro-floats are coiling or if the market is favoring slightly higher liquidity names.</p>
+<p>### Block 4: Volatility &amp; Circuit Breaker (Halt Tracker)
+<em> <strong>Label:</strong> Active Volatility Halts
+</em> <strong>Logic:</strong> Count the total number of LUDP (Limit Up/Limit Down) trading halts triggered in the last 60 minutes across the watch list / universe.
+<em> <strong>Primary Stat:</strong> Count integer (e.g., <code>2 Halts Active</code>).
+</em> <strong>Subtext:</strong> Ticker names of active halts in an inline micro-badge (e.g., <code>[DXST] [BJDX]</code>).</p>
+<p>---</p>
+<p>## 4. Implementation Instructions for the Agent
+1.  Open the dashboard layout file containing the header structure.
+2.  Locate the wrapper container sitting immediately under the <code>SPY / QQQ / IWM</code> ticker row.
+3.  Inject a new component <code>&lt;MomentumBreadthBanner/&gt;</code>.
+4.  Ensure state hooks tie directly into the existing web socket / live polling frequency (<code>auto-refresh 1m</code> or 15s interval as shown in <strong>image_3b9d44.png</strong>).
+5.  Optimize the database queries running on the PostgreSQL backend to calculate these aggregates efficiently without blocking the primary live gainer table execution loop.</p>
+            </article>
+        </main>
+    </div>
+
+    <script>
+        async function copyToClipboard(button, text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                button.style.background = 'var(--tip-color)';
+                button.style.borderColor = 'var(--tip-color)';
+                button.style.color = '#ffffff';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.style.background = 'rgba(99, 102, 241, 0.15)';
+                    button.style.borderColor = 'rgba(99, 102, 241, 0.3)';
+                    button.style.color = '#a5b4fc';
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy text: ', err);
+            }
+        }
+    </script>
+</body>
+</html>

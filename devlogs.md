@@ -2,7 +2,23 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-10] Implement Caveman Skill & HTML Handoff Exportable
+
+### Summary
+* Implement Caveman Skill. Update rules. Omit agent-only filler words.
+* Write python parser. Convert md handoffs to premium HTML format.
+
+### What Changed
+* `AGENTS.md`: Define Caveman Skill rule under Style & Formatting. Terse writing style for internal docs, devlogs, agent memory.
+* `AGENT_MEMORY.md`: Apply Caveman Skill. Set session goals. Prune completed.
+* `scripts/export_handoffs.py`: Python CLI tool. Match regex, parse Markdown to responsive premium HTML. Styles include dark mode, Inter font, custom alert boxes, code block wrapper with Copy button.
+* `handoffs/alerts_ui_handoff`: Rename to `handoffs/alerts_ui_handoff.md` for batch parsing.
+* `handoffs/html/*`: Generated HTML files. Rich styled presentation of all developer handoffs.
+
+---
+
 ## [2026-06-08] Live Screener Full Refactor + News Pipeline Upgrade
+
 
 ### Summary
 Three separate fixes shipped this session: a backend crash caused by a type mismatch, a full clean rewrite of the live screener pipeline, and a major upgrade to the news enrichment loop using Massive as the primary source with a per-ticker retry state machine.

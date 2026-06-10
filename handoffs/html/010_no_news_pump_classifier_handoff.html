@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>010 No News Pump Classifier Handoff - Handoff Document</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #0b0f19;
+            --bg-surface: rgba(17, 24, 39, 0.7);
+            --bg-card: rgba(30, 41, 59, 0.4);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-primary: #6366f1;
+            --accent-glow: rgba(99, 102, 241, 0.15);
+            
+            --note-color: #3b82f6;
+            --tip-color: #10b981;
+            --important-color: #8b5cf6;
+            --warning-color: #f59e0b;
+            --caution-color: #ef4444;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            line-height: 1.625;
+            -webkit-font-smoothing: antialiased;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.1) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(168, 85, 247, 0.08) 0px, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.3);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.3);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.5);
+        }
+
+        .layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar & Navigation */
+        .sidebar {
+            width: 300px;
+            background: var(--bg-surface);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-right: 1px solid var(--border-color);
+            padding: 2.5rem 1.5rem;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            z-index: 10;
+        }
+
+        .logo {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #a5b4fc, #818cf8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .nav-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+        }
+
+        .nav-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .nav-link {
+            display: block;
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.375rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--text-primary);
+            padding-left: 1rem;
+        }
+
+        .nav-link.active {
+            border-left: 3px solid var(--accent-primary);
+            font-weight: 600;
+        }
+
+        /* Main Content Panel */
+        .content-panel {
+            margin-left: 300px;
+            flex-grow: 1;
+            padding: 4rem 5% 6rem 5%;
+            max-width: 1200px;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-radius: 1rem;
+            padding: 3rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+        }
+
+        /* Typography */
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Outfit', sans-serif;
+            color: var(--text-primary);
+            font-weight: 700;
+            margin-top: 2.5rem;
+            margin-bottom: 1rem;
+            letter-spacing: -0.02em;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-top: 0;
+            background: linear-gradient(to right, #f8fafc, #cbd5e1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        h2 {
+            font-size: 1.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 0.5rem;
+        }
+
+        h3 { font-size: 1.35rem; }
+        h4 { font-size: 1.15rem; }
+
+        p, ul, ol, table, pre {
+            margin-bottom: 1.5rem;
+        }
+
+        p {
+            color: var(--text-secondary);
+        }
+
+        strong {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        /* Lists */
+        ul, ol {
+            padding-left: 1.5rem;
+            color: var(--text-secondary);
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+        }
+
+        /* Inline Code */
+        code:not(pre code) {
+            font-family: 'Fira Code', monospace;
+            background: rgba(99, 102, 241, 0.12);
+            color: #a5b4fc;
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.25rem;
+            font-size: 0.85em;
+            border: 1px solid rgba(99, 102, 241, 0.2);
+        }
+
+        /* Code Blocks */
+        .code-container {
+            position: relative;
+            background: #070a13;
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            margin: 1.5rem 0;
+            overflow: hidden;
+        }
+
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 1rem;
+            background: rgba(15, 23, 42, 0.6);
+            border-bottom: 1px solid var(--border-color);
+            font-family: 'Fira Code', monospace;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .copy-btn {
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            color: #a5b4fc;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            border-radius: 0.25rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .copy-btn:hover {
+            background: var(--accent-primary);
+            color: #ffffff;
+        }
+
+        pre {
+            font-family: 'Fira Code', monospace;
+            font-size: 0.875rem;
+            padding: 1.25rem;
+            overflow-x: auto;
+            color: #e2e8f0;
+            margin-bottom: 0;
+        }
+
+        /* Tables */
+        .table-container {
+            overflow-x: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 0.75rem;
+            margin: 2rem 0;
+            background: rgba(15, 23, 42, 0.2);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+            text-align: left;
+            margin-bottom: 0;
+        }
+
+        th, td {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background: rgba(15, 23, 42, 0.4);
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        /* Callouts / Alerts */
+        .alert {
+            border-left: 4px solid;
+            padding: 1.25rem 1.5rem;
+            border-radius: 0.5rem;
+            background: rgba(30, 41, 59, 0.2);
+            margin: 1.5rem 0;
+        }
+
+        .alert p:last-child {
+            margin-bottom: 0;
+        }
+
+        .alert-title {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .alert.note { border-color: var(--note-color); }
+        .alert.note .alert-title { color: var(--note-color); }
+
+        .alert.tip { border-color: var(--tip-color); }
+        .alert.tip .alert-title { color: var(--tip-color); }
+
+        .alert.important { border-color: var(--important-color); }
+        .alert.important .alert-title { color: var(--important-color); }
+
+        .alert.warning { border-color: var(--warning-color); }
+        .alert.warning .alert-title { color: var(--warning-color); }
+
+        .alert.caution { border-color: var(--caution-color); }
+        .alert.caution .alert-title { color: var(--caution-color); }
+
+        /* File Links */
+        a {
+            color: #818cf8;
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+
+        a:hover {
+            color: #a5b4fc;
+            text-decoration: underline;
+        }
+
+        /* Responsive */
+        @media (max-width: 968px) {
+            .sidebar {
+                display: none;
+            }
+            .content-panel {
+                margin-left: 0;
+                padding: 2rem 1.5rem;
+            }
+            .card {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="sidebar">
+            <div class="logo">
+                <span>🛸</span> Homma Research
+            </div>
+            <nav class="nav-section">
+                <div class="nav-title">Documents</div>
+                <ul class="nav-list">
+                    <li><a href="006_schwab_momentum_screener_handoff.html" class="nav-link" data-filename="006_schwab_momentum_screener_handoff.html">006 Schwab Momentum Screener Handoff</a></li>
+<li><a href="007_webpage_troubleshooting_cors_auth_handoff.html" class="nav-link" data-filename="007_webpage_troubleshooting_cors_auth_handoff.html">007 Webpage Troubleshooting Cors Auth Handoff</a></li>
+<li><a href="008_ui_ux_theme_onboarding_enhancements_handoff.html" class="nav-link" data-filename="008_ui_ux_theme_onboarding_enhancements_handoff.html">008 Ui Ux Theme Onboarding Enhancements Handoff</a></li>
+<li><a href="009_production_build_port_issues_handoff.html" class="nav-link" data-filename="009_production_build_port_issues_handoff.html">009 Production Build Port Issues Handoff</a></li>
+<li><a href="010_no_news_pump_classifier_handoff.html" class="nav-link" data-filename="010_no_news_pump_classifier_handoff.html" class="nav-link active">010 No News Pump Classifier Handoff</a></li>
+<li><a href="011_schwab_streamer_troubleshooting.html" class="nav-link" data-filename="011_schwab_streamer_troubleshooting.html">011 Schwab Streamer Troubleshooting</a></li>
+<li><a href="012_schwab_yfinance_gainer_enrichment_handoff.html" class="nav-link" data-filename="012_schwab_yfinance_gainer_enrichment_handoff.html">012 Schwab Yfinance Gainer Enrichment Handoff</a></li>
+<li><a href="013_sigmap_antigravity_mcp_handoff.html" class="nav-link" data-filename="013_sigmap_antigravity_mcp_handoff.html">013 Sigmap Antigravity Mcp Handoff</a></li>
+<li><a href="agent_handoff_momentum_banner.html" class="nav-link" data-filename="agent_handoff_momentum_banner.html">Agent Handoff Momentum Banner</a></li>
+<li><a href="alerts_ui_handoff.html" class="nav-link" data-filename="alerts_ui_handoff.html">Alerts Ui Handoff</a></li>
+<li><a href="questdb_postgres_handoff.html" class="nav-link" data-filename="questdb_postgres_handoff.html">Questdb Postgres Handoff</a></li>
+                </ul>
+            </nav>
+        </aside>
+        <main class="content-panel">
+            <article class="card">
+                <h1>No-News Pump Classifier &amp; News Aggregator Handoff</h1>
+<p><strong>Date</strong>: 2026-05-26  
+<strong>Scope</strong>: Full-stack — backend services, DB migration, EOD ingest, live screener, frontend UI  
+<strong>Status</strong>: ✅ Complete &amp; deployed</p>
+<p>---</p>
+<h2>1. What Was Built</h2>
+<p>A two-phase catalyst classification system that automatically tags every live gainer with one of three tiers and surfaces the result in the UI — so you can instantly tell whether a move is fundamental or pure tape-speed speculation.</p>
+<h3>Catalyst Tier Taxonomy</h3>
+<div class="table-container">  <table>    <thead><tr><th>Tag</th><th>Trigger Condition</th><th>UI</th></tr></thead>    <tbody><tr><td><code>Confirmed Catalyst</code></td><td><code>news_headline</code> is populated</td><td>Existing italic headline text in drawer</td></tr><tr><td><code>Technical / No News</code></td><td>No news + <code>gap_pct ≥ 30%</code> + <code>rvol_15m ≥ 2x</code></td><td>Orange ⚠️ <strong>NNP</strong> pill in table row + orange badge in drawer</td></tr><tr><td><code>Speculative</code></td><td>No news + low or unknown RVOL</td><td>Gray <strong>? SPEC</strong> pill in table row + gray badge in drawer</td></tr></tbody>  </table></div>
+<p>---</p>
+<h2>2. New Files</h2>
+<p>### <a href="file:///home/jackc/projects/homma-research/backend/services/news_aggregator.py"><code>backend/services/news_aggregator.py</code></a>
+Pluggable news source interface built on Python ABCs.</p>
+<div class="code-container">  <div class="code-header">    <span>CODE</span>    <button class="copy-btn" onclick="copyToClipboard(this, decodeURIComponent('NewsSource%20%28ABC%29%0A%20%20%E2%94%94%E2%94%80%E2%94%80%20get_news%28ticker%2C%20hours_back%29%20-%3E%20list%5Bdict%5D%0A%0AYFinanceNewsSource%28NewsSource%29%20%20%20%20%20%E2%86%90%20live%2C%20no%20API%20key%20required%0ABenzingaNewsSource%28NewsSource%29%20%20%20%20%20%E2%86%90%20stub%2C%20raises%20NotImplementedError%0A%0ANewsAggregator%0A%20%20%E2%94%94%E2%94%80%E2%94%80%20fan-out%20orchestrator%2C%20de-duplicates%20by%20title%20prefix%0A%20%20%E2%94%94%E2%94%80%E2%94%80%20has_news%28ticker%2C%20hours_back%29%20-%3E%20bool%20%20%20%E2%86%90%20short-circuits%20on%20first%20hit%0A%0Aget_default_aggregator%28%29%20-%3E%20NewsAggregator%20%20%E2%86%90%20update%20here%20to%20add%20future%20sources'))">Copy</button>  </div>  <pre><code class="language-code">NewsSource (ABC)
+  └── get_news(ticker, hours_back) -&gt; list[dict]
+
+YFinanceNewsSource(NewsSource)     ← live, no API key required
+BenzingaNewsSource(NewsSource)     ← stub, raises NotImplementedError
+
+NewsAggregator
+  └── fan-out orchestrator, de-duplicates by title prefix
+  └── has_news(ticker, hours_back) -&gt; bool   ← short-circuits on first hit
+
+get_default_aggregator() -&gt; NewsAggregator  ← update here to add future sources</code></pre></div>
+<p><strong>To plug in a future in-house aggregator:</strong>
+1. Create a class that subclasses <code>NewsSource</code>
+2. Implement <code>get_news(ticker, hours_back) -&gt; list[dict]</code>
+3. Add it to <code>get_default_aggregator()</code>:
+   &lt;!--CODEBLOCK_1--&gt;python
+stamp_catalyst_tags(gainers: list[dict]) -&gt; list[dict]
+&lt;!--CODEBLOCK_2--&gt;python
+start_news_enrichment_loop(get_current_gainers_fn, interval_seconds=180)
+&lt;!--CODEBLOCK_3--&gt;typescript
+// Added to LiveGainerRow:
+catalyst?:  string | null   // &#x27;Confirmed Catalyst&#x27; | &#x27;Technical / No News&#x27; | &#x27;Speculative&#x27;
+&lt;!--CODEBLOCK_4--&gt;
+⚠️ NNP  ← orange, tooltip: &quot;No-News Pump — speculative volatility, no fundamental catalyst&quot;
+? SPEC   ← gray, tooltip: &quot;Speculative — low/unknown RVOL, no confirmed catalyst&quot;
+&lt;!--CODEBLOCK_5--&gt;
+Confirmed Catalyst + headline  → italic gray headline text (unchanged)
+Technical / No News            → orange ⚠️ &quot;Speculative Volatility / No News&quot; badge + subtext
+Speculative                    → gray &quot;? Unconfirmed Momentum&quot; badge + subtext
+null catalyst                  → &quot;No recent news&quot; (fallback, unchanged)
+&lt;!--CODEBLOCK_6--&gt;sql
+-- Column on daily_gainers
+catalyst TEXT   -- &#x27;Confirmed Catalyst&#x27; | &#x27;Technical / No News&#x27; | &#x27;Speculative&#x27; | NULL</p>
+<p>-- New table
+pump_classifications (
+    id             SERIAL PRIMARY KEY,
+    ticker         TEXT        NOT NULL,
+    date           DATE        NOT NULL,
+    catalyst_tag   TEXT        NOT NULL,
+    gap_pct        NUMERIC(8,2),
+    rvol           NUMERIC(8,2),
+    float_shares   BIGINT,
+    classified_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    news_source    TEXT,       -- &#x27;lightweight_check&#x27; | &#x27;yfinance_verify&#x27; | &#x27;ingest_pipeline&#x27;
+    UNIQUE (ticker, date)
+);
+&lt;!--CODEBLOCK_7--&gt;bash
+sudo pm2 restart fastapi-backend
+&lt;!--CODEBLOCK_8--&gt;bash
+cd /opt/trading-journal/frontend &amp;&amp; sudo npm run build
+sudo pm2 restart nextjs-frontend
+&lt;!--CODEBLOCK_9--&gt;python
+class MyCustomNewsSource(NewsSource):
+    def get_news(self, ticker: str, hours_back: int = 24) -&gt; list[dict]:
+        # Call your own scraper / API here
+        # Return list of {&#x27;title&#x27;: ..., &#x27;published&#x27;: ..., &#x27;source&#x27;: ..., &#x27;description&#x27;: ...}
+        ...</p>
+<p>def get_default_aggregator() -&gt; NewsAggregator:
+    return NewsAggregator(sources=[
+        YFinanceNewsSource(),
+        MyCustomNewsSource(),   # ← add here
+    ])
+&lt;!--CODEBLOCK_10--&gt;sql
+-- All &#x27;Technical / No News&#x27; pumps this month
+SELECT ticker, date, gap_pct, rvol, news_source
+FROM pump_classifications
+WHERE catalyst_tag = &#x27;Technical / No News&#x27;
+  AND date &gt;= date_trunc(&#x27;month&#x27;, CURRENT_DATE)
+ORDER BY gap_pct DESC;</p>
+<p>-- Compare tier distribution
+SELECT catalyst_tag, COUNT(*) as count, AVG(gap_pct) as avg_gap, AVG(rvol) as avg_rvol
+FROM pump_classifications
+GROUP BY catalyst_tag
+ORDER BY count DESC;
+```</p>
+            </article>
+        </main>
+    </div>
+
+    <script>
+        async function copyToClipboard(button, text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                button.style.background = 'var(--tip-color)';
+                button.style.borderColor = 'var(--tip-color)';
+                button.style.color = '#ffffff';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.style.background = 'rgba(99, 102, 241, 0.15)';
+                    button.style.borderColor = 'rgba(99, 102, 241, 0.3)';
+                    button.style.color = '#a5b4fc';
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy text: ', err);
+            }
+        }
+    </script>
+</body>
+</html>
