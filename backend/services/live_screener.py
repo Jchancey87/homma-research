@@ -57,6 +57,13 @@ _daily_cache_lock  = threading.Lock()
 _last_auth_alert_ts = 0.0
 _auth_alert_lock    = threading.Lock()
 
+_last_session: str  = 'closed'   # Track session transitions for cache flushing
+_session_lock       = threading.Lock()
+
+# Maximum age (seconds) for a candle to be valid for mom_2m calculation.
+# If the best-matching candle is older than this, mom_2m is set to None.
+MAX_MOM_CANDLE_AGE_S = 300   # 5 minutes
+
 
 # ── Market session ─────────────────────────────────────────────────────────────
 
@@ -366,10 +373,20 @@ def _compute_minute_metrics(ticker: str, last_price: Optional[float],
     now_ms     = int(time.time() * 1000)
     target_ts  = now_ms - 120_000   # exactly 2 minutes ago
     best       = min(candles, key=lambda c: abs((c.get('t') or 0) - target_ts))
-    price_2min_ago = best.get('c')
-    mom_2m = 0.0
-    if price_2min_ago and price_2min_ago > 0 and curr_p:
-        mom_2m = round(((curr_p - price_2min_ago) / price_2min_ago) * 100, 2)
+    best_ts    = best.get('t') or 0
+    candle_age_s = abs(now_ms - best_ts) / 1000.0 if best_ts else float('inf')
+
+    # Guard: if the closest candle is too far from the 2-min-ago target,
+    # it's stale data (e.g. yesterday's candles at morning start).
+    if candle_age_s > MAX_MOM_CANDLE_AGE_S:
+        price_2min_ago = None
+        mom_2m = None
+        log.debug(f"[Screener] {ticker}: best candle for mom_2m is {candle_age_s:.0f}s old — marking as None")
+    else:
+        price_2min_ago = best.get('c')
+        mom_2m = 0.0
+        if price_2min_ago and price_2min_ago > 0 and curr_p:
+            mom_2m = round(((curr_p - price_2min_ago) / price_2min_ago) * 100, 2)
 
     # ── VWAP (intraday, cumulative) ──
     total_vol = sum(c.get('v') or 0 for c in candles)
@@ -738,6 +755,21 @@ def _background_refresh_loop():
         try:
             time.sleep(CACHE_TTL_SECONDS)
             session = get_market_session()
+
+            # ── Session transition: flush per-ticker caches ──
+            # This prevents stale yesterday data from leaking into
+            # the first refresh of a new pre-market/open session.
+            global _last_session
+            with _session_lock:
+                prev = _last_session
+                _last_session = session
+            if prev != session:
+                log.info(f"[Screener] Session transition: {prev} → {session} — flushing per-ticker caches")
+                with _minute_cache_lock:
+                    _minute_cache.clear()
+                with _daily_cache_lock:
+                    _daily_cache.clear()
+
             if session != 'closed':
                 log.info(f"[Screener] Auto-refresh (session={session})")
                 refresh_cache(force=True)
