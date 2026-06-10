@@ -15,6 +15,9 @@ This file tracks major milestones, debugging struggles, architectural decisions,
 * `handoffs/alerts_ui_handoff`: Rename to `handoffs/alerts_ui_handoff.md` for batch parsing.
 * `handoffs/html/*`: Generated HTML files. Rich styled presentation of all developer handoffs.
 
+### Git Commit
+`cb7962b` - feat(docs): implement caveman skill and HTML handoffs exportable script
+
 ---
 
 ## [2026-06-08] Live Screener Full Refactor + News Pipeline Upgrade
