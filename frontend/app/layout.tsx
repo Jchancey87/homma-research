@@ -30,7 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className={`${inter.className} bg-[var(--background)] text-[var(--foreground)] min-h-screen transition-colors duration-300`}>
         <NavBar />
-        <main className="max-w-screen-2xl mx-auto px-4 py-6">{children}</main>
+        <main className="max-w-[1920px] mx-auto px-3 py-6">{children}</main>
         <OnboardingWizard />
       </body>
     </html>

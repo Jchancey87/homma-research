@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import time
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
@@ -448,5 +448,66 @@ async def get_momentum_breadth(
             "count": len(halt_tickers),
             "tickers": halt_tickers
         }
+    }
+
+
+# ---------------------------------------------------------------------------
+# Debug: Candle freshness diagnostic
+# ---------------------------------------------------------------------------
+
+@router.get("/debug/candles/{ticker}", tags=["debug"])
+async def debug_candles(ticker: str):
+    """
+    Diagnostic endpoint: show candle freshness for a ticker.
+    Helps verify whether mom_2m would be valid (candle < 5 min from target).
+    """
+    from services.schwab_client import get_minute_bars
+    from services.live_screener import get_market_session
+
+    ticker = ticker.upper()
+    candles = await asyncio.to_thread(get_minute_bars, ticker)
+    now_ms = int(time.time() * 1000)
+    target_ts = now_ms - 120_000  # 2 minutes ago
+
+    if not candles:
+        return {
+            "ticker": ticker,
+            "total_candles": 0,
+            "newest_candle_ts": None,
+            "newest_candle_age_s": None,
+            "oldest_candle_ts": None,
+            "target_2min_ago_ts": datetime.fromtimestamp(target_ts / 1000, tz=timezone.utc).isoformat(),
+            "best_match_ts": None,
+            "best_match_age_s": None,
+            "best_match_close": None,
+            "mom_2m_valid": False,
+            "session": get_market_session(),
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    def _ts_iso(ms):
+        return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).isoformat() if ms else None
+
+    timestamps = [c.get('t') or 0 for c in candles]
+    newest_ts = max(timestamps)
+    oldest_ts = min(timestamps)
+
+    best = min(candles, key=lambda c: abs((c.get('t') or 0) - target_ts))
+    best_ts = best.get('t') or 0
+    best_age_s = round(abs(target_ts - best_ts) / 1000, 1)
+
+    return {
+        "ticker": ticker,
+        "total_candles": len(candles),
+        "newest_candle_ts": _ts_iso(newest_ts),
+        "newest_candle_age_s": round((now_ms - newest_ts) / 1000, 1),
+        "oldest_candle_ts": _ts_iso(oldest_ts),
+        "target_2min_ago_ts": _ts_iso(target_ts),
+        "best_match_ts": _ts_iso(best_ts),
+        "best_match_age_s": best_age_s,
+        "best_match_close": best.get('c'),
+        "mom_2m_valid": best_age_s <= 300,
+        "session": get_market_session(),
+        "checked_at": datetime.now(timezone.utc).isoformat(),
     }
 

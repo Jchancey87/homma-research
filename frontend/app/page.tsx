@@ -149,7 +149,7 @@ async function ContinuationPicksPanel() {
 
 export default async function DashboardPage() {
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto">
+    <div className="space-y-6 max-w-[1920px] mx-auto">
 
       {/* ── Morning header ── */}
       <MorningHeader />
