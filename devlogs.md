@@ -973,3 +973,15 @@ Diagnosed the failed nightly market brief email delivery and resolved a ModuleNo
 * **Celery Import Bugfix (`llm_tasks.py`)**: Removed the obsolete import `from backend.routes.analysis import _CACHE_TTL` in [llm_tasks.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/tasks/llm_tasks.py) which caused a `ModuleNotFoundError` on Celery worker threads.
 * **SMTP Credentials Audit**: Verified via `debug_email_status.py` that both development and production Gmail SMTP passwords return `535 BadCredentials` authentication errors, explaining the missing nightly market brief emails.
 * **Digital Garden Routing Guidance**: Documented the root cause of the digital garden SSRF private IP block error and provided instructions to switch the API endpoint to the public proxy domain `https://homma-research.homma.casa`.
+
+---
+
+## [2026-06-11] Health Check: Expired Schwab Token CPU Loop & Log Bloat
+
+### Summary
+Identified expired/revoked Schwab OAuth token causing infinite restart loop of `schwab-streamer` service under PM2 and backend API failures. Resulted in high CPU usage and log file bloat (`streamer-err.log` at 127MB, `fastapi-err.log` at 37MB).
+
+### What Changed
+* **Identified Crash Loop**: Expired/revoked Schwab OAuth token triggers `OAuthError` in `schwab-streamer` login. PM2 configured with `autorestart: true` immediately restarts process, causing infinite loop.
+* **Identified Backend API Errors**: Backend FastAPI server (`fastapi-backend`) constantly retries Schwab API requests, generating high logging volume and 400 Bad Request responses.
+* **Log Bloat**: Large error log accumulation in `/var/log/trading-journal/`.

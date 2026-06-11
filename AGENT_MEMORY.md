@@ -29,9 +29,9 @@
 * **Deploy:** Run `sudo /opt/trading-journal/deploy.sh` (push from `/home/jackc/projects/homma-research` first).
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Implement Caveman Skill. Update `AGENTS.md` & `devlogs.md`.
-* **Goal:** Create HTML handoff exportable script. Convert `.md` handoffs to premium `.html` files.
-* **Status:** Commencing implementation.
+* **Goal:** Diagnose high CPU usage.
+* **Findings:** Expired Schwab OAuth token causes infinite PM2 restart loop on `schwab-streamer` and spamming `fastapi-backend` error logs.
+* **Remediation:** Recommend manual OAuth token re-authorization using `schwab_auth_setup.py`.
 
 ## 🗑️ Rot & Pruning Log
 * Pruned debug ticker research goal. Completed.
