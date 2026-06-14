@@ -17,7 +17,7 @@ Business logic is fully decoupled from routes for testability and reuse:
 
 | Service | Purpose |
 |---|---|
-| `polygon_client.py` | **Official Massive.com SDK adapter** (fka Polygon.io) — all market-data REST calls route through here: gainers snapshot, grouped daily bars, minute bars, news, ticker details |
+| `schwab_client.py` | **Canonical Schwab API facade** (replaces the deprecated `polygon_client.py` / `polygon_service.py` shims) — re-exports every low-level helper from `momentum_screener.schwab.http_client` and provides legacy-Polygon-shape adapters (gainers snapshot, minute/daily bars, ticker details). Routers, jobs, and services must import from here, not from `momentum_screener.schwab.http_client` directly. |
 | `fmp_service.py` | Financial Modeling Prep integration — fundamental metrics, cash runway, earnings, analyst targets, institutional ownership |
 | `sec_service.py` | SEC EDGAR integration — CIK lookup, filing fetches (Submissions API), EFTS full-text search, XBRL shares history |
 | `risk_service.py` | Risk Detection data pipeline — reverse splits, short interest, insider activity, S-3/424B filings, toxic financing search |
@@ -171,6 +171,6 @@ pip install -U massive   # replaces polygon-api-client
 ```
 
 - SDK entry points: `from massive import RESTClient, WebSocketClient`
-- All calls are centralised in `services/polygon_client.py` — no raw HTTP calls to Polygon/Massive endpoints anywhere else.
+- All calls are centralised in `services/schwab_client.py` — no raw HTTP calls to Polygon/Massive endpoints anywhere else.
 - Gap % for ingested gainers uses the **day-open vs prev-close** from grouped daily bars (not the live last-trade price), ensuring accurate historical gap calculation.
 - Reference: [massive-com/client-python](https://github.com/massive-com/client-python)

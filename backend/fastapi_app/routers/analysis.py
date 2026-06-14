@@ -3,17 +3,12 @@ fastapi_app/routers/analysis.py
 FastAPI port of routes/analysis.py
 """
 import uuid
-import asyncio
-from datetime import datetime, date, time, timedelta
-from typing import Optional, List
-import pytz
-import pandas as pd
-import numpy as np
-import yfinance as yf
+from datetime import date, datetime
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Request, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 import logging
 import asyncpg
 
@@ -21,12 +16,8 @@ log = logging.getLogger(__name__)
 
 from fastapi_app.db import get_db, row_to_dict, rows_to_list
 from fastapi_app.tasks import llm_tasks
+from services.chart_data_service import get_chart_data as _get_chart_data, ChartDataNotFoundError
 
-router = APIRouter(prefix="/analysis", tags=["analysis"]) # Wait, in Flask it was registered as /api/analysis or was it registered directly? Let's check main.py later. The plan says prefix="/api", and router is included under prefix="/api". The routes in Flask were /continuation, /research, etc.
-# Wait! In Flask, `analysis_bp` had no prefix, it was registered in app.py as app.register_blueprint(analysis_bp, url_prefix='/api'). 
-# In FastAPI, we'll just not use a prefix here and let main.py handle it, OR we'll use prefix="" 
-
-# Let's redefine router to match exact Flask paths which were e.g. /api/continuation.
 router = APIRouter(tags=["analysis"])
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -307,222 +298,10 @@ async def get_chart_data(
 ):
     """
     Return OHLCV + all indicator series as JSON for the interactive Lightweight Charts frontend.
-    This queries TimescaleDB first, then falls back to live API fetching (Polygon/yfinance).
+    Delegates to services.chart_data_service.get_chart_data which owns the
+    DB read, fallback chain, indicator math, and cache write.
     """
-    import pytz
-    from datetime import datetime, time, timedelta
-    
-    ticker_val = ticker.upper().strip()
-    date_str = date.isoformat()
-    
-    # Try to fetch from internal TimescaleDB
-    db_bars = None
     try:
-        eastern = pytz.timezone('US/Eastern')
-        start_dt = eastern.localize(datetime.combine(date, time.min))
-        end_dt = eastern.localize(datetime.combine(date, time.max))
-        
-        rows = await db.fetch(
-            """
-            SELECT timestamp, open, high, low, close, volume
-            FROM price_history_1min
-            WHERE symbol = $1
-              AND timestamp >= $2
-              AND timestamp <= $3
-            ORDER BY timestamp ASC
-            """,
-            ticker_val,
-            start_dt,
-            end_dt
-        )
-        if rows:
-            db_bars = [
-                {
-                    "time": r["timestamp"],
-                    "open": r["open"],
-                    "high": r["high"],
-                    "low": r["low"],
-                    "close": r["close"],
-                    "volume": r["volume"]
-                }
-                for r in rows
-            ]
-    except Exception as exc:
-        log.error("Failed to query price_history_1min for chart-data: %s", exc)
-
-    def _compute_chart_data(db_bars=None, mini_mode=False):
-        import pandas as pd
-        import numpy as np
-        from fastapi_app.tasks.llm_tasks import _fetch_intraday_polygon
-        import yfinance as yf
-
-        if db_bars:
-            bars_df = pd.DataFrame(db_bars)
-            bars_df.set_index('time', inplace=True)
-        else:
-            # 1. Try Schwab API first
-            bars_df = pd.DataFrame()
-            try:
-                from momentum_screener.schwab.http_client import get_price_history_every_minute
-                candles = get_price_history_every_minute(ticker_val, start_datetime=start_dt, end_datetime=end_dt)
-                if candles:
-                    bars_df = pd.DataFrame(candles)
-                    bars_df = bars_df.rename(columns={'datetime': 't'})
-                    bars_df['timestamp'] = pd.to_datetime(bars_df['t'], unit='ms', utc=True)
-                    bars_df = bars_df.set_index('timestamp')
-            except Exception as e:
-                log.error("Failed to fetch from Schwab in chart-data fallback: %s", e)
-
-            # 2. Try Polygon fallback
-            if bars_df.empty:
-                bars_df = _fetch_intraday_polygon(ticker_val, date_str)
-
-            # 3. Try yfinance fallback
-            if bars_df.empty:
-                try:
-                    start_dt_yf = datetime.strptime(date_str, '%Y-%m-%d')
-                    end_dt_yf   = start_dt_yf + timedelta(days=1)
-                    yf_df = yf.download(ticker_val,
-                                         start=start_dt_yf.strftime('%Y-%m-%d'),
-                                         end=end_dt_yf.strftime('%Y-%m-%d'),
-                                         interval='1m', prepost=True, progress=False)
-                    if not yf_df.empty:
-                        if hasattr(yf_df.columns, 'levels'):
-                            yf_df.columns = yf_df.columns.get_level_values(0)
-                        yf_df = yf_df.rename(columns={
-                            'Open': 'open', 'High': 'high', 'Low': 'low',
-                            'Close': 'close', 'Volume': 'volume'
-                        })
-                        bars_df = yf_df
-                except Exception as e:
-                    pass
-
-            # 4. Try previous day fallback (Polygon/yfinance)
-            if bars_df.empty:
-                try:
-                    prev_date = (datetime.strptime(date_str, '%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
-                    bars_df = _fetch_intraday_polygon(ticker_val, prev_date)
-                    if bars_df.empty:
-                        start_dt_yf = datetime.strptime(prev_date, '%Y-%m-%d')
-                        end_dt_yf   = start_dt_yf + timedelta(days=1)
-                        bars_df = yf.download(ticker_val, start=start_dt_yf.strftime('%Y-%m-%d'),
-                                             end=end_dt_yf.strftime('%Y-%m-%d'),
-                                             interval='1m', prepost=True, progress=False)
-                        if not bars_df.empty and hasattr(bars_df.columns, 'levels'):
-                            bars_df.columns = bars_df.columns.get_level_values(0)
-                            bars_df = bars_df.rename(columns={'Open':'open','High':'high','Low':'low','Close':'close','Volume':'volume'})
-                except: pass
-
-        if bars_df.empty:
-            return None, []
-
-        records_to_insert = []
-        if not db_bars and not bars_df.empty:
-            utc = pytz.utc
-            for idx, row in bars_df.iterrows():
-                ts = idx.to_pydatetime()
-                if ts.tzinfo is None:
-                    ts = ts.replace(tzinfo=utc)
-                else:
-                    ts = ts.astimezone(utc)
-                records_to_insert.append((
-                    ticker_val,
-                    ts,
-                    float(row['open']),
-                    float(row['high']),
-                    float(row['low']),
-                    float(row['close']),
-                    int(row['volume']) if pd.notna(row['volume']) else 0
-                ))
-
-        df = bars_df[['open', 'high', 'low', 'close', 'volume']].copy()
-
-        if hasattr(df.index, 'tz') and df.index.tz is not None:
-            df.index = df.index.tz_convert('UTC')
-        else:
-            df.index = df.index.tz_localize('UTC', ambiguous='infer', nonexistent='shift_forward')
-        epoch = pd.Timestamp('1970-01-01', tz='UTC')
-        df['time'] = ((df.index - epoch).total_seconds()).astype(int)
-
-        if mini_mode:
-            df['ema_21'] = df['close'].ewm(span=21, adjust=False).mean()
-            df = df.dropna(subset=['ema_21'])
-        else:
-            for span in [8, 13, 21, 34, 55]:
-                df[f'ema_{span}'] = df['close'].ewm(span=span, adjust=False).mean()
-
-            vol_avg = df['volume'].rolling(20).mean()
-            df['rvol'] = (df['volume'] / vol_avg).fillna(1.0)
-
-            tr1 = df['high'] - df['low']
-            tr2 = (df['high'] - df['close'].shift(1)).abs()
-            tr3 = (df['low']  - df['close'].shift(1)).abs()
-            tr  = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
-            df['atr'] = tr.ewm(alpha=1/14, adjust=False).mean()
-
-            up_move   = df['high'] - df['high'].shift(1)
-            down_move = df['low'].shift(1) - df['low']
-            pos_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0.0)
-            neg_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0.0)
-            pos_dm_s  = pd.Series(pos_dm, index=df.index).ewm(alpha=1/14, adjust=False).mean()
-            neg_dm_s  = pd.Series(neg_dm, index=df.index).ewm(alpha=1/14, adjust=False).mean()
-            tr_s      = tr.ewm(alpha=1/14, adjust=False).mean()
-            df['plus_di']  = 100 * (pos_dm_s / tr_s)
-            df['minus_di'] = 100 * (neg_dm_s / tr_s)
-            dx = 100 * (df['plus_di'] - df['minus_di']).abs() / (df['plus_di'] + df['minus_di']).abs()
-            df['adx'] = dx.ewm(alpha=1/14, adjust=False).mean()
-            df = df.dropna(subset=['ema_55', 'adx'])
-
-        t = df['time'].tolist()
-
-        def line_series(col: str):
-            return [{'time': int(ti), 'value': round(float(v), 4)}
-                    for ti, v in zip(t, df[col]) if not (isinstance(v, float) and v != v)]
-
-        ohlcv_records = [
-            {'time': int(ti), 'open': round(float(o), 4), 'high': round(float(h), 4),
-             'low': round(float(l), 4), 'close': round(float(c), 4)}
-            for ti, o, h, l, c in zip(t, df['open'], df['high'], df['low'], df['close'])
-        ]
-        vol_colors = ['rgba(34,211,167,0.5)' if c >= o else 'rgba(240,77,90,0.5)'
-                      for c, o in zip(df['close'], df['open'])]
-        vol_records = [
-            {'time': int(ti), 'value': int(v), 'color': col}
-            for ti, v, col in zip(t, df['volume'], vol_colors)
-        ]
-
-        if mini_mode:
-            return {
-                'ohlcv':    ohlcv_records,
-                'volume':   vol_records,
-                'ema_21':   line_series('ema_21'),
-            }, records_to_insert
-
-        return {
-            'ohlcv':    ohlcv_records,
-            'volume':   vol_records,
-            'rvol':     line_series('rvol'),
-            'ema_8':    line_series('ema_8'),
-            'ema_13':   line_series('ema_13'),
-            'ema_21':   line_series('ema_21'),
-            'ema_34':   line_series('ema_34'),
-            'ema_55':   line_series('ema_55'),
-            'adx':      line_series('adx'),
-            'plus_di':  line_series('plus_di'),
-            'minus_di': line_series('minus_di'),
-            'atr':      line_series('atr'),
-        }, records_to_insert
-        
-    result, records_to_insert = await asyncio.to_thread(_compute_chart_data, db_bars, mini)
-    if result is None:
-        raise HTTPException(status_code=404, detail=f"No intraday data available for {ticker} on {date_str}")
-        
-    if records_to_insert:
-        try:
-            from fastapi_app.db.ohlcv import insert_bars_1min
-            async with db.transaction():
-                await insert_bars_1min(db, records_to_insert)
-        except Exception as exc:
-            log.error("Failed to cache fetched chart data in DB: %s", exc)
-            
-    return result
+        return await _get_chart_data(db, ticker, date, mini)
+    except ChartDataNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))

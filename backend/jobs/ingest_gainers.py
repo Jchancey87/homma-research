@@ -30,7 +30,7 @@ if _backend not in sys.path:
     sys.path.insert(0, _backend)
 
 from config import Config
-from services import polygon_client as poly
+from services.schwab_client import get_gainers_snapshot, get_daily_bars, get_latest_headline, get_price_history_every_minute, get_price_history_every_day
 
 logging.basicConfig(
     level=logging.INFO,
@@ -130,7 +130,7 @@ def fetch_gainers(target_date: str) -> list[dict]:
 
 def _get_polygon_snapshot() -> list[dict]:
     """Fetch top gainers from Polygon Snapshot API via the official SDK."""
-    snaps = poly.get_gainers_snapshot(include_otc=False)
+    snaps = get_gainers_snapshot(include_otc=False)
     return snaps[:POLYGON_SNAPSHOT_LIMIT]
 
 
@@ -204,7 +204,7 @@ def _enrich_ticker(snap: dict, grouped: dict[str, dict], target_date: str) -> di
     bar = grouped.get(ticker, {})
     if not bar:
         # Fallback: Fetch per-ticker daily bars from Schwab
-        bars = poly.get_daily_bars(ticker, target_date, target_date)
+        bars = get_daily_bars(ticker, target_date, target_date)
         if bars:
             bar = bars[-1] # use latest bar for that date
     
@@ -368,7 +368,7 @@ def _yf_float_fallback(ticker: str) -> float | None:
         return None
 
 
-# (News fetching is now handled by services/polygon_client.py → poly.get_latest_headline)
+# (News fetching is now handled by services/schwab_client.py → get_latest_headline)
 
 
 # ---------------------------------------------------------------------------
@@ -395,10 +395,6 @@ def _enrich_metrics(ticker: str, target_date: str) -> dict:
     from datetime import datetime, timedelta
     import pandas as pd
     import yfinance as yf
-    from momentum_screener.schwab.http_client import (
-        get_price_history_every_minute,
-        get_price_history_every_day
-    )
     
     metrics = {
         'premarket_high': None,

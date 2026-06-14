@@ -2,6 +2,55 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-14] Architectural Refactor: RFC-001/002/003
+
+### Summary
+* Execute top-3 architectural RFCs from codebase audit. Analytics extraction, Schwab facade unification, config merger.
+* +58 unit tests. Routers slimmed by 585 lines. Two shim files deleted. Silent DB config divergence eliminated.
+* 150/150 tests pass. 0 regressions.
+
+### What Changed
+* `services/chart_data_service.py`: New. 354L. Hosts 3-tier fetch fallback (TimescaleDB → Schwab → Polygon → yfinance) + EMA/RVOL/ADX/ATR pandas math + Lightweight-Charts payload shaping. Owns `_fetch_intraday_polygon` (moved from `tasks/llm_tasks.py:58`).
+* `services/alerts_analytics.py`: New. 344L. `compute_daily_summary`, `compute_performance_scorecard`. Pure helpers: `_forward_returns_from_candles`, `_group_alerts_by_ticker`, `_scorecard_row`.
+* `services/continuation_analytics.py`: New. 187L. `compute_performance_stats` + pure `_enrich_pick`, `_categorize_float`, `_categorize_gap`, `_compute_summary`, `_compute_group_stats`.
+* `routers/analysis.py`: 528→307 lines (-221). `/research/chart-data` endpoint now 1 line wrapping service call.
+* `routers/alerts.py`: 370→142 lines (-228). `daily-summary` and `performance` endpoints delegate to service.
+* `routers/continuation.py`: 283→147 lines (-136). `performance` endpoint delegates to service.
+* `services/schwab_client.py`: Now canonical Schwab import facade. Re-exports all 8 upstream helpers (`get_quote`, `get_quotes`, `get_movers`, `get_price_history_*`, `get_instruments`, `get_option_chain`, `get_http_client`) + 9 legacy-Polygon-shape adapters.
+* `services/polygon_client.py`, `services/polygon_service.py`: Deleted. 30 lines of pure re-export shims.
+* 10 callers migrated to facade: 4 routers (continuation, watchlist, gainers, market), 3 jobs (backfill_alert_candles, ingest_gainers, ingest_minute_candles), 2 services (live_screener, chart_data_service), 1 intra-service.
+* `backend/config.py`: Unified. Single env-var source. `Settings` (lowercase) + `Config` (UPPER_CASE) both point to same values. 40+ fields. Canonical `DATABASE_URL` default = `journal1@192.168.0.201` (matches actively-running app).
+* `backend/fastapi_app/config.py`: Now 2-line re-export: `from config import settings`. Silent DB password/host divergence between the two files eliminated.
+* `AGENTS.md`: Section 4 "Router Layer Rules" added. Enforces thin routers, no raw SQL in routers, no external API calls in routers, analytics services own their own unit tests.
+* `backend/README.md`: Updated services table. Removed polygon_client reference.
+* `tests/test_chart_data_service.py`: 8 tests (mini/full mode, NaN handling, record builder, error class).
+* `tests/test_alerts_analytics.py`: 16 tests (forward returns edge cases, ticker grouping, scorecard row).
+* `tests/test_continuation_analytics.py`: 34 tests (parametrized float/gap categorization, win thresholds, group stats).
+* `handoffs/014_architectural_refactor_quickwins_and_db_adoption.md`: New. Next-batch RFCs (QW-1..4 + RFC-005 DB adoption).
+
+### Architectural Decisions
+* Router Layer Rules: routers do (a) parse+validate, (b) call one service, (c) format response. Max ~30 lines per endpoint. If exceeded → extract service.
+* Service public APIs: async when DB I/O, sync when pure. Domain exceptions (e.g. `ChartDataNotFoundError`) raised by services, translated to HTTP errors by router.
+* Test placement: pure transforms → `tests/test_<service>.py` (no DB); async I/O → `tests/test_<router>.py` (integration).
+* Schwab facade: `services.schwab_client` is the ONLY allowed backend-side import for Schwab. Routers/jobs/services MUST NOT import `momentum_screener.schwab.http_client` directly.
+* Config: `from config import Config` (legacy) and `from fastapi_app.config import settings` (modern) both work; values identical. New code prefers `settings.lowercase`. New env vars MUST be added in BOTH `Settings` and `Config` class bodies.
+
+### Known Issues
+* `pip install --break-system-packages schwab-py` needed locally (pre-existing — not refactor-related). Causes `test_continuation.py::test_continuation_performance_and_refresh` to fail on import in fresh envs.
+
+---
+
+## [2026-06-11] Expand Caveman Skill Scope
+
+### Summary
+* Expand Caveman Skill rule.
+* Broaden enforcement across subagent configurations, prompts, inter-agent messages, notifications, metadata.
+
+### What Changed
+* `AGENTS.md`: Update Style & Formatting rule. Add subagent definitions, tools, prompts, messaging, notifications, file metadata.
+
+---
+
 ## [2026-06-10] Implement Caveman Skill & HTML Handoff Exportable
 
 ### Summary

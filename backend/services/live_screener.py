@@ -91,7 +91,7 @@ def get_session_label(session: str) -> str:
 
 def _fetch_schwab_movers() -> Dict[str, dict]:
     """Pull top movers from Schwab (NASDAQ, NYSE, EQUITY_ALL). Real-time, no lag."""
-    from momentum_screener.schwab.http_client import get_movers
+    from services.schwab_client import get_movers
     candidates = {}
     for exch in ['NASDAQ', 'NYSE', 'EQUITY_ALL']:
         try:
@@ -212,7 +212,7 @@ def _fetch_watchlist_tickers() -> List[str]:
 
 def _fetch_quotes(symbols: List[str]) -> Dict[str, dict]:
     """Fetch Schwab quotes in chunks of 50. Returns {sym: quote_dict}."""
-    from momentum_screener.schwab.http_client import get_quotes
+    from services.schwab_client import get_quotes
     all_quotes = {}
     for i in range(0, len(symbols), 50):
         chunk = symbols[i:i+50]
@@ -475,7 +475,7 @@ def _compute_daily_metrics(ticker: str) -> dict:
 
     empty = {'sparkline_5d': [], 'sma20': None, 'sma50': None, 'sma100': None}
     try:
-        from momentum_screener.schwab.http_client import get_price_history_every_day
+        from services.schwab_client import get_price_history_every_day
         raw = get_price_history_every_day(ticker)
         closes = [c.get('close') for c in raw if c.get('close') is not None]
         if not closes:
@@ -650,7 +650,7 @@ def refresh_cache(force: bool = False) -> dict:
 
     # ── 5. Per-ticker enrichment (minute metrics + daily SMAs) ──
     try:
-        from momentum_screener.schwab.http_client import get_http_client
+        from services.schwab_client import get_http_client
         get_http_client()
         gainers = _enrich_all(gainers)
     except Exception as e:

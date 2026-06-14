@@ -75,7 +75,7 @@ async def market_breadth():
 
     # Try Schwab batch quotes first
     try:
-        from momentum_screener.schwab.http_client import get_quotes
+        from services.schwab_client import get_quotes
         quotes = await asyncio.to_thread(get_quotes, INDICES)
         for ticker in INDICES:
             q_data = quotes.get(ticker, {})
@@ -146,7 +146,7 @@ def _fetch_snapshot_sync(ticker: str):
     )
     if _backend not in sys.path:
         sys.path.insert(0, _backend)
-    from services.polygon_client import get_ticker_snapshot
+    from services.schwab_client import get_ticker_snapshot
     return get_ticker_snapshot(ticker)
 
 

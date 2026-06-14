@@ -19,7 +19,7 @@ import pytz
 from datetime import datetime, timedelta
 from pydantic import TypeAdapter, ValidationError
 from config import Config
-from services.polygon_service import get_ticker_details
+from services.schwab_client import get_ticker_details
 from validation.external_schemas import (
     FMPEarningsEvent,
     FMPProfile,

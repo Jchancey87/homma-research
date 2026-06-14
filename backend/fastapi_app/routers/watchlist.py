@@ -169,7 +169,7 @@ async def watchlist_prices(db: asyncpg.Connection = Depends(get_db)):
 
     results = {}
     try:
-        from momentum_screener.schwab.http_client import get_quotes
+        from services.schwab_client import get_quotes
         quotes = await asyncio.to_thread(get_quotes, list(tickers))
         for t in tickers:
             q_data = quotes.get(t, {})

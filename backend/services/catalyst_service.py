@@ -92,10 +92,8 @@ def _get_polygon_news(ticker: str, anchor_date: str, n: int = 15) -> list[dict]:
     """
     Fetch news from Massive.com (fka Polygon.io) anchored ±14 days around anchor_date.
     Returns list with 'title', 'published', 'publisher', 'description'.
-    Uses the official Massive SDK via polygon_client adapter.
+    Uses the official Massive SDK.
     """
-    from services import polygon_client as poly
-
     try:
         dt        = datetime.strptime(anchor_date, '%Y-%m-%d')
         from_date = (dt - timedelta(days=14)).strftime('%Y-%m-%d')

@@ -22,7 +22,7 @@ if _backend not in sys.path:
 
 from config import Config
 from database import get_connection
-from momentum_screener.schwab.http_client import get_price_history_every_minute, get_instruments
+from services.schwab_client import get_price_history_every_minute, get_instruments
 
 logging.basicConfig(
     level=logging.INFO,

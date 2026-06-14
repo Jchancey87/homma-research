@@ -42,17 +42,16 @@ def build_context_payload(ticker: str) -> dict:
 
 def _get_daily_ohlcv(ticker: str, days: int = 252) -> pd.DataFrame:
     """
-    Fetch daily OHLCV bars from Massive.com (fka Polygon.io) via the official
-    SDK adapter (primary) or yfinance (fallback).
+    Fetch daily OHLCV bars via the Schwab facade (primary) or yfinance (fallback).
     Returns a DataFrame indexed by date with columns: open, high, low, close, volume.
     """
-    from services import polygon_client as poly
+    from services.schwab_client import get_daily_bars
 
-    # Try Massive SDK first
+    # Try Schwab facade first
     try:
         end   = datetime.utcnow()
         start = end - timedelta(days=days + 30)
-        bars  = poly.get_daily_bars(
+        bars  = get_daily_bars(
             ticker,
             start.strftime('%Y-%m-%d'),
             end.strftime('%Y-%m-%d'),

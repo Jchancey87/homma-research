@@ -498,7 +498,7 @@ async def follow_through(db: asyncpg.Connection = Depends(get_db)):
         
     # Try fetching live quotes for these tickers
     try:
-        from momentum_screener.schwab.http_client import get_quotes
+        from services.schwab_client import get_quotes
         quotes = await asyncio.to_thread(get_quotes, tickers)
     except Exception as e:
         log.warning(f"Failed to fetch live quotes for follow-through tickers: {e}")

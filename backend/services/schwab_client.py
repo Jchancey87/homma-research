@@ -1,13 +1,57 @@
+"""
+services/schwab_client.py
+~~~~~~~~~~~~~~~~~~~~~~~~~
+Single facade for all Schwab Trader API access.
+
+Routers, jobs, and services MUST import from this module, not from
+``momentum_screener.schwab.http_client`` directly. This module:
+
+  1. Re-exports every low-level function from ``momentum_screener.schwab.http_client``
+     (get_quote, get_quotes, get_movers, get_price_history_*, get_instruments,
+     get_option_chain, get_http_client) so callers have one import path.
+  2. Provides legacy-Polygon-shape adapters (get_gainers_snapshot,
+     get_ticker_snapshot, get_minute_bars, get_daily_bars, get_last_trade,
+     get_last_quote, get_latest_headline, get_ticker_details) for backward
+     compatibility with existing call sites.
+
+Canonical Schwab import point (RFC-002). Replaces the former
+``services/polygon_client.py`` and ``services/polygon_service.py`` shims.
+"""
 import logging
 from typing import Optional, List, Dict
 from momentum_screener.schwab.http_client import (
+    get_http_client,
+    get_quote,
     get_quotes,
     get_movers,
     get_price_history_every_minute,
     get_price_history_every_day,
-    get_instruments
+    get_instruments,
+    get_option_chain,
 )
 from schwab.client import Client
+
+__all__ = [
+    # Low-level re-exports
+    "get_http_client",
+    "get_quote",
+    "get_quotes",
+    "get_movers",
+    "get_price_history_every_minute",
+    "get_price_history_every_day",
+    "get_instruments",
+    "get_option_chain",
+    # Legacy-Polygon-shape adapters
+    "get_gainers_snapshot",
+    "get_ticker_snapshot",
+    "get_grouped_daily",
+    "get_minute_bars",
+    "get_daily_bars",
+    "get_last_trade",
+    "get_last_quote",
+    "get_latest_headline",
+    "get_ticker_details",
+]
 
 log = logging.getLogger(__name__)
 

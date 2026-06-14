@@ -55,25 +55,7 @@ def _cache_write(ticker: str, date: str | None, report_type: str, output: str, m
             (ticker, date, report_type, version, output, model_used, job_id, now.isoformat(), expires_at)
         )
 
-def _fetch_intraday_polygon(ticker: str, date: str):
-    import pandas as pd
-    from services import polygon_client as poly
-
-    try:
-        bars = poly.get_minute_bars(ticker, date, date, limit=50_000)
-        if not bars:
-            return pd.DataFrame()
-
-        df = pd.DataFrame(bars)
-        df = df.rename(columns={'o': 'open', 'h': 'high', 'l': 'low',
-                                 'c': 'close', 'v': 'volume', 'vw': 'vwap'})
-        df['timestamp'] = pd.to_datetime(df['t'], unit='ms', utc=True)
-        df['timestamp'] = df['timestamp'].dt.tz_convert('America/New_York')
-        df = df.set_index('timestamp')
-        return df
-    except Exception as e:
-        print(f"[analysis] Massive/Polygon intraday fetch failed for {ticker} {date}: {e}")
-        return pd.DataFrame()
+from services.chart_data_service import _fetch_intraday_polygon  # noqa: E402,F401
 
 # ── Tasks ─────────────────────────────────────────────────────────────────────
 
