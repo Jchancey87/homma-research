@@ -2,6 +2,177 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-14] Architectural Refactor: RFC-010 (ScheduledTask class for morning scanners)
+
+### Summary
+* Extract duplicated scaffolding from `momentum_screener/morning/premarket_gap.py` + `refresh.py` into a single `ScheduledTask` class. 241/241 tests pass. 0 regressions. +18 new tests.
+
+### What Changed
+* `momentum_screener/morning/scheduler.py` (102L, new). `ScheduledTask(hour, minute, fn, *, name, tz="US/Central", weekdays_only=True, poll_seconds=30, now_fn=None)`. Pure `should_run(now)` decision method (testable without threads); `_loop()` daemon-thread wrapper. `start()` is idempotent (lock-guarded `_thread` check).
+* `momentum_screener/morning/premarket_gap.py` 51 → 22 (-29L). Pure wiring: `ScheduledTask(8, 0, scan_gaps, name="premarket-gap-scanner")` + `start_premarket_scanner()`.
+* `momentum_screener/morning/refresh.py` 57 → 22 (-35L). Pure wiring: `ScheduledTask(8, 45, run_full_refresh, name="morning-routine")` + `start_morning_routine()`.
+* `backend/tests/test_scheduled_task.py` (181L, 18 tests). Coverage: constructor validation (4 cases — hour/minute/fn/poll_seconds), defaults match legacy stubs, `should_run` happy path, off-minute no-fire, once-per-day guard, next-day re-fire, weekday gate (Sat/Sun blocked by default), `weekdays_only=False` override, `now_fn` injection, tz string + object acceptance, `start()` idempotency (monkeypatched `threading.Thread` factory).
+* Net: -64L of duplicated thread/loop/last-run-date scaffolding; +102L reusable class; +181L tests.
+
+### Architectural Decisions
+* `should_run(now)` is the testable seam. Decoupled from the daemon thread so the entire firing decision (time match + weekday gate + once-per-day) is unit-testable in microseconds without sleeping. Thread loop is the 8-line wrapper.
+* `start()` idempotency is a new contract the original stubs violated. Lock-guarded; `monkeypatch` test asserts exactly one `Thread` instance created across N calls.
+* `now_fn` injection point: tests pass `MagicMock(return_value=frozen_datetime)`; production uses `lambda: datetime.now(self.tz)`. No real-clock dependency in tests.
+* tz accepts string OR object. String gets resolved through `pytz.timezone(...)` internally — keeps the call site simple (`tz="America/New_York"`) while preserving singleton identity if the canonical object is passed in.
+* Error path: `time.sleep(60)` after exception (matches legacy `time.sleep(60)` recovery), `time.sleep(poll_seconds)` on the normal path. `fn` failure does NOT update `last_run_date` — next poll retries the same minute.
+
+### Acceptance
+* `pytest tests/ -p no:anyio -q` → 241/241 pass (was 223; +18 new ScheduledTask tests).
+* `grep -rn "threading\.Thread\|time\.sleep\|last_run_date" momentum_screener/morning/` → 7 matches, all in `scheduler.py`. The two consumer modules are pure wiring.
+* `premarket_gap.py` 51 → 22, `refresh.py` 57 → 22. Public API (`start_premarket_scanner`, `start_morning_routine`) unchanged.
+
+### Out of Scope (intentionally)
+* `momentum_screener/morning/` does not currently wire to a real database — these are still stubs awaiting the morning-routine body. The refactor de-risks the wiring shape; the body implementation is a separate task.
+* Central/Eastern tz normalisation: validation/`EASTERN_TZ` covers America/New_York; Central has no equivalent helper. The single rogue `pytz.timezone("US/Central")` lives in the new `scheduler.py` module default and is intentionally Central (the morning routines run in CT, not ET). If a 2nd Central-tz call site appears, mirror the `EASTERN_TZ` pattern.
+
+### Next
+* All long-term RFCs from handoff #014: RFC-010 complete. Remaining: RFC-006 (frontend type mirroring), RFC-007 (sync database.py async migration), RFC-008 (momentum_screener → backend dep break), RFC-009 (frontend API client consolidation).
+
+---
+
+## [2026-06-14] Architectural Refactor: RFC-004 QW-3+4 + RFC-005 (Telegram templates, ticker/TZ canonicalisation, db/ module adoption)
+
+### Summary
+* Complete the remaining items from handoff #014: collapse 7 Telegram alert templates, centralise ticker + timezone normalisation, and adopt the `db/` module pattern across 7 routers.
+* 223/223 tests pass. 0 regressions. +31 new tests (19 QW-3 + 12 QW-4). Started this session at 192.
+
+### What Changed
+
+#### QW-3 — Telegram template collapse
+* `fastapi_app/tasks/alerts.py`: Rewritten 266 → 232 lines. Module-level `ALERT_TYPE_META: dict[str, dict]` keyed by alert type (VOLATILITY_HALT, VOLATILITY_RESUME, HOD_BREAKOUT, VOLUME_SPIKE, PREV_DAY_BREAKOUT, VWAP_CROSSOVER, VWAP_BOUNCE). Each value: `emoji`, `header`, `signal` (`None` | static string | `"auto"` for dynamic-escape), `show_rvol` (bool). FALLBACK_META for unknown types.
+* New `_format_alert_message(alert_data: dict) -> str` at module level. Single f-string assembly; conditional lines (candle vol, vwap, pdh, float) self-guard as empty strings.
+* Format helpers extracted to module level: `_escape_markdown`, `_fmt_volume`, `_fmt_cap`, `_fmt_float`.
+* `send_telegram_alert_task` body: 211 → 41 lines. `send_telegram_message` + `send_telegram_message_task` left untouched.
+* New `tests/test_alerts_telegram_format.py` (273L, 19 tests). Golden-message snapshots for all 7 known types + fallback path. Sign handling (positive/negative/zero), self-guarding optional fields, invalid timestamp passthrough, TV URL vs label escape, partial float/cap rendering, META contract (no silent additions/removals).
+* Side effect: standardised field order across all 7 types to `candle_vol → vwap → pdh → float`. Original `PREV_DAY_BREAKOUT` had `candle_vol → pdh → vwap → float` (PDH-first) — now consistent with the others. Documented in golden tests.
+
+#### QW-4 — Ticker + TZ canonicalisation
+* New `validation/constants.py` (29L). `EASTERN_TZ = pytz.timezone("America/New_York")`. Single Python source of truth for the canonical US/Eastern tz object (resolves "US/Eastern" vs "America/New_York" dual-spelling bug).
+* `validation/schemas.py`: added public `normalize_ticker(v: str) -> str` (re-export of `_upper_strip`). Kept `_upper_strip = normalize_ticker` alias for in-module backwards compat.
+* `validation/__init__.py`: re-exports both `normalize_ticker` and `EASTERN_TZ` so importers do `from validation import normalize_ticker, EASTERN_TZ`.
+* Migrated 18 inline `ticker.upper().strip()` call sites across 8 files: routers/{charts, observations, watchlist, gainers, market_data}, db/signals, services/chart_data_service, jobs/daily_analysis_report. All now use `normalize_ticker`.
+* Migrated 16 `pytz.timezone('US/Eastern')` + `pytz.timezone('America/New_York')` Python callsites across 13 files: services/{live_screener, pump_classifier, alerts_analytics, chart_data_service, catalyst_service, fmp_service, continuation_performance_service}, jobs/{ingest_gainers, ingest_minute_candles, daily_analysis_report, backfill_alert_candles}, llm/llm_client, fastapi_app/tasks/llm_tasks. All now use `EASTERN_TZ`.
+* APScheduler `CronTrigger(..., timezone="US/Eastern")` and Celery `timezone="US/Eastern"` swapped to `timezone=EASTERN_TZ` (typed pytz object).
+* Cosmetic: comments mentioning "US/Eastern timezone" updated to "Eastern timezone" in 3 docstrings.
+* `America/New_York` still appears in raw SQL `AT TIME ZONE '...'` (Postgres string API) and in `pandas dt.tz_convert("...")` (pandas API) — both are string-typed and outside scope.
+* New `tests/test_validation_helpers.py` (124L, 12 tests). Includes a self-walking grep guard that walks `backend/` and fails if any new caller sneaks in a `pytz.timezone('US/Eastern'|'America/New_York')` constructor outside `validation/constants.py`.
+
+#### RFC-005 — db/ module pattern across 7 routers
+7 new `db/` modules mirroring the existing `db/ohlcv.py` pattern (async functions, `asyncpg.Connection` as first arg, return plain dicts/lists/booleans):
+* `db/observations.py` (145L) — list/get/create/update/delete observations.
+* `db/charts.py` (192L) — owns both `chart_captures` and `chart_tags` tables. Includes the `sync_chart_tags` junction-table sync.
+* `db/watchlist.py` (95L) — list/insert/update/view/delete watchlist. `list_watchlist_tickers` for the prices endpoint.
+* `db/market.py` (62L) — `daily_gainers` (latest_date, top_rvol_float) + `volatility_halts` (active halts last hour).
+* `db/screener_alerts.py` (85L) — history/dates/feedback. `save_alert_feedback` writes to BOTH `screener_alerts` + `screener_alerts_archive` in one call.
+* `db/continuation_picks.py` (108L) — list/stats/insert/deactivate/delete. Idempotent insert via `ON CONFLICT (ticker, date) DO NOTHING`.
+* `db/daily_gainers.py` (290L, the largest) — shared `_filter_conditions` helper, list_gainers, tickers_for_date, distinct_sectors, latest_ingest_summary, top_gainers_on_date, aggregate_ticker_history, list_appearances_for_ticker, aggregate_repeat_runners, bucket_gainers_by_float, sector_aggregates (this-week / last-week), previous_trading_date, top_gainers_for_follow_through, next_trading_day_for_ticker.
+
+Routers (Router-Layer-Rules compliant after refactor):
+* `observations.py` 123 → 109 (-14)
+* `charts.py` 358 → 277 (-81)
+* `watchlist.py` 180 → 167 (-13)
+* `market.py` 443 → 432 (-11; small SQL surface)
+* `alerts.py` 142 → 126 (-16)
+* `continuation.py` 138 → 118 (-20)
+* `gainers.py` 599 → 439 (-160, biggest win)
+
+Net: ~80 SQL strings extracted from routers. All 7 audit routers now contain zero `db.execute`/`db.fetch`/`db.fetchrow` calls.
+
+### Architectural Decisions
+* `ALERT_TYPE_META` is a flat dict, not a class hierarchy. Each value is a plain dict; new alert types are added by adding a single key. Test guards against silent additions/removals via `test_meta_dict_covers_all_documented_types`.
+* `signal` field supports 3 modes: `None` (no line), static string (no escape), `"auto"` (dynamic + escape via `_escape_markdown`). Single string sentinel — cleaner than separate bool flags.
+* `normalize_ticker` is the public re-export, `_upper_strip` is the private alias. New code MUST use the public name; old in-module references keep working.
+* `EASTERN_TZ` is a pytz singleton. Resolves the "US/Eastern" vs "America/New_York" name bug at the Python level. The pytz object IS canonical — the IANA name is just the constructor argument.
+* `db/` module convention: every public function takes `conn: asyncpg.Connection` as the first positional arg. `*_exists` helpers return `bool` (avoid over-fetching). `update_*` helpers accept a `dict` of column→value pairs and handle the dynamic SET clause internally. `delete_*` / `update_*` return `bool` from asyncpg's `"<n>"` status (true iff n > 0).
+* `continuation_picks.insert_pick` is async but its return value (True/False) is **not** wired to the router's `inserted` counter. The router still increments the count of *attempts* (preserving the legacy test contract). The db function exposes the truth for future callers who want it.
+
+### Acceptance
+* `pytest tests/ -p no:anyio` → 223/223 pass.
+* `grep -rn "fetchrow\|conn\.execute\|db\.fetch" backend/fastapi_app/routers/{alerts,charts,continuation,gainers,market,observations,watchlist}.py` → 0 matches.
+* `grep -rn "US/Eastern" backend/ --include="*.py" | grep -v "validation/"` → 0 results.
+* `grep -rn "pytz\.timezone(['\"]\(US/Eastern\|America/New_York\)" backend/ --include="*.py" | grep -v "validation/"` → 0 results.
+* `grep -rn "\.upper()\.strip()" backend/ --include="*.py" | grep -v "/scratch/" | grep -v "validation/schemas"` → 0 results.
+
+### Out of Scope (intentionally)
+* `routers/analysis.py` still has raw SQL on `llm_jobs` and `research_cache` tables — these were already covered by RFC-001 (chart_data_service extraction). Smaller surface; not in the RFC-005 audit.
+* `America/New_York` still appears in raw SQL `AT TIME ZONE '...'` and in `pandas dt.tz_convert("...")` — both are string-typed and outside the Python-side tz normalisation.
+* `zoneinfo` migration (drop pytz dependency) — separate RFC.
+
+### Next
+* All RFC-004 quick-wins + RFC-005 complete. Architectural refactor roadmap (RFCs 001–005) finished.
+* Open items for future sessions (per handoff #014 Long-term section): RFC-006 (frontend type mirroring), RFC-007 (sync database.py async migration), RFC-008 (momentum_screener → backend dependency break), RFC-009 (frontend API client consolidation), RFC-010 (ScheduledTask class for morning scanner).
+
+---
+
+## [2026-06-14] Architectural Refactor: RFC-004 QW-2 (chart_service unify)
+
+### Summary
+* Collapse two near-duplicate chart-upload modules (Flask-style + FastAPI-style shim) into one framework-agnostic service. 192/192 tests pass. 0 regressions. +18 unit tests.
+* `-79` lines (shim deleted). New service is `sync`; routers adapt `UploadFile` via 5-line `await image.read() + asyncio.to_thread(...)` block.
+
+### What Changed
+* `services/chart_service.py`: Rewritten. Now 87L (was 60L). Public surface: `VALID_TAGS`, `validate_tags(tags)`, `save_chart_image(blob, content_type, filename, *, ticker=None, capture_date=None, subfolder=None)`. No Flask `FileStorage` or FastAPI `UploadFile` coupling. Uses `Config.ALLOWED_MIME_TYPES`, `Config.MAX_UPLOAD_BYTES`, `Config.ALLOWED_EXTENSIONS`, `Config.STORAGE_PATH` from unified config (RFC-003).
+* `tests/test_chart_service.py`: New. 130L, 18 tests. Pure tests with `tmp_path` fixture + `monkeypatch.setattr("config.Config.STORAGE_PATH", ...)`. Coverage: validate_tags (all-valid, invalid-substring, empty, constant-equals-expected), `_resolve_extension` (default/empty/whitelisted/non-whitelisted/case-insensitive), save_chart_image (writes to storage, writes correct bytes, creates subfolder, no-metadata still works, unique filenames, bad MIME rejected, oversized blob rejected, exact-limit accepted, ext-from-filename overrides).
+* `fastapi_app/routers/charts.py`: Updated 2 call sites. Both now: `blob = await image.read(); image_path = await asyncio.to_thread(save_chart_image, blob, image.content_type or "", image.filename or "", ticker=..., capture_date=..., subfolder=...)`. Imports switched from `..chart_service_shim` to `services.chart_service`.
+* `fastapi_app/chart_service_shim.py`: **DELETED**. 79L shim removed; its only caller (`routers/charts.py`) now uses the canonical service.
+
+### Architectural Decisions
+* Service is **sync** (blocking disk I/O). FastAPI routers wrap calls in `asyncio.to_thread()` to keep the event loop non-blocking — mirrors the existing `os.remove` pattern in `delete_chart`.
+* Signature is `(blob, content_type, filename, *, ticker, capture_date, subfolder)`. Keyword-only metadata args make call sites self-documenting.
+* Validation lives in the service (MIME + size checks raise `ValueError`). The router catches `ValueError` and translates to HTTP 415. Domain exception pattern.
+* `VALID_TAGS` constant is duplicated-free (single source in the new service). Old shim's copy deleted.
+* The OLD `services/chart_service.py` (Flask FileStorage) had **zero callers** in the active codebase (verified by `grep`). Safe to overwrite.
+* `chart_service_research.py` (matplotlib chart generation) is a separate concern; not touched.
+
+### Acceptance
+* `pytest tests/ -p no:anyio` → 192/192 pass (was 174; +18 new chart_service tests).
+* `grep -rn "chart_service_shim" --include="*.py"` → 0 references (only a docstring mention in the new service file).
+* `grep -rn "from services.chart_service" --include="*.py"` → 1 caller (routers/charts.py).
+
+### Next
+* Continue RFC-004: QW-3 (Telegram template collapse) → QW-4 (ticker/TZ normalization) → RFC-005 (db module adoption across 7 routers).
+
+---
+
+## [2026-06-14] Architectural Refactor: RFC-004 QW-1 (live_quotes_service)
+
+### Summary
+* Extract batch live-quote fetching from 4 routers into a single deep service. Schwab chunk-of-50 primary, per-ticker Polygon REST fallback. `NormalizedQuote` dataclass.
+* 174/174 tests pass. 0 regressions. +24 unit tests for service.
+* Routers slimmed: continuation -9, watchlist -30, gainers -5, market -70 (-114 total).
+* Side-effect fix: market.py's "Polygon fallback" was non-functional (called `get_ticker_snapshot` which is a Schwab shim post-RFC-002). Now uses real Polygon REST for indices missing from Schwab.
+
+### What Changed
+* `services/live_quotes_service.py`: New. 230L. Public API: `get_live_quotes(tickers, *, polygon_api_key=None) -> dict[ticker, NormalizedQuote]` + `NormalizedQuote` dataclass. Pure shape-unwrap helpers: `_quote_from_schwab`, `_quote_from_polygon`. Sync Polygon adapter: `_polygon_fetch_one_sync` (runs in threadpool). Tickers de-duplicated case-insensitively; first-seen casing wins for result key. Missing tickers yield `NormalizedQuote(source="none", ...)` so callers can do `nq.last_price` without null guards.
+* `tests/test_live_quotes_service.py`: New. 285L, 24 tests. Coverage: dataclass defaults/as_dict, schwab unwrap (happy/empty/missing-last/None payload), polygon unwrap (happy/missing-close/no-prev/garbage-vol/top-level-dict/non-dict), polygon HTTP adapter (happy/non-ok/timeout), get_live_quotes (full coverage / partial fallback / full polygon fallback / no key / empty key / empty input / None input / dedup / polygon failure).
+* `routers/continuation.py`: 147→138L. `list_picks` quote enrichment now `quotes = await get_live_quotes(tickers)` + per-row field access. Removed inline `asyncio.to_thread(get_quotes, ...)` + `q_data.get('quote', {})` unwrap.
+* `routers/watchlist.py`: 209→179L. `watchlist_prices` collapsed from 40L fallback chain (Schwab try/except → raw `requests.get` Polygon loop) to 7L: `quotes = await get_live_quotes(tickers, polygon_api_key=settings.polygon_api_key)`. Real Polygon fallback now actually works.
+* `routers/gainers.py`: 603→598L. `follow_through` quote fetch now uses service. Preserves DB lookup fallback for historical days where Polygon is also unavailable. `polygon_api_key=None` (intentional — see inline comment).
+* `routers/market.py`: 513→443L. `breadth` endpoint shrunk from 50L to 12L. Deleted helpers: `_fetch_snapshot_sync`, `_extract_close`, `_extract_prev_close`, `_extract_volume` (all 35L, now dead code). Now uses real Polygon REST for indices missing from Schwab.
+* `backend/README.md`: Services table updated. `live_quotes_service.py` row added.
+
+### Architectural Decisions
+* Service public surface kept minimal: 1 function + 1 dataclass. Callers receive `NormalizedQuote` and pick the fields they need; existing per-router response shapes (e.g. `today_last` vs `price`) are preserved.
+* `change_pct` is always in percent units (multiplied by 100 if needed) to match Schwab's `netPercentChange`. On Polygon fallback path, the service computes `(last - prev_close) / prev_close * 100` to keep the contract consistent.
+* Polygon fallback is opt-in via `polygon_api_key` kwarg. Pass `None` to skip the fallback (e.g. gainers' follow_through where historical-day data is the goal).
+* `get_live_quotes` always returns a dict containing every input ticker (key = first-seen casing). Callers never need to null-check `result[ticker]` — `nq.last_price is None` is the universal "no data" signal.
+* The service is intentionally sync-on-the-Schwab-side (uses `asyncio.to_thread` for the blocking `get_quotes` call) but the public API is async. The 4 callers all used `await asyncio.to_thread(get_quotes, ...)` already, so the migration is zero-friction.
+
+### Acceptance
+* `pytest tests/ -p no:anyio` → 174/174 pass.
+* `grep -n "get_quotes\|get_ticker_snapshot\|requests\.\(get\|post\)" backend/fastapi_app/routers/continuation.py backend/fastapi_app/routers/watchlist.py backend/fastapi_app/routers/gainers.py backend/fastapi_app/routers/market.py` → 0 matches. All 4 routers are Router-Layer-Rules compliant for live-quote access.
+
+### Next
+* Continue RFC-004: QW-2 (chart upload unify) → QW-3 (Telegram template collapse) → QW-4 (ticker/TZ normalization).
+* Then RFC-005: adopt `db/` module pattern across remaining 7 routers (observations → charts → watchlist → market → alerts → continuation → gainers).
+
+---
+
 ## [2026-06-14] Architectural Refactor: RFC-001/002/003
 
 ### Summary

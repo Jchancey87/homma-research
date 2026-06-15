@@ -18,6 +18,7 @@ Business logic is fully decoupled from routes for testability and reuse:
 | Service | Purpose |
 |---|---|
 | `schwab_client.py` | **Canonical Schwab API facade** (replaces the deprecated `polygon_client.py` / `polygon_service.py` shims) — re-exports every low-level helper from `momentum_screener.schwab.http_client` and provides legacy-Polygon-shape adapters (gainers snapshot, minute/daily bars, ticker details). Routers, jobs, and services must import from here, not from `momentum_screener.schwab.http_client` directly. |
+| `live_quotes_service.py` | Batch live-quote fetcher — Schwab primary (`get_quotes` chunked) with per-ticker Polygon snapshot fallback. Returns `NormalizedQuote` dataclass. Used by continuation, watchlist, gainers, market routers. |
 | `fmp_service.py` | Financial Modeling Prep integration — fundamental metrics, cash runway, earnings, analyst targets, institutional ownership |
 | `sec_service.py` | SEC EDGAR integration — CIK lookup, filing fetches (Submissions API), EFTS full-text search, XBRL shares history |
 | `risk_service.py` | Risk Detection data pipeline — reverse splits, short interest, insider activity, S-3/424B filings, toxic financing search |
