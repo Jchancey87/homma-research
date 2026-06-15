@@ -5,6 +5,7 @@ No other code changes required.
 """
 from openai import OpenAI
 from config import Config
+from validation import EASTERN_TZ
 
 # ---------------------------------------------------------------------------
 # Client singleton
@@ -278,8 +279,7 @@ def get_ticker_deep_research(ticker: str, data: dict) -> tuple[str, str]:
     """Perform a deep research analysis using gathered yfinance data."""
     import json
     from datetime import datetime
-    import pytz
-    today_str = datetime.now(pytz.timezone('America/New_York')).strftime('%Y-%m-%d')
+    today_str = datetime.now(EASTERN_TZ).strftime('%Y-%m-%d')
     user_msg = (
         f"Today's Date: {today_str}\n"
         f"Ticker: {ticker}\n"

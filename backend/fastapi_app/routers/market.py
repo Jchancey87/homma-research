@@ -20,6 +20,8 @@ from fastapi import APIRouter, Depends, Query
 
 from ..config import settings
 from ..db import get_db
+from ..db import market as db_market
+from services.live_quotes_service import get_live_quotes
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/market", tags=["market"])
@@ -73,55 +75,19 @@ async def market_breadth():
     spy_chg: Optional[float] = None
     vix: Optional[float] = None
 
-    # Try Schwab batch quotes first
-    try:
-        from services.schwab_client import get_quotes
-        quotes = await asyncio.to_thread(get_quotes, INDICES)
-        for ticker in INDICES:
-            q_data = quotes.get(ticker, {})
-            quote = q_data.get('quote', {}) if q_data else {}
-            close = quote.get("lastPrice")
-            chg_pct = quote.get("netPercentChange")
-            volume = quote.get("totalVolume")
-            
-            if close is not None:
-                if ticker == "SPY":
-                    spy_chg = chg_pct
-                indices[ticker] = {
-                    "ticker":  ticker,
-                    "price":   close,
-                    "chg_pct": chg_pct,
-                    "volume":  volume,
-                }
-    except Exception as exc:
-        log.warning("[market] Schwab breadth fetch failed: %s. Falling back to Polygon.", exc)
-
-    # Fallback to parallel Polygon snapshot fetches if any indices are missing
-    missing_indices = [t for t in INDICES if t not in indices]
-    if missing_indices:
-        async def fetch_one(ticker):
-            try:
-                snap = await asyncio.to_thread(_fetch_snapshot_sync, ticker)
-                return ticker, snap
-            except Exception as exc:
-                log.warning("[market] Snapshot error for %s: %s", ticker, exc)
-                return ticker, None
-
-        snaps = await asyncio.gather(*(fetch_one(t) for t in missing_indices))
-        for ticker, snap in snaps:
-            if snap:
-                close  = _extract_close(snap)
-                prev_c = _extract_prev_close(snap)
-                volume = _extract_volume(snap)
-                chg_pct = round((close - prev_c) / prev_c * 100, 2) if close and prev_c else None
-                if ticker == "SPY":
-                    spy_chg = chg_pct
-                indices[ticker] = {
-                    "ticker":  ticker,
-                    "price":   close,
-                    "chg_pct": chg_pct,
-                    "volume":  volume,
-                }
+    quotes = await get_live_quotes(INDICES, polygon_api_key=settings.polygon_api_key)
+    for ticker in INDICES:
+        nq = quotes.get(ticker)
+        if nq is None or nq.last_price is None:
+            continue
+        if ticker == "SPY":
+            spy_chg = nq.change_pct
+        indices[ticker] = {
+            "ticker":  ticker,
+            "price":   nq.last_price,
+            "chg_pct": nq.change_pct,
+            "volume":  nq.volume,
+        }
 
     data = {
         "indices":    indices,
@@ -138,43 +104,8 @@ async def market_breadth():
     return data
 
 
-def _fetch_snapshot_sync(ticker: str):
-    """Synchronous shim call — runs in threadpool via asyncio.to_thread()."""
-    import sys, os
-    _backend = os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    )
-    if _backend not in sys.path:
-        sys.path.insert(0, _backend)
-    from services.schwab_client import get_ticker_snapshot
-    return get_ticker_snapshot(ticker)
-
-
-def _extract_close(snap) -> Optional[float]:
-    if isinstance(snap, dict):
-        day = snap.get("day", {})
-        return day.get("c") or snap.get("last", {}).get("price")
-    if hasattr(snap, "last_trade") and snap.last_trade:
-        return snap.last_trade.price
-    return getattr(snap, "close", None)
-
-
-def _extract_prev_close(snap) -> Optional[float]:
-    if isinstance(snap, dict):
-        return snap.get("prevDay", {}).get("c")
-    prev = getattr(snap, "prev_day", None)
-    return getattr(prev, "close", None) if prev else None
-
-
-def _extract_volume(snap) -> Optional[float]:
-    if isinstance(snap, dict):
-        return snap.get("day", {}).get("v")
-    day = getattr(snap, "day", None)
-    if day is None:
-        return None
-    return getattr(day, "v", None)
-
-
+# ---------------------------------------------------------------------------
+# GET /market/calendar
 # ---------------------------------------------------------------------------
 # GET /market/calendar
 # ---------------------------------------------------------------------------
@@ -361,22 +292,16 @@ async def get_momentum_breadth(
     # Fallback to database if live cache doesn't have enough data
     if len(top_5_rvol) < 5 or len(top_5_floats) < 5:
         try:
-            # Get latest available date
-            max_date_row = await db.fetchrow("SELECT MAX(date) as max_date FROM daily_gainers")
-            max_date = max_date_row["max_date"] if max_date_row else None
+            max_date = await db_market.latest_daily_gainers_date(db)
             if max_date:
-                price_cond = "AND close_price BETWEEN $2 AND $3" if price_filter else ""
-                params = [max_date]
-                if price_filter:
-                    params.extend([2.0, 25.0])
-                
-                rows = await db.fetch(f"""
-                    SELECT rvol_15m, float_shares FROM daily_gainers
-                    WHERE date = $1 {price_cond}
-                    ORDER BY gap_pct DESC
-                    LIMIT 5
-                """, *params)
-                
+                rows = await db_market.top_rvol_float_on_date(
+                    db,
+                    max_date,
+                    min_price=2.0 if price_filter else None,
+                    max_price=25.0 if price_filter else None,
+                    limit=5,
+                )
+
                 # Append missing data
                 for r in rows:
                     if len(top_5_rvol) < 5 and r["rvol_15m"] is not None:
@@ -414,13 +339,7 @@ async def get_momentum_breadth(
     # 4. Volatility Halts
     halt_tickers = []
     try:
-        halt_rows = await db.fetch("""
-            SELECT DISTINCT ticker FROM volatility_halts
-            WHERE halt_time >= NOW() - INTERVAL '60 minutes'
-              AND status = 'halted'
-            ORDER BY ticker
-        """)
-        halt_tickers = [r["ticker"] for r in halt_rows]
+        halt_tickers = await db_market.active_volatility_halts_last_hour(db)
     except Exception as e:
         log.warning(f"Failed to fetch volatility halts: {e}")
 

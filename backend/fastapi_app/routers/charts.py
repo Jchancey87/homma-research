@@ -7,22 +7,21 @@ File I/O (save/delete) is performed via asyncio.to_thread() to stay non-blocking
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
-from datetime import date as date_type
+from datetime import date
 from typing import Optional
 
 import asyncpg
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
-
-from ..chart_service_shim import VALID_TAGS, save_chart_image, validate_tags
-from ..db import get_db, row_to_dict, rows_to_list
-
-import asyncio
 from pydantic import BaseModel
-from typing import Any
+
+from ..db import get_db
+from ..db import charts as db_charts
+from services.chart_service import VALID_TAGS, save_chart_image, validate_tags
+from validation import normalize_ticker
 
 
 class ChartUpdateBody(BaseModel):
@@ -36,25 +35,9 @@ class ChartUpdateBody(BaseModel):
 class GeminiImportJsonBody(BaseModel):
     analysis_text: str = ""
 
+
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/charts", tags=["charts"])
-
-
-# ---------------------------------------------------------------------------
-# Internal helper — sync tag-sync (called inside a transaction)
-# ---------------------------------------------------------------------------
-
-async def _sync_chart_tags(conn: asyncpg.Connection, chart_id: int, tags: list[str]) -> None:
-    """Replace all chart_tags rows for chart_id with the new tag list."""
-    await conn.execute("DELETE FROM chart_tags WHERE chart_id = $1", chart_id)
-    for tag in tags:
-        tag = str(tag).strip()
-        if tag:
-            await conn.execute(
-                "INSERT INTO chart_tags (chart_id, tag) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-                chart_id,
-                tag,
-            )
 
 
 # ---------------------------------------------------------------------------
@@ -92,34 +75,35 @@ async def upload_chart(
 
     # Parse capture_date
     try:
-        from datetime import date
         parsed_date = date.fromisoformat(capture_date)
     except ValueError:
         raise HTTPException(status_code=422, detail="capture_date must be YYYY-MM-DD")
 
-    # Save image (async-safe via shim)
+    ticker_norm = normalize_ticker(ticker)
+
+    # Save image — adapt FastAPI UploadFile to framework-agnostic (bytes, content_type, filename)
     try:
-        image_path = await save_chart_image(image, ticker.upper().strip(), parsed_date.isoformat())
+        blob = await image.read()
+        image_path = await asyncio.to_thread(
+            save_chart_image,
+            blob, image.content_type or "", image.filename or "",
+            ticker=ticker_norm, capture_date=parsed_date.isoformat(),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=415, detail=str(exc))
 
-    row = await db.fetchrow(
-        """INSERT INTO chart_captures
-           (ticker, capture_date, timeframe, image_path, setup_type,
-            cleanliness_score, tags, notes)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-           RETURNING id""",
-        ticker.upper().strip(),
-        parsed_date.isoformat(),
-        timeframe,
-        image_path,
-        setup_type,
-        cleanliness_score,
-        json.dumps(tag_list),
-        notes,
+    chart_id = await db_charts.insert_chart_capture(
+        db,
+        ticker=ticker_norm,
+        capture_date=parsed_date.isoformat(),
+        image_path=image_path,
+        timeframe=timeframe,
+        setup_type=setup_type,
+        cleanliness_score=cleanliness_score,
+        tags_json=json.dumps(tag_list),
+        notes=notes,
     )
-    chart_id = row["id"]
-    await _sync_chart_tags(db, chart_id, tag_list)
+    await db_charts.sync_chart_tags(db, chart_id, tag_list)
 
     return {"id": chart_id, "image_path": image_path}
 
@@ -139,39 +123,15 @@ async def list_charts(
     db: asyncpg.Connection = Depends(get_db),
 ):
     """List chart captures with optional filters."""
-    conditions: list[str] = []
-    params: list = []
-
-    if tag:
-        # JOIN handled via subquery to keep DISTINCT logic simple
-        conditions.append(
-            f"cc.id IN (SELECT chart_id FROM chart_tags WHERE tag = ${len(params)+1})"
-        )
-        params.append(tag)
-
-    if ticker:
-        conditions.append(f"cc.ticker = ${len(params)+1}")
-        params.append(ticker.upper().strip())
-    if setup_type:
-        conditions.append(f"cc.setup_type = ${len(params)+1}")
-        params.append(setup_type)
-    if date_from:
-        conditions.append(f"cc.capture_date >= ${len(params)+1}")
-        params.append(date_from)
-    if date_to:
-        conditions.append(f"cc.capture_date <= ${len(params)+1}")
-        params.append(date_to)
-    if min_cleanliness is not None:
-        conditions.append(f"cc.cleanliness_score >= ${len(params)+1}")
-        params.append(min_cleanliness)
-
-    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-    rows = await db.fetch(
-        f"SELECT cc.* FROM chart_captures cc {where} "
-        "ORDER BY cc.capture_date DESC, cc.created_at DESC",
-        *params,
+    return await db_charts.list_chart_captures(
+        db,
+        ticker=normalize_ticker(ticker) if ticker else None,
+        setup_type=setup_type,
+        tag=tag,
+        date_from=date_from,
+        date_to=date_to,
+        min_cleanliness=min_cleanliness,
     )
-    return rows_to_list(rows)
 
 
 # ---------------------------------------------------------------------------
@@ -180,10 +140,10 @@ async def list_charts(
 
 @router.get("/{chart_id}")
 async def get_chart(chart_id: int, db: asyncpg.Connection = Depends(get_db)):
-    row = await db.fetchrow("SELECT * FROM chart_captures WHERE id = $1", chart_id)
+    row = await db_charts.get_chart_capture(db, chart_id)
     if not row:
         raise HTTPException(status_code=404, detail="Not found")
-    return row_to_dict(row)
+    return row
 
 
 # ---------------------------------------------------------------------------
@@ -208,7 +168,7 @@ async def update_chart(
     if body.timeframe is not None:
         updates["timeframe"] = body.timeframe
 
-    tag_list: list[str] | None = None
+    tag_list: Optional[list[str]] = None
     if body.tags is not None:
         tag_list = [str(t).strip() for t in body.tags if str(t).strip()]
         invalid = validate_tags(tag_list)
@@ -222,17 +182,9 @@ async def update_chart(
     if not updates and tag_list is None:
         raise HTTPException(status_code=422, detail="No valid fields to update")
 
-    # Build SET clause with positional params ($1, $2…)
-    set_parts = [f"{k} = ${i+1}" for i, k in enumerate(updates)]
-    values = list(updates.values()) + [chart_id]
-    set_clause = ", ".join(set_parts)
-
-    await db.execute(
-        f"UPDATE chart_captures SET {set_clause} WHERE id = ${len(values)}",
-        *values,
-    )
+    await db_charts.update_chart_capture(db, chart_id, updates)
     if tag_list is not None:
-        await _sync_chart_tags(db, chart_id, tag_list)
+        await db_charts.sync_chart_tags(db, chart_id, tag_list)
 
     return {"success": True}
 
@@ -243,15 +195,13 @@ async def update_chart(
 
 @router.delete("/{chart_id}")
 async def delete_chart(chart_id: int, db: asyncpg.Connection = Depends(get_db)):
-    row = await db.fetchrow(
-        "SELECT image_path, gemini_image_path FROM chart_captures WHERE id = $1", chart_id
-    )
+    row = await db_charts.get_chart_capture_paths(db, chart_id)
     if not row:
         raise HTTPException(status_code=404, detail="Not found")
 
     # Delete image files off-thread
     for path_field in ("image_path", "gemini_image_path"):
-        p = row[path_field]
+        p = row.get(path_field)
         if p and os.path.exists(p):
             try:
                 await asyncio.to_thread(os.remove, p)
@@ -259,7 +209,7 @@ async def delete_chart(chart_id: int, db: asyncpg.Connection = Depends(get_db)):
                 pass
 
     # chart_tags deleted by CASCADE
-    await db.execute("DELETE FROM chart_captures WHERE id = $1", chart_id)
+    await db_charts.delete_chart_capture(db, chart_id)
     return {"success": True}
 
 
@@ -276,53 +226,39 @@ async def gemini_import(
 ):
     """
     Store Gemini annotation text and optional annotated image for a chart.
-    Accepts either multipart/form-data or JSON (see JSON variant below).
+    Accepts multipart/form-data.
     """
-    row = await db.fetchrow(
-        "SELECT ticker, capture_date FROM chart_captures WHERE id = $1", chart_id
-    )
+    row = await db_charts.get_chart_capture(db, chart_id)
     if not row:
         raise HTTPException(status_code=404, detail="Not found")
 
     ticker = row["ticker"]
     capture_date = str(row["capture_date"])
 
-    image_path: str | None = None
+    image_path: Optional[str] = None
     if annotated_image and annotated_image.filename:
         try:
-            image_path = await save_chart_image(
-                annotated_image, ticker=ticker, capture_date=capture_date, subfolder="annotated"
+            blob = await annotated_image.read()
+            image_path = await asyncio.to_thread(
+                save_chart_image,
+                blob, annotated_image.content_type or "", annotated_image.filename or "",
+                ticker=ticker, capture_date=capture_date, subfolder="annotated",
             )
         except ValueError as exc:
             raise HTTPException(status_code=415, detail=str(exc))
 
     analysis_text = (analysis_text or "").strip()
+    await db_charts.update_gemini_import(db, chart_id, analysis_text, image_path)
 
-    if image_path:
-        await db.execute(
-            """UPDATE chart_captures
-               SET gemini_annotation = $1,
-                   llm_annotation    = $1,
-                   gemini_image_path = $2,
-                   gemini_imported_at = NOW()
-               WHERE id = $3""",
-            analysis_text, image_path, chart_id,
-        )
-    else:
-        await db.execute(
-            """UPDATE chart_captures
-               SET gemini_annotation = $1,
-                   llm_annotation    = $1,
-                   gemini_imported_at = NOW()
-               WHERE id = $2""",
-            analysis_text, chart_id,
-        )
-
-    return {"success": True, "gemini_image_path": image_path, "analysis_text": analysis_text}
+    return {
+        "success": True,
+        "gemini_image_path": image_path,
+        "analysis_text": analysis_text,
+    }
 
 
 # ---------------------------------------------------------------------------
-# POST /charts/{chart_id}/gemini-import — JSON variant
+# POST /charts/{chart_id}/gemini-import-json
 # ---------------------------------------------------------------------------
 
 @router.post("/{chart_id}/gemini-import-json")
@@ -332,19 +268,10 @@ async def gemini_import_json(
     db: asyncpg.Connection = Depends(get_db),
 ):
     """JSON-body variant of gemini-import (no file upload)."""
-    row = await db.fetchrow(
-        "SELECT id FROM chart_captures WHERE id = $1", chart_id
-    )
+    row = await db_charts.get_chart_capture(db, chart_id)
     if not row:
         raise HTTPException(status_code=404, detail="Not found")
 
     analysis_text = (body.analysis_text or "").strip()
-    await db.execute(
-        """UPDATE chart_captures
-           SET gemini_annotation   = $1,
-               llm_annotation      = $1,
-               gemini_imported_at  = NOW()
-           WHERE id = $2""",
-        analysis_text, chart_id,
-    )
+    await db_charts.update_gemini_import(db, chart_id, analysis_text)
     return {"success": True, "analysis_text": analysis_text}

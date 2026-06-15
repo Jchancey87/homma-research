@@ -24,10 +24,12 @@ from typing import Optional, List, Dict
 
 import pytz
 
+from validation import EASTERN_TZ
+
 log = logging.getLogger(__name__)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
-EASTERN          = pytz.timezone('US/Eastern')
+EASTERN          = EASTERN_TZ
 CACHE_TTL_SECONDS = 60       # Background refresh interval
 PERSIST_HOUR_ET  = 20        # 8 PM ET — trigger EOD persist
 PERSIST_MINUTE_ET = 0

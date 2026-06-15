@@ -23,6 +23,7 @@ if _backend not in sys.path:
 from config import Config
 from database import get_connection
 from services.schwab_client import get_price_history_every_minute
+from validation import EASTERN_TZ
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,8 +40,8 @@ def backfill_alert_candles(target_date: date_cls):
     """
     log.info(f"Starting alert candle backfill for {target_date}...")
     
-    # 1. Get unique symbols that triggered alerts on target_date (US/Eastern timezone)
-    tz_et = pytz.timezone('America/New_York')
+    # 1. Get unique symbols that triggered alerts on target_date (Eastern timezone)
+    tz_et = EASTERN_TZ
     
     with get_connection() as conn:
         cur = conn._conn.cursor()
@@ -129,8 +130,8 @@ if __name__ == "__main__":
     parser.add_argument('--date', default=None, help='YYYY-MM-DD target date (defaults to today in Eastern)')
     args = parser.parse_args()
     
-    # Default to today in US/Eastern
-    tz_et = pytz.timezone('America/New_York')
+    # Default to today in Eastern (ET)
+    tz_et = EASTERN_TZ
     if args.date:
         target_date = datetime.strptime(args.date, '%Y-%m-%d').date()
     else:

@@ -16,6 +16,7 @@ from ..db import ohlcv as db_ohlcv
 from ..db import indicators as db_indicators
 from ..db import signals as db_signals
 from ..db import strategies as db_strategies
+from validation import normalize_ticker
 from validation.schemas import SignalCreateBody
 
 log = logging.getLogger(__name__)
@@ -69,7 +70,7 @@ async def get_ohlcv(
     Fetch OHLCV candle data for a ticker.
     Supports 'daily' (from price_history_daily) and '1min'/'1m' (from price_history_1min).
     """
-    symbol = symbol.upper().strip()
+    symbol = normalize_ticker(symbol)
     is_daily = timeframe.lower() in ("daily", "1d")
 
     if is_daily:
@@ -108,7 +109,7 @@ async def resample_ohlcv(
     Resample 1-minute historical data into higher timeframes on the fly
     using TimescaleDB's native time_bucket() functionality.
     """
-    symbol = symbol.upper().strip()
+    symbol = normalize_ticker(symbol)
     now = datetime.now(timezone.utc)
     start_dt = parse_datetime_param(start, now - timedelta(days=7))
     end_dt = parse_datetime_param(end, now)
@@ -142,7 +143,7 @@ async def get_indicators(
     Fetch stored technical indicators for a ticker.
     Can request a single indicator name or multiple using query params.
     """
-    symbol = symbol.upper().strip()
+    symbol = normalize_ticker(symbol)
     now = datetime.now(timezone.utc)
     start_dt = parse_datetime_param(start, now - timedelta(days=7))
     end_dt = parse_datetime_param(end, now)
@@ -200,7 +201,7 @@ async def list_signals(
     db: asyncpg.Connection = Depends(get_db),
 ):
     """Fetch trading signals for a ticker with optional type and strategy filters."""
-    symbol = symbol.upper().strip()
+    symbol = normalize_ticker(symbol)
     try:
         signals = await db_signals.get_signals(
             db, symbol, limit=limit, signal_type=signal_type, strategy_id=strategy_id

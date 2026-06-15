@@ -8,17 +8,21 @@ Flask validation schemas so the API surface is identical.
 """
 from __future__ import annotations
 
-import io
+import asyncio
 import csv
+import io
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import asyncpg
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse
 
-from ..db import get_db, rows_to_list, row_to_dict
+from ..db import get_db
+from ..db import daily_gainers as db_daily_gainers
+from services.live_quotes_service import get_live_quotes
+from validation import normalize_ticker
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/gainers", tags=["gainers"])
@@ -53,30 +57,14 @@ async def list_gainers(
     db: asyncpg.Connection = Depends(get_db),
 ):
     """Filtered list of daily gainers (mirrors Flask /gainers)."""
-    conditions, params = [], []
-
-    if date:
-        conditions.append(f"date = ${len(params)+1}")
-        params.append(date)
-    if min_gap is not None:
-        conditions.append(f"gap_pct >= ${len(params)+1}")
-        params.append(min_gap)
-    if max_float is not None:
-        conditions.append(f"float_shares <= ${len(params)+1}")
-        params.append(max_float * 1_000_000)
-    if min_rvol is not None:
-        conditions.append(f"rvol_15m >= ${len(params)+1}")
-        params.append(min_rvol)
-    if sector:
-        conditions.append(f"sector = ${len(params)+1}")
-        params.append(sector)
-
-    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-    rows = await db.fetch(
-        f"SELECT * FROM daily_gainers {where} ORDER BY gap_pct DESC LIMIT 500",
-        *params,
+    return await db_daily_gainers.list_gainers(
+        db,
+        date=date,
+        min_gap=min_gap,
+        max_float_m=max_float,
+        min_rvol=min_rvol,
+        sector=sector,
     )
-    return rows_to_list(rows)
 
 
 # ---------------------------------------------------------------------------
@@ -86,24 +74,16 @@ async def list_gainers(
 @router.get("/summary")
 async def gainers_summary(db: asyncpg.Connection = Depends(get_db)):
     """Latest ingest date + top 9 gainers + total count."""
-    date_row = await db.fetchrow(
-        "SELECT date, COUNT(*) AS total FROM daily_gainers "
-        "GROUP BY date ORDER BY date DESC LIMIT 1"
-    )
-    if not date_row:
+    summary = await db_daily_gainers.latest_ingest_summary(db)
+    if not summary:
         return {"date": None, "total": 0, "gainers": []}
 
-    latest_date = date_row["date"]
-    total = date_row["total"]
-
-    rows = await db.fetch(
-        """SELECT ticker, gap_pct, float_shares, rvol_15m, sector,
-                  news_headline, news_fresh, close_price, open_price
-           FROM daily_gainers WHERE date = $1
-           ORDER BY gap_pct DESC LIMIT 9""",
-        latest_date,
-    )
-    return {"date": str(latest_date), "total": total, "gainers": rows_to_list(rows)}
+    top = await db_daily_gainers.top_gainers_on_date(db, summary["date"], limit=9)
+    return {
+        "date": str(summary["date"]),
+        "total": summary["total"],
+        "gainers": top,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -113,11 +93,7 @@ async def gainers_summary(db: asyncpg.Connection = Depends(get_db)):
 @router.get("/sectors")
 async def sectors(db: asyncpg.Connection = Depends(get_db)):
     """Distinct sector list."""
-    rows = await db.fetch(
-        "SELECT DISTINCT sector FROM daily_gainers "
-        "WHERE sector IS NOT NULL AND sector != '' ORDER BY sector"
-    )
-    return [r["sector"] for r in rows]
+    return await db_daily_gainers.distinct_sectors(db)
 
 
 # ---------------------------------------------------------------------------
@@ -134,32 +110,21 @@ async def export_gainers(
     db: asyncpg.Connection = Depends(get_db),
 ):
     """CSV export of filtered gainers."""
-    conditions, params = [], []
-    if date:
-        conditions.append(f"date = ${len(params)+1}"); params.append(date)
-    if min_gap is not None:
-        conditions.append(f"gap_pct >= ${len(params)+1}"); params.append(min_gap)
-    if max_float is not None:
-        conditions.append(f"float_shares <= ${len(params)+1}"); params.append(max_float * 1_000_000)
-    if min_rvol is not None:
-        conditions.append(f"rvol_15m >= ${len(params)+1}"); params.append(min_rvol)
-    if sector:
-        conditions.append(f"sector = ${len(params)+1}"); params.append(sector)
-
-    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-    rows = await db.fetch(
-        f"SELECT * FROM daily_gainers {where} ORDER BY gap_pct DESC LIMIT 500",
-        *params,
+    rows = await db_daily_gainers.list_gainers(
+        db,
+        date=date,
+        min_gap=min_gap,
+        max_float_m=max_float,
+        min_rvol=min_rvol,
+        sector=sector,
     )
-    gainers = rows_to_list(rows)
-
-    if not gainers:
+    if not rows:
         return StreamingResponse(iter([""]), media_type="text/csv")
 
     output = io.StringIO()
-    writer = csv.DictWriter(output, fieldnames=gainers[0].keys())
+    writer = csv.DictWriter(output, fieldnames=rows[0].keys())
     writer.writeheader()
-    writer.writerows(gainers)
+    writer.writerows(rows)
 
     return StreamingResponse(
         iter([output.getvalue()]),
@@ -189,57 +154,20 @@ async def ticker_history(
 ):
     """Aggregated per-ticker appearance history."""
     cutoff = None if date else _cutoff_from_period(period)
-    conditions, params = [], []
-
-    if date:
-        conditions.append(f"date = ${len(params)+1}"); params.append(date)
-    elif cutoff:
-        conditions.append(f"date >= ${len(params)+1}"); params.append(cutoff)
-    if search:
-        conditions.append(f"ticker LIKE ${len(params)+1}"); params.append(f"{search}%")
-    if min_gap is not None:
-        conditions.append(f"gap_pct >= ${len(params)+1}"); params.append(min_gap)
-    if max_float is not None:
-        conditions.append(f"float_shares <= ${len(params)+1}"); params.append(max_float * 1_000_000)
-    if min_rvol is not None:
-        conditions.append(f"rvol_15m >= ${len(params)+1}"); params.append(min_rvol)
-    if sector:
-        conditions.append(f"sector = ${len(params)+1}"); params.append(sector)
-    if min_price is not None:
-        conditions.append(f"close_price >= ${len(params)+1}"); params.append(min_price)
-    if max_price is not None:
-        conditions.append(f"close_price <= ${len(params)+1}"); params.append(max_price)
-
-    order_map = {
-        "appearances": "appearances DESC",
-        "avg_gap": "avg_gap_pct DESC",
-        "last_seen": "last_seen DESC",
-        "first_seen": "first_seen ASC",
-    }
-    order_clause = order_map.get(sort or "last_seen", "last_seen DESC")
-    where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-    params.append(limit)
-
-    rows = await db.fetch(f"""
-        SELECT
-            ticker,
-            MAX(sector)                         AS sector,
-            COUNT(*)                            AS appearances,
-            MAX(date)                           AS last_seen,
-            MIN(date)                           AS first_seen,
-            ROUND(AVG(gap_pct)::numeric,  2)::float             AS avg_gap_pct,
-            ROUND(AVG(rvol_15m)::numeric, 2)::float             AS avg_rvol,
-            ROUND((AVG(float_shares) / 1e6)::numeric, 2)::float AS avg_float_m,
-            MAX(gap_pct)::float                                  AS max_gap_pct,
-            MAX(close_price)::float                              AS last_close,
-            MAX(market_cap)::float                               AS last_market_cap
-        FROM daily_gainers
-        {where}
-        GROUP BY ticker
-        ORDER BY {order_clause}
-        LIMIT ${len(params)}
-    """, *params)
-    return rows_to_list(rows)
+    return await db_daily_gainers.aggregate_ticker_history(
+        db,
+        date=date,
+        cutoff_date=cutoff,
+        search=search,
+        min_gap=min_gap,
+        max_float_m=max_float,
+        min_rvol=min_rvol,
+        sector=sector,
+        min_price=min_price,
+        max_price=max_price,
+        sort=sort or "last_seen",
+        limit=limit,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -253,20 +181,10 @@ async def ticker_appearances(
     db: asyncpg.Connection = Depends(get_db),
 ):
     """All individual daily_gainers rows for a specific ticker, newest first."""
-    ticker = ticker.upper().strip()
     cutoff = _cutoff_from_period(period)
-
-    if cutoff:
-        rows = await db.fetch(
-            "SELECT * FROM daily_gainers WHERE ticker = $1 AND date >= $2 ORDER BY date DESC",
-            ticker, cutoff,
-        )
-    else:
-        rows = await db.fetch(
-            "SELECT * FROM daily_gainers WHERE ticker = $1 ORDER BY date DESC",
-            ticker,
-        )
-    return rows_to_list(rows)
+    return await db_daily_gainers.list_appearances_for_ticker(
+        db, normalize_ticker(ticker), cutoff_date=cutoff
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -280,12 +198,8 @@ async def repeat_runners(db: asyncpg.Connection = Depends(get_db)):
     Returns tickers that are moving today AND have appeared in the DB before.
     """
     try:
-        import sys, os
-        _backend = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        if _backend not in sys.path:
-            sys.path.insert(0, _backend)
         from services.live_screener import get_live_gainers
-        snapshot = get_live_gainers()
+        snapshot = await asyncio.to_thread(get_live_gainers)
         gainers_by_ticker = {g["ticker"]: g for g in snapshot.get("gainers", [])}
         today_tickers = list(gainers_by_ticker.keys())
     except Exception:
@@ -294,23 +208,8 @@ async def repeat_runners(db: asyncpg.Connection = Depends(get_db)):
     if not today_tickers:
         return []
 
-    rows = await db.fetch(f"""
-        SELECT
-            ticker,
-            COUNT(*)                                           AS appearances,
-            ROUND(AVG(gap_pct)::numeric, 1)::float             AS avg_gap_pct,
-            MAX(gap_pct)::float                                AS best_gap_pct,
-            MAX(date)                                          AS last_seen,
-            MIN(date)                                          AS first_seen,
-            ROUND(AVG(rvol_15m)::numeric, 1)::float           AS avg_rvol,
-            ROUND((AVG(float_shares)/1e6)::numeric, 1)::float AS avg_float_m
-        FROM daily_gainers
-        WHERE ticker = ANY($1::text[])
-        GROUP BY ticker
-        ORDER BY appearances DESC, best_gap_pct DESC
-    """, today_tickers)
-    results = rows_to_list(rows)
-    for r in results:
+    rows = await db_daily_gainers.aggregate_repeat_runners(db, today_tickers)
+    for r in rows:
         g = gainers_by_ticker.get(r['ticker'], {})
         r['sparkline_5d'] = g.get('sparkline_5d', [])
         r['sparkline_intraday'] = g.get('sparkline_intraday', [])
@@ -323,7 +222,7 @@ async def repeat_runners(db: asyncpg.Connection = Depends(get_db)):
         r['above_sma100'] = g.get('above_sma100', False)
         r['today_last'] = g.get('last_price')
         r['today_gap_pct'] = g.get('gap_pct')
-    return results
+    return rows
 
 
 # ---------------------------------------------------------------------------
@@ -337,23 +236,8 @@ async def float_buckets(
 ):
     """Bucket gainers by float tier for a given date."""
     exact_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    rows = await db.fetch("""
-        SELECT
-            CASE
-                WHEN float_shares < 10e6   THEN 'Nano'
-                WHEN float_shares < 50e6   THEN 'Micro'
-                WHEN float_shares < 200e6  THEN 'Small'
-                ELSE                            'Mid+'
-            END                                                AS bucket,
-            COUNT(*)                                           AS count,
-            ROUND(AVG(gap_pct)::numeric, 1)::float             AS avg_gap_pct,
-            MAX(gap_pct)::float                                AS best_gap_pct
-        FROM daily_gainers
-        WHERE date = $1 AND float_shares IS NOT NULL
-        GROUP BY bucket
-        ORDER BY avg_gap_pct DESC NULLS LAST
-    """, exact_date)
-    return {"date": exact_date, "buckets": rows_to_list(rows)}
+    buckets = await db_daily_gainers.bucket_gainers_by_float(db, exact_date)
+    return {"date": exact_date, "buckets": buckets}
 
 
 # ---------------------------------------------------------------------------
@@ -367,26 +251,10 @@ async def sector_rotation(db: asyncpg.Connection = Depends(get_db)):
     this_week = (today - timedelta(days=7)).isoformat()
     last_week = (today - timedelta(days=14)).isoformat()
 
-    this_rows = await db.fetch("""
-        SELECT sector,
-               COUNT(*)                                    AS count,
-               ROUND(AVG(gap_pct)::numeric, 1)::float      AS avg_gap_pct
-        FROM daily_gainers
-        WHERE date >= $1 AND sector IS NOT NULL AND sector != ''
-        GROUP BY sector
-        ORDER BY avg_gap_pct DESC NULLS LAST
-        LIMIT 6
-    """, this_week)
-
-    last_rows = await db.fetch("""
-        SELECT sector,
-               ROUND(AVG(gap_pct)::numeric, 1)::float      AS avg_gap_pct
-        FROM daily_gainers
-        WHERE date >= $1 AND date < $2 AND sector IS NOT NULL AND sector != ''
-        GROUP BY sector
-        ORDER BY avg_gap_pct DESC NULLS LAST
-        LIMIT 6
-    """, last_week, this_week)
+    this_rows = await db_daily_gainers.sector_aggregates(db, since_date=this_week)
+    last_rows = await db_daily_gainers.sector_aggregates(
+        db, since_date=last_week, before_date=this_week,
+    )
 
     last_map     = {r["sector"]: r["avg_gap_pct"] for r in last_rows}
     last_sectors = [r["sector"] for r in last_rows]
@@ -418,15 +286,11 @@ async def sector_rotation(db: asyncpg.Connection = Depends(get_db)):
 
 @router.get("/live")
 async def live_screener(force: Optional[int] = Query(None)):
-    """
-    Live screener data from Schwab API.
-    Replaces the Polygon snapshot logic with the Schwab client.
-    """
-    import asyncio
+    """Live screener data from Schwab API."""
     from services.live_screener import get_live_gainers
-    
     should_force = (force == 1)
     return await asyncio.to_thread(get_live_gainers, force=should_force)
+
 
 # ---------------------------------------------------------------------------
 # GET /gainers/heatmap
@@ -442,26 +306,24 @@ async def gainers_heatmap(
     min_rvol:  Optional[float] = Query(None),
     sector:    Optional[str]   = Query(None),
 ):
-    import asyncio
-    
     def _get_heatmap():
         from services.heatmap_service import build_heatmap_spec, get_sector_spec
         cutoff = None if date else _cutoff_from_period(period)
-        
+
         if view == 'sector':
             return get_sector_spec(
                 cutoff_date=cutoff, exact_date=date,
                 min_gap=min_gap, max_float_m=max_float,
-                min_rvol=min_rvol, sector=sector
+                min_rvol=min_rvol, sector=sector,
             )
-        else:
-            return build_heatmap_spec(
-                cutoff_date=cutoff, exact_date=date,
-                min_gap=min_gap, max_float_m=max_float,
-                min_rvol=min_rvol, sector=sector
-            )
-            
+        return build_heatmap_spec(
+            cutoff_date=cutoff, exact_date=date,
+            min_gap=min_gap, max_float_m=max_float,
+            min_rvol=min_rvol, sector=sector,
+        )
+
     return await asyncio.to_thread(_get_heatmap)
+
 
 # ---------------------------------------------------------------------------
 # GET /gainers/follow-through
@@ -473,89 +335,69 @@ async def follow_through(db: asyncpg.Connection = Depends(get_db)):
     For each ticker in the most recent day's gainers, look up the next
     trading day's open price vs the gainer's close price.
     """
-    import asyncio
-    
-    # 1. Find the most recent day in the DB before today
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    recent_date_row = await db.fetchrow(
-        "SELECT MAX(date) as max_date FROM daily_gainers WHERE date < $1", today
-    )
-    if not recent_date_row or not recent_date_row['max_date']:
+    recent_date = await db_daily_gainers.previous_trading_date(db, today)
+    if not recent_date:
         return {"date": None, "results": []}
-        
-    recent_date = recent_date_row['max_date']
-    
-    # 2. Get the gainers from that date
-    gainers = await db.fetch(
-        "SELECT ticker, date as prev_date, gap_pct as prev_gap, close_price as prev_close, float_shares "
-        "FROM daily_gainers WHERE date = $1 ORDER BY gap_pct DESC LIMIT 10",
-        recent_date
-    )
-    
-    tickers = [g['ticker'] for g in gainers]
-    if not tickers:
+
+    gainers = await db_daily_gainers.top_gainers_for_follow_through(db, recent_date, limit=10)
+    if not gainers:
         return {"date": str(recent_date), "results": []}
-        
-    # Try fetching live quotes for these tickers
-    try:
-        from services.schwab_client import get_quotes
-        quotes = await asyncio.to_thread(get_quotes, tickers)
-    except Exception as e:
-        log.warning(f"Failed to fetch live quotes for follow-through tickers: {e}")
-        quotes = {}
-        
+
+    tickers = [g["ticker"] for g in gainers]
+    # No Polygon fallback here: subsequent trading days may not be in the
+    # Polygon snapshot cache, and the DB lookup below already covers the
+    # historical-day case.
+    quotes = await get_live_quotes(tickers)
+
     results = []
     for g in gainers:
-        ticker = g['ticker']
-        q_data = quotes.get(ticker, {}) if quotes else {}
-        quote = q_data.get('quote', {}) if q_data else {}
-        
-        if quote:
-            today_open = quote.get('openPrice')
-            today_last = quote.get('lastPrice')
-            today_volume = quote.get('totalVolume')
+        ticker = g["ticker"]
+        nq = quotes.get(ticker)
+
+        if nq is not None and nq.source != "none":
+            today_open   = nq.open_price
+            today_last   = nq.last_price
+            today_volume = nq.volume
         else:
-            # Fall back to database lookup for subsequent days
-            next_day = await db.fetchrow(
-                "SELECT open_price, close_price FROM daily_gainers WHERE ticker=$1 AND date > $2 ORDER BY date ASC LIMIT 1",
-                ticker, recent_date
+            next_day = await db_daily_gainers.next_trading_day_for_ticker(
+                db, ticker, recent_date
             )
             if next_day:
-                today_open = next_day['open_price']
-                today_last = next_day['close_price']
+                today_open   = next_day["open_price"]
+                today_last   = next_day["close_price"]
                 today_volume = None
             else:
-                today_open = None
-                today_last = None
-                today_volume = None
-                
+                today_open = today_last = today_volume = None
+
         price_for_calc = today_last if today_last is not None else today_open
         change_pct = None
         status = 'no_data'
-        
-        if price_for_calc is not None and g['prev_close']:
-            change_pct = round(((price_for_calc - g['prev_close']) / g['prev_close']) * 100, 2)
+
+        if price_for_calc is not None and g["prev_close"]:
+            change_pct = round(((price_for_calc - g["prev_close"]) / g["prev_close"]) * 100, 2)
             if change_pct > 2.0:
                 status = 'following'
             elif change_pct < -2.0:
                 status = 'fading'
             else:
                 status = 'flat'
-                
+
         results.append({
-            'ticker': ticker,
-            'prev_date': str(g['prev_date']),
-            'prev_gap': g['prev_gap'],
-            'prev_close': g['prev_close'],
-            'today_open': today_open,
-            'today_last': today_last,
+            'ticker':       ticker,
+            'prev_date':    str(g["prev_date"]),
+            'prev_gap':     g["prev_gap"],
+            'prev_close':   g["prev_close"],
+            'today_open':   today_open,
+            'today_last':   today_last,
             'today_volume': today_volume,
-            'change_pct': change_pct,
-            'status': status,
-            'float_shares': g['float_shares'],
+            'change_pct':   change_pct,
+            'status':       status,
+            'float_shares': g["float_shares"],
         })
-        
+
     return {"date": str(recent_date), "results": results}
+
 
 # ---------------------------------------------------------------------------
 # GET /gainers/pipe-scan
@@ -564,40 +406,34 @@ async def follow_through(db: asyncpg.Connection = Depends(get_db)):
 @router.get("/pipe-scan")
 async def pipe_scan(
     date: str = Query(...),
-    db: asyncpg.Connection = Depends(get_db)
+    db: asyncpg.Connection = Depends(get_db),
 ):
-    import asyncio
-    
-    # 1. Fetch gainers for the date
-    gainers = await db.fetch("SELECT ticker FROM daily_gainers WHERE date = $1", date)
-    tickers = [g['ticker'] for g in gainers]
-    
+    tickers = await db_daily_gainers.tickers_for_date(db, date)
     if not tickers:
         return []
-        
+
     def _run_pipe_scan():
         from services.pipe_service import build_pipe_payload
         results = []
-        for ticker in tickers[:15]: # Limit to top 15 to avoid long wait
+        for ticker in tickers[:15]:  # Limit to top 15 to avoid long wait
             try:
                 payload = build_pipe_payload(ticker, date)
-                # Mock result based on payload for now since actual scan is LLM based
                 results.append({
-                    "ticker": ticker,
-                    "anchor_date": date,
-                    "is_pipe": False, # actual detection requires LLM
-                    "filing_date": None,
-                    "filing_url": None,
-                    "security_type": None,
-                    "pricing_type": None,
+                    "ticker":         ticker,
+                    "anchor_date":    date,
+                    "is_pipe":        False,  # actual detection requires LLM
+                    "filing_date":    None,
+                    "filing_url":     None,
+                    "security_type":  None,
+                    "pricing_type":   None,
                     "proceeds_amount": None,
                     "use_of_proceeds": None,
-                    "toxic_signals": [],
-                    "deal_score": None,
-                    "item_codes": []
+                    "toxic_signals":  [],
+                    "deal_score":     None,
+                    "item_codes":     [],
                 })
             except Exception:
                 pass
         return results
-        
+
     return await asyncio.to_thread(_run_pipe_scan)

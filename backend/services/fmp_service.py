@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 from pydantic import TypeAdapter, ValidationError
 from config import Config
 from services.schwab_client import get_ticker_details
+from validation import EASTERN_TZ
 from validation.external_schemas import (
     FMPEarningsEvent,
     FMPProfile,
@@ -76,7 +77,7 @@ def _get(path: str, params: dict | None = None, version: int = 3, stable: bool =
 
 
 def _today_et() -> datetime:
-    return datetime.now(pytz.timezone('America/New_York'))
+    return datetime.now(EASTERN_TZ)
 
 
 # ---------------------------------------------------------------------------

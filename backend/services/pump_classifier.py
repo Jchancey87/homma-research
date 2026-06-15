@@ -27,6 +27,8 @@ from typing import Callable, Dict
 
 import pytz
 
+from validation import EASTERN_TZ
+
 log = logging.getLogger(__name__)
 
 # ── Classification thresholds ──────────────────────────────────────────────────
@@ -46,7 +48,7 @@ CATALYST_CONFIRMED   = 'Confirmed Catalyst'
 CATALYST_NO_NEWS     = 'Technical / No News'
 CATALYST_SPECULATIVE = 'Speculative'
 
-EASTERN = pytz.timezone('US/Eastern')
+EASTERN = EASTERN_TZ
 
 
 # ── Phase 1: Lightweight in-memory classifier ─────────────────────────────────

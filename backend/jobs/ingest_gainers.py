@@ -31,6 +31,7 @@ if _backend not in sys.path:
 
 from config import Config
 from services.schwab_client import get_gainers_snapshot, get_daily_bars, get_latest_headline, get_price_history_every_minute, get_price_history_every_day
+from validation import EASTERN_TZ
 
 logging.basicConfig(
     level=logging.INFO,
@@ -57,8 +58,7 @@ POLYGON_SNAPSHOT_LIMIT = 50   # tickers to pull from Polygon gainers snapshot
 # ---------------------------------------------------------------------------
 
 def main():
-    import pytz
-    eastern = pytz.timezone('US/Eastern')
+    eastern = EASTERN_TZ
     ny_now  = datetime.now(eastern)
 
     parser = argparse.ArgumentParser(description='Ingest daily top gainers')

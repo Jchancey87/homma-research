@@ -31,8 +31,18 @@ from pydantic import (
 # Shared helpers
 # ---------------------------------------------------------------------------
 
-def _upper_strip(v: str) -> str:
+def normalize_ticker(v: str) -> str:
+    """Public ticker normaliser: uppercase + strip surrounding whitespace.
+
+    Imported elsewhere via ``from validation import normalize_ticker``.
+    Older call sites in this module still use the private alias below.
+    """
     return v.upper().strip()
+
+
+# Backwards-compat alias — keep so existing field_validator bodies that
+# reference ``_upper_strip`` don't need to be touched.
+_upper_strip = normalize_ticker
 
 
 def _clean_tags(tags: list) -> list[str]:
@@ -451,7 +461,7 @@ class TickerHistoryQuery(BaseModel):
     def upper_search(cls, v):
         if not v:
             return None
-        return str(v).upper().strip()
+        return normalize_ticker(str(v))
 
 
 class PipeScanQuery(BaseModel):

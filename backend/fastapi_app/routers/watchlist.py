@@ -10,15 +10,17 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
 from typing import Optional
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..config import settings
-from ..db import get_db, rows_to_list, row_to_dict
+from ..db import get_db
+from ..db import watchlist as db_watchlist
+from validation import normalize_ticker
 from validation.schemas import WatchlistAddBody, WatchlistUpdateBody
+from services.live_quotes_service import get_live_quotes
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
@@ -31,10 +33,7 @@ router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 @router.get("")
 async def list_watchlist(db: asyncpg.Connection = Depends(get_db)):
     """Return all watchlist tickers ordered by last viewed / added."""
-    rows = await db.fetch(
-        "SELECT * FROM watchlist ORDER BY last_viewed_at DESC NULLS LAST, added_at DESC"
-    )
-    return rows_to_list(rows)
+    return await db_watchlist.list_watchlist(db)
 
 
 # ---------------------------------------------------------------------------
@@ -81,13 +80,15 @@ async def add_to_watchlist(data: WatchlistAddBody, db: asyncpg.Connection = Depe
 
         sector, notes, tags_raw = await asyncio.to_thread(_enrich)
 
-    tags = json.dumps([str(t).strip() for t in tags_raw if str(t).strip()])
-    now  = datetime.now(timezone.utc)
+    tags_json = json.dumps([str(t).strip() for t in tags_raw if str(t).strip()])
 
     try:
-        await db.execute(
-            "INSERT INTO watchlist (ticker, sector, notes, tags, added_at) VALUES ($1, $2, $3, $4, $5)",
-            ticker, sector, notes, tags, now,
+        await db_watchlist.insert_watchlist(
+            db,
+            ticker=ticker,
+            sector=sector,
+            notes=notes,
+            tags_json=tags_json,
         )
     except asyncpg.UniqueViolationError:
         raise HTTPException(status_code=409, detail=f"{ticker} is already on your watchlist")
@@ -105,9 +106,8 @@ async def update_watchlist_item(
     data: WatchlistUpdateBody,
     db: asyncpg.Connection = Depends(get_db),
 ):
-    ticker = ticker.upper().strip()
-    row = await db.fetchrow("SELECT ticker FROM watchlist WHERE ticker = $1", ticker)
-    if not row:
+    ticker = normalize_ticker(ticker)
+    if not await db_watchlist.watchlist_ticker_exists(db, ticker):
         raise HTTPException(status_code=404, detail="Not found")
 
     updates: dict = {}
@@ -118,12 +118,7 @@ async def update_watchlist_item(
     if data.tags is not None:
         updates["tags"] = json.dumps(data.tags)
 
-    set_parts = [f"{k} = ${i+1}" for i, k in enumerate(updates)]
-    values    = list(updates.values()) + [ticker]
-    await db.execute(
-        f"UPDATE watchlist SET {', '.join(set_parts)} WHERE ticker = ${len(values)}",
-        *values,
-    )
+    await db_watchlist.update_watchlist(db, ticker, updates)
     return {"success": True}
 
 
@@ -133,11 +128,7 @@ async def update_watchlist_item(
 
 @router.post("/{ticker}/viewed")
 async def mark_viewed(ticker: str, db: asyncpg.Connection = Depends(get_db)):
-    ticker = ticker.upper().strip()
-    now = datetime.now(timezone.utc)
-    await db.execute(
-        "UPDATE watchlist SET last_viewed_at = $1 WHERE ticker = $2", now, ticker
-    )
+    await db_watchlist.mark_watchlist_viewed(db, normalize_ticker(ticker))
     return {"success": True}
 
 
@@ -147,11 +138,10 @@ async def mark_viewed(ticker: str, db: asyncpg.Connection = Depends(get_db)):
 
 @router.delete("/{ticker}")
 async def remove_from_watchlist(ticker: str, db: asyncpg.Connection = Depends(get_db)):
-    ticker = ticker.upper().strip()
-    row = await db.fetchrow("SELECT ticker FROM watchlist WHERE ticker = $1", ticker)
-    if not row:
+    ticker = normalize_ticker(ticker)
+    deleted = await db_watchlist.delete_watchlist(db, ticker)
+    if not deleted:
         raise HTTPException(status_code=404, detail="Not found")
-    await db.execute("DELETE FROM watchlist WHERE ticker = $1", ticker)
     return {"success": True}
 
 
@@ -162,48 +152,16 @@ async def remove_from_watchlist(ticker: str, db: asyncpg.Connection = Depends(ge
 @router.get("/prices")
 async def watchlist_prices(db: asyncpg.Connection = Depends(get_db)):
     """Return Schwab (or Polygon fallback) price + % change for every watchlist ticker in batch."""
-    rows = await db.fetch("SELECT ticker FROM watchlist ORDER BY added_at DESC")
-    tickers = [r["ticker"] for r in rows]
+    tickers = await db_watchlist.list_watchlist_tickers(db)
     if not tickers:
         return {}
 
-    results = {}
-    try:
-        from services.schwab_client import get_quotes
-        quotes = await asyncio.to_thread(get_quotes, list(tickers))
-        for t in tickers:
-            q_data = quotes.get(t, {})
-            quote = q_data.get('quote', {}) if q_data else {}
-            results[t] = {
-                "price": quote.get("lastPrice"),
-                "chg_pct": quote.get("netPercentChange"),
-                "volume": quote.get("totalVolume")
-            }
-    except Exception as e:
-        log.warning(f"Failed to fetch Schwab quotes for watchlist: {e}")
-        polygon_key = settings.polygon_api_key
-        if polygon_key:
-            def _fetch_polygon_prices() -> dict:
-                import requests as _req
-                poly_results = {}
-                for t in tickers:
-                    try:
-                        url = f"https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers/{t}"
-                        resp = _req.get(url, params={"apiKey": polygon_key}, timeout=5)
-                        if resp.ok:
-                            snap = resp.json().get("ticker", {})
-                            day = snap.get("day", {})
-                            prev = snap.get("prevDay", {})
-                            price = day.get("c") or snap.get("last", {}).get("price")
-                            prev_c = prev.get("c")
-                            chg_pct = round((price - prev_c) / prev_c * 100, 2) if price and prev_c else None
-                            poly_results[t] = {"price": price, "chg_pct": chg_pct, "volume": day.get("v")}
-                    except Exception:
-                        poly_results[t] = {"price": None, "chg_pct": None, "volume": None}
-                return poly_results
-            results = await asyncio.to_thread(_fetch_polygon_prices)
-        else:
-            for t in tickers:
-                results[t] = {"price": None, "chg_pct": None, "volume": None}
-
-    return results
+    quotes = await get_live_quotes(tickers, polygon_api_key=settings.polygon_api_key)
+    return {
+        t: {
+            "price":   nq.last_price,
+            "chg_pct": nq.change_pct,
+            "volume":  nq.volume,
+        }
+        for t, nq in quotes.items()
+    }

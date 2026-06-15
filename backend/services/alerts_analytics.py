@@ -23,9 +23,11 @@ from typing import Optional
 import asyncpg
 import pytz
 
+from validation import EASTERN_TZ
+
 log = logging.getLogger(__name__)
 
-EASTERN = pytz.timezone("America/New_York")
+EASTERN = EASTERN_TZ
 PRICE_BUCKETS = ((2, "$1-2"), (5, "$2-5"), (15, "$5-15"))
 
 
@@ -37,12 +39,12 @@ async def compute_daily_summary(
     db: asyncpg.Connection, target_date: Optional[_date] = None
 ) -> dict:
     """
-    Get all alerts for a specific US/Eastern date, joined with stock
+    Get all alerts for a specific Eastern-time date, joined with stock
     fundamentals, augmented with forward returns (1m/3m/5m/15m, MFE, MAE),
     and grouped by ticker symbol.
 
     If target_date is None, the most recent alert date in the DB is used;
-    if no alerts exist, today (US/Eastern) is returned with an empty list.
+    if no alerts exist, today (Eastern) is returned with an empty list.
     """
     if target_date is None:
         target_date = await _latest_alert_date(db) or datetime.now(EASTERN).date()

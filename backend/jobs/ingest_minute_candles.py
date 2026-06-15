@@ -23,6 +23,7 @@ if _backend not in sys.path:
 from config import Config
 from database import get_connection
 from services.schwab_client import get_price_history_every_minute, get_instruments
+from validation import EASTERN_TZ
 
 logging.basicConfig(
     level=logging.INFO,
@@ -210,7 +211,7 @@ def ingest_minute_candles(target_date: date_cls):
     log.info(f"Found {len(tickers)} tickers targeting for 1-minute candle ingestion.")
     
     # Establish date boundaries in Eastern time (Schwab API works with ET dates)
-    tz_et = pytz.timezone('America/New_York')
+    tz_et = EASTERN_TZ
     start_dt = datetime.combine(target_date, datetime.min.time()).replace(tzinfo=tz_et)
     end_dt = datetime.combine(target_date, datetime.max.time()).replace(tzinfo=tz_et)
     
@@ -278,7 +279,7 @@ if __name__ == "__main__":
         if target_date_str:
             target_date = datetime.strptime(target_date_str, '%Y-%m-%d').date()
         else:
-            target_date = datetime.now(pytz.timezone('US/Eastern')).date()
+            target_date = datetime.now(EASTERN_TZ).date()
             
         log.info(f"Running candle ingestion for {target_date}...")
         ingest_minute_candles(target_date)

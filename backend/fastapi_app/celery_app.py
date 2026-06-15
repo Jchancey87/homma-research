@@ -11,6 +11,7 @@ if _BACKEND_DIR not in sys.path:
 
 from celery import Celery
 from fastapi_app.config import settings
+from validation import EASTERN_TZ
 
 celery_app = Celery(
     "homma_tasks",
@@ -27,7 +28,7 @@ celery_app.conf.update(
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",
-    timezone="US/Eastern",
+    timezone=EASTERN_TZ,
     enable_utc=True,
     worker_prefetch_multiplier=1, # Since these are heavy LLM/scraping tasks, don't prefetch too many
 )

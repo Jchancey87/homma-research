@@ -13,6 +13,7 @@ import pandas as pd
 
 from fastapi_app.celery_app import celery_app
 from database import get_connection
+from validation import EASTERN_TZ
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -174,7 +175,7 @@ def run_deep_research(job_id: str, ticker: str, date: str, base_url: str):
         chart_urls  = []
 
         if not date:
-            date = datetime.now(pytz.timezone('America/New_York')).strftime('%Y-%m-%d')
+            date = datetime.now(EASTERN_TZ).strftime('%Y-%m-%d')
 
         bars_df = _fetch_intraday_polygon(ticker, date)
 

@@ -12,6 +12,7 @@ import logging
 import requests
 from datetime import datetime, timedelta
 from config import Config
+from validation import EASTERN_TZ
 
 log = logging.getLogger(__name__)
 
@@ -53,8 +54,7 @@ def build_catalyst_payload(ticker: str, date: str | None = None) -> dict:
         Structured dict for the LLM prompt.
     """
     if not date:
-        import pytz
-        date = datetime.now(pytz.timezone('America/New_York')).strftime('%Y-%m-%d')
+        date = datetime.now(EASTERN_TZ).strftime('%Y-%m-%d')
 
     polygon_news = _get_polygon_news(ticker, date)
     yf_news      = _get_yfinance_news(ticker, date)
@@ -354,10 +354,9 @@ def _get_earnings_calendar(ticker: str) -> dict:
         log.warning(f'[Catalyst] FMP earnings calendar failed: {e}')
 
     # --- Fallback: yfinance (with staleness annotation) ---
-    import pytz
     try:
         import yfinance as yf
-        today = datetime.now(pytz.timezone('America/New_York')).date()
+        today = datetime.now(EASTERN_TZ).date()
 
         t   = yf.Ticker(ticker)
         cal = t.calendar

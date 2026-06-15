@@ -25,9 +25,11 @@ import numpy as np
 import pandas as pd
 import pytz
 
+from validation import EASTERN_TZ, normalize_ticker
+
 log = logging.getLogger(__name__)
 
-EASTERN = pytz.timezone("US/Eastern")
+EASTERN = EASTERN_TZ  # canonical "America/New_York" tz; legacy alias kept for in-file use
 UTC = pytz.utc
 EPOCH = pd.Timestamp("1970-01-01", tz="UTC")
 
@@ -64,7 +66,7 @@ async def get_chart_data(
     Raises:
         ChartDataNotFoundError: when the entire fallback chain returns no data.
     """
-    ticker_val = ticker.upper().strip()
+    ticker_val = normalize_ticker(ticker)
     date_str = date.isoformat()
     start_dt = EASTERN.localize(datetime.combine(date, time.min))
     end_dt = EASTERN.localize(datetime.combine(date, time.max))

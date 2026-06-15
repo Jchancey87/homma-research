@@ -14,6 +14,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
+from validation import EASTERN_TZ
+
 log = logging.getLogger(__name__)
 
 _scheduler = None  # module-level singleton
@@ -28,7 +30,7 @@ def _build_scheduler():
     # ── Job 1: Nightly gainer ingest ─────────────────────────────────────────
     scheduler.add_job(
         _nightly_gainer_ingest,
-        CronTrigger(day_of_week="mon-fri", hour=20, minute=5, timezone="US/Eastern"),  # 8:05 PM ET
+        CronTrigger(day_of_week="mon-fri", hour=20, minute=5, timezone=EASTERN_TZ),  # 8:05 PM ET
         id="nightly_gainer_ingest",
         name="Nightly Gainer Ingest",
         replace_existing=True,
@@ -56,7 +58,7 @@ def _build_scheduler():
     # ── Job 4: Pre-market gappers summary ─────────────────────────────────────
     scheduler.add_job(
         _premarket_gappers_summary,
-        CronTrigger(day_of_week="mon-fri", hour=9, minute=10, timezone="US/Eastern"),  # 9:10 AM ET
+        CronTrigger(day_of_week="mon-fri", hour=9, minute=10, timezone=EASTERN_TZ),  # 9:10 AM ET
         id="premarket_gappers_summary",
         name="Pre-market Gappers Summary",
         replace_existing=True,
@@ -65,7 +67,7 @@ def _build_scheduler():
     # ── Job 5: Nightly alert chart backfill ──────────────────────────────────
     scheduler.add_job(
         _nightly_alerts_backfill,
-        CronTrigger(day_of_week="mon-fri", hour=20, minute=10, timezone="US/Eastern"),  # 8:10 PM ET
+        CronTrigger(day_of_week="mon-fri", hour=20, minute=10, timezone=EASTERN_TZ),  # 8:10 PM ET
         id="nightly_alerts_backfill",
         name="Nightly Alerts Backfill",
         replace_existing=True,
@@ -75,7 +77,7 @@ def _build_scheduler():
     # ── Job 6: Update Continuation Play Performance ─────────────────────────
     scheduler.add_job(
         _update_continuation_performance,
-        CronTrigger(day_of_week="mon-fri", hour=20, minute=15, timezone="US/Eastern"),  # 8:15 PM ET
+        CronTrigger(day_of_week="mon-fri", hour=20, minute=15, timezone=EASTERN_TZ),  # 8:15 PM ET
         id="update_continuation_performance",
         name="Update Continuation Performance",
         replace_existing=True,
@@ -96,7 +98,7 @@ async def _nightly_gainer_ingest() -> None:
     log.info("[scheduler] nightly_gainer_ingest starting")
     try:
         import pytz
-        eastern = pytz.timezone("US/Eastern")
+        eastern = EASTERN_TZ
         target_date = datetime.now(eastern).strftime("%Y-%m-%d")
 
         def _run() -> tuple[int, int]:
@@ -193,7 +195,7 @@ async def _premarket_gappers_summary() -> None:
 
         gappers.sort(key=lambda x: x[2], reverse=True)
 
-        eastern = pytz.timezone("US/Eastern")
+        eastern = EASTERN_TZ
         date_str = datetime.now(eastern).strftime("%Y-%m-%d")
 
         message = (
@@ -240,7 +242,7 @@ async def _nightly_alerts_backfill() -> None:
     log.info("[scheduler] nightly_alerts_backfill starting")
     try:
         import pytz
-        eastern = pytz.timezone("US/Eastern")
+        eastern = EASTERN_TZ
         target_date_obj = datetime.now(eastern).date()
 
         def _run() -> None:

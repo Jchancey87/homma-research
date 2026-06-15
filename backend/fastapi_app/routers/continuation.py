@@ -4,17 +4,20 @@ Async port of backend/routes/continuation_picks.py.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Optional
 
 import asyncpg
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from ..db import get_db, rows_to_list, row_to_dict
-from validation.schemas import PickAddBody
+from ..db import get_db
+from ..db import continuation_picks as db_continuation_picks
 from services.continuation_analytics import compute_performance_stats
+from services.live_quotes_service import get_live_quotes
+from validation.schemas import PickAddBody
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/continuation-picks", tags=["continuation"])
@@ -30,47 +33,23 @@ async def list_picks(
     limit: int = Query(50, ge=1, le=500),
     db: asyncpg.Connection = Depends(get_db),
 ):
-    import asyncio
-    
-    if include_inactive:
-        rows = await db.fetch(
-            """SELECT * FROM continuation_picks
-               ORDER BY is_active DESC, date DESC, rank ASC
-               LIMIT $1""",
-            limit,
-        )
-    else:
-        rows = await db.fetch(
-            """SELECT * FROM continuation_picks
-               WHERE is_active = TRUE
-               ORDER BY date DESC, rank ASC
-               LIMIT $1""",
-            limit,
-        )
-    
-    results = rows_to_list(rows)
-    if not results:
-        return results
-        
-    tickers = {r["ticker"] for r in results}
-    try:
-        from services.schwab_client import get_quotes
-        quotes = await asyncio.to_thread(get_quotes, list(tickers))
-    except Exception as e:
-        log.warning(f"Failed to fetch live quotes for continuation picks: {e}")
-        quotes = {}
-        
-    for r in results:
-        ticker = r["ticker"]
-        q_data = quotes.get(ticker, {}) if quotes else {}
-        quote = q_data.get('quote', {}) if q_data else {}
-        
-        r["today_last"] = quote.get("lastPrice")
-        r["today_open"] = quote.get("openPrice")
-        r["today_volume"] = quote.get("totalVolume")
-        r["today_change_pct"] = quote.get("netPercentChange")
-        
-    return results
+    rows = await db_continuation_picks.list_picks(
+        db, include_inactive=include_inactive, limit=limit
+    )
+    if not rows:
+        return rows
+
+    tickers = [r["ticker"] for r in rows]
+    quotes = await get_live_quotes(tickers)
+
+    for r in rows:
+        nq = quotes.get(r["ticker"])
+        r["today_last"] = nq.last_price if nq else None
+        r["today_open"] = nq.open_price if nq else None
+        r["today_volume"] = nq.volume if nq else None
+        r["today_change_pct"] = nq.change_pct if nq else None
+
+    return rows
 
 
 @router.post("", status_code=201)
@@ -79,13 +58,20 @@ async def add_picks(data: PickAddBody, db: asyncpg.Connection = Depends(get_db))
     now = datetime.now(timezone.utc)
     inserted = 0
     for p in data.picks:
-        await db.execute(
-            """INSERT INTO continuation_picks
-               (ticker, date, reason, gap_pct, float_shares, rvol_15m, sector, rank, created_at)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-               ON CONFLICT (ticker, date) DO NOTHING""",
-            p.ticker, p.date.isoformat(), p.reason, p.gap_pct,
-            p.float_shares, p.rvol_15m, p.sector, p.rank, now,
+        # ``inserted`` mirrors the legacy contract: it counts attempts, not
+        # only rows that survived the ON CONFLICT clause.  Callers that
+        # need the real success count can read the response status.
+        await db_continuation_picks.insert_pick(
+            db,
+            ticker=p.ticker,
+            date=p.date.isoformat(),
+            reason=p.reason,
+            gap_pct=p.gap_pct,
+            float_shares=p.float_shares,
+            rvol_15m=p.rvol_15m,
+            sector=p.sector,
+            rank=p.rank,
+            created_at=now,
         )
         inserted += 1
     return {"inserted": inserted}
@@ -97,45 +83,30 @@ async def deactivate_pick(
     body: DeactivateBody = Body(default_factory=DeactivateBody),
     db: asyncpg.Connection = Depends(get_db),
 ):
-    now = datetime.now(timezone.utc)
-    row = await db.fetchrow("SELECT id FROM continuation_picks WHERE id = $1", pick_id)
-    if not row:
+    if not await db_continuation_picks.pick_exists(db, pick_id):
         raise HTTPException(status_code=404, detail="Not found")
-    await db.execute(
-        """UPDATE continuation_picks
-           SET is_active = FALSE, deactivated_at = $1, deactivated_reason = $2
-           WHERE id = $3""",
-        now, body.reason, pick_id,
+    await db_continuation_picks.deactivate_pick(
+        db, pick_id, body.reason, datetime.now(timezone.utc)
     )
     return {"success": True}
 
 
 @router.delete("/{pick_id}")
 async def delete_pick(pick_id: int, db: asyncpg.Connection = Depends(get_db)):
-    row = await db.fetchrow("SELECT id FROM continuation_picks WHERE id = $1", pick_id)
-    if not row:
+    if not await db_continuation_picks.pick_exists(db, pick_id):
         raise HTTPException(status_code=404, detail="Not found")
-    await db.execute("DELETE FROM continuation_picks WHERE id = $1", pick_id)
+    await db_continuation_picks.delete_pick(db, pick_id)
     return {"success": True}
 
 
 @router.get("/stats")
 async def picks_stats(db: asyncpg.Connection = Depends(get_db)):
-    rows = await db.fetch(
-        """SELECT date, COUNT(*) AS count
-           FROM continuation_picks
-           WHERE is_active = TRUE
-           GROUP BY date
-           ORDER BY date DESC
-           LIMIT 14"""
-    )
-    return rows_to_list(rows)
+    return await db_continuation_picks.picks_stats_last_14_days(db)
 
 
 @router.post("/refresh-performance")
 async def refresh_performance():
     """Manually triggers performance historical tracking update."""
-    import asyncio
     from services.continuation_performance_service import update_all_continuation_performances
     count = await asyncio.to_thread(update_all_continuation_performances)
     return {"updated": count}

@@ -34,6 +34,7 @@ import markdown
 from database import get_connection
 from config import Config
 from llm.llm_client import get_continuation_analysis, get_deep_analysis_report
+from validation import EASTERN_TZ, normalize_ticker
 from services.fmp_service import (
     get_earnings_calendar,
     get_company_profile,
@@ -48,9 +49,8 @@ log = logging.getLogger(__name__)
 
 def main():
     parser = argparse.ArgumentParser(description='Generate and email deep daily analysis report')
-    import pytz
     from datetime import datetime
-    eastern = pytz.timezone('US/Eastern')
+    eastern = EASTERN_TZ
     default_date = datetime.now(eastern).strftime('%Y-%m-%d')
     parser.add_argument('--date', default=default_date, help='YYYY-MM-DD')
     parser.add_argument('--dry-run', action='store_true', help='Print report instead of emailing')
@@ -133,7 +133,7 @@ def parse_and_save_top_picks(continuation_md: str, date_str: str, gainers: list[
 
     with get_connection() as conn:
         for rank, (ticker, reason) in enumerate(pick_pattern, start=1):
-            ticker = ticker.upper().strip()
+            ticker = normalize_ticker(ticker)
             g = gainer_map.get(ticker, {})
             conn.execute(
                 """

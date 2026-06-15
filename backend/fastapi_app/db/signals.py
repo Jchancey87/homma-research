@@ -15,6 +15,8 @@ from typing import Optional
 
 import asyncpg
 
+from validation import normalize_ticker
+
 log = logging.getLogger(__name__)
 
 
@@ -93,7 +95,7 @@ async def get_signals(
 
     if symbol:
         conditions.append(f"s.symbol = ${len(params)+1}")
-        params.append(symbol.upper().strip())
+        params.append(normalize_ticker(symbol))
     if signal_type:
         conditions.append(f"s.signal_type = ${len(params)+1}")
         params.append(signal_type)

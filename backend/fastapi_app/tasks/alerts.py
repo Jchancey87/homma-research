@@ -52,12 +52,148 @@ def send_telegram_message_task(message: str) -> dict:
     return {"status": "success" if success else "failed"}
 
 
+# ── Alert type metadata ────────────────────────────────────────────────────
+# Drives the header rendering and which optional fields get shown.
+#   signal=None   → no Signal line at all
+#   signal=str    → static Signal line, no escaping required
+#   signal="auto" → dynamic, escapes the alert_type itself
+ALERT_TYPE_META: dict[str, dict] = {
+    "VOLATILITY_HALT":     {"emoji": "⏸️",  "header": "VOLATILITY HALT",          "signal": "Volatility Halt (Status H)",        "show_rvol": False},
+    "VOLATILITY_RESUME":   {"emoji": "▶️",  "header": "VOLATILITY RESUME",        "signal": "Volatility Resume (Status Active)", "show_rvol": False},
+    "HOD_BREAKOUT":        {"emoji": "🏔️",  "header": "HOD BREAKOUT",             "signal": None,                               "show_rvol": True},
+    "VOLUME_SPIKE":        {"emoji": "🔊",  "header": "VOLUME SPIKE",             "signal": None,                               "show_rvol": True},
+    "PREV_DAY_BREAKOUT":   {"emoji": "🚀",  "header": "PREV DAY HIGH BREAKOUT",   "signal": None,                               "show_rvol": True},
+    "VWAP_CROSSOVER":      {"emoji": "🌊",  "header": "VWAP CROSSOVER",           "signal": None,                               "show_rvol": True},
+    "VWAP_BOUNCE":         {"emoji": "📈",  "header": "VWAP SUPPORT BOUNCE",      "signal": None,                               "show_rvol": True},
+}
+
+FALLBACK_META: dict = {"emoji": "🚨", "header": "BREAKOUT DETECTED", "signal": "auto", "show_rvol": True}
+
+
+# ── Format helpers ─────────────────────────────────────────────────────────
+def _escape_markdown(text) -> str:
+    """Escape Telegram Markdown special chars: _, *, [, `."""
+    if not isinstance(text, str):
+        text = str(text)
+    for char in ["_", "*", "[", "`"]:
+        text = text.replace(char, f"\\{char}")
+    return text
+
+
+def _fmt_volume(v: int) -> str:
+    """Format volume as K/M abbreviation."""
+    if v >= 1_000_000:
+        return f"{v / 1_000_000:.1f}M"
+    if v >= 1_000:
+        return f"{v / 1_000:.0f}K"
+    return str(v)
+
+
+def _fmt_cap(cap: float) -> str:
+    """Format market cap as M/B."""
+    if cap >= 1_000_000_000:
+        return f"${cap / 1_000_000_000:.1f}B"
+    if cap >= 1_000_000:
+        return f"${cap / 1_000_000:.0f}M"
+    return f"${cap:,.0f}"
+
+
+def _fmt_float(shares: int) -> str:
+    """Format float shares as M."""
+    if shares >= 1_000_000:
+        return f"{shares / 1_000_000:.1f}M"
+    return f"{shares:,}"
+
+
+# ── Message builder ────────────────────────────────────────────────────────
+def _format_alert_message(alert_data: dict) -> str:
+    """
+    Build the Markdown body for a single Telegram alert.
+
+    Always renders header + (Ticker, Price, optional Signal, optional RVOL)
+    + optional context lines (candle vol, vwap, pdh, float) + Time.
+    Optional context lines are empty strings when their source data is
+    missing, so they self-guard without an explicit show/hide flag.
+    """
+    symbol        = alert_data.get("symbol", "UNKNOWN")
+    price         = alert_data.get("price", 0.0)
+    alert_type    = alert_data.get("alert_type", "Breakout")
+    rvol          = alert_data.get("rvol", 0.0)
+    timestamp_str = alert_data.get("time", "")
+
+    daily_pct      = alert_data.get("daily_pct", 0.0)
+    candle_vol     = alert_data.get("candle_vol", 0)
+    avg_candle_vol = alert_data.get("avg_candle_vol", 0)
+    vwap           = alert_data.get("vwap", 0.0)
+    yesterday_high = alert_data.get("yesterday_high", 0.0)
+    float_category = alert_data.get("float_category", "")
+    market_cap     = alert_data.get("market_cap", 0)
+    float_shares   = alert_data.get("float_shares", 0)
+
+    try:
+        dt = datetime.fromisoformat(timestamp_str)
+        timestamp = dt.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        timestamp = timestamp_str
+
+    meta = ALERT_TYPE_META.get(alert_type, FALLBACK_META)
+
+    if meta["signal"] == "auto":
+        signal_line = f"- *Signal:* {_escape_markdown(alert_type)}\n"
+    elif meta["signal"]:
+        signal_line = f"- *Signal:* {meta['signal']}\n"
+    else:
+        signal_line = ""
+
+    rvol_line = f"- *RVOL:* {rvol:.1f}x\n" if meta["show_rvol"] else ""
+
+    daily_sign     = "+" if daily_pct >= 0 else ""
+    escaped_symbol = _escape_markdown(symbol)
+    tv_link        = f"https://www.tradingview.com/chart/?symbol={symbol}"
+
+    vwap_line = ""
+    if vwap > 0:
+        vwap_pct  = ((price - vwap) / vwap) * 100.0
+        vwap_sign = "+" if vwap_pct >= 0 else ""
+        vwap_line = f"- *VWAP dist:* {vwap_sign}{vwap_pct:.1f}% (VWAP ${vwap:.2f})\n"
+
+    pdh_line = ""
+    if yesterday_high > 0:
+        pdh_pct  = ((price - yesterday_high) / yesterday_high) * 100.0
+        pdh_sign = "+" if pdh_pct >= 0 else ""
+        pdh_line = f"- *PDH dist:* {pdh_sign}{pdh_pct:.1f}% (PDH ${yesterday_high:.2f})\n"
+
+    candle_vol_line = ""
+    if candle_vol and avg_candle_vol:
+        cvol_ratio      = candle_vol / avg_candle_vol if avg_candle_vol > 0 else 0
+        candle_vol_line = f"- *Candle vol:* {_fmt_volume(candle_vol)} ({cvol_ratio:.1f}x avg {_fmt_volume(avg_candle_vol)})\n"
+
+    float_line = ""
+    if float_shares or float_category:
+        float_str = _fmt_float(float_shares) if float_shares else "N/A"
+        cat_str   = f" [{float_category}]" if float_category else ""
+        cap_str   = f" | Cap: {_fmt_cap(market_cap)}" if market_cap else ""
+        float_line = f"- *Float:* {float_str}{cat_str}{cap_str}\n"
+
+    return (
+        f"{meta['emoji']} *{meta['header']}* {meta['emoji']}\n\n"
+        f"- *Ticker:* [${escaped_symbol}]({tv_link})\n"
+        f"- *Price:* ${price:,.2f} ({daily_sign}{daily_pct:.1f}% day)\n"
+        f"{signal_line}"
+        f"{rvol_line}"
+        f"{candle_vol_line}"
+        f"{vwap_line}"
+        f"{pdh_line}"
+        f"{float_line}"
+        f"- *Time:* {timestamp}"
+    )
+
+
 @celery_app.task(name="fastapi_app.tasks.alerts.send_telegram_alert_task")
 def send_telegram_alert_task(alert_data: dict) -> dict:
     """
     Sends a real-time breakout alert notification to Telegram via Bot API.
-    Includes enriched decision context: price, daily %, candle RVOL, float, cap,
-    VWAP relationship, and PDH distance.
+    Body formatting is driven by ALERT_TYPE_META; see _format_alert_message.
     """
     token = settings.telegram_bot_token
     chat_id = settings.telegram_chat_id
@@ -66,187 +202,17 @@ def send_telegram_alert_task(alert_data: dict) -> dict:
         logger.warning(
             "Telegram bot settings not configured (token or chat_id is empty). "
             "Skipping alert dispatch for %s.",
-            alert_data.get("symbol")
+            alert_data.get("symbol"),
         )
         return {"status": "skipped", "reason": "not_configured"}
 
-    # ── Extract alert parameters ──────────────────────────────────────────────
-    symbol       = alert_data.get("symbol", "UNKNOWN")
-    price        = alert_data.get("price", 0.0)
-    alert_type   = alert_data.get("alert_type", "Breakout")
-    rvol         = alert_data.get("rvol", 0.0)
-    timestamp_str = alert_data.get("time", "")
-
-    # Enriched fields (may be absent on older payloads — use safe defaults)
-    daily_pct     = alert_data.get("daily_pct", 0.0)
-    candle_vol    = alert_data.get("candle_vol", 0)
-    avg_candle_vol = alert_data.get("avg_candle_vol", 0)
-    vwap          = alert_data.get("vwap", 0.0)
-    yesterday_high = alert_data.get("yesterday_high", 0.0)
-    float_category = alert_data.get("float_category", "")
-    market_cap    = alert_data.get("market_cap", 0)
-    float_shares  = alert_data.get("float_shares", 0)
-
-    # ── Format helpers ────────────────────────────────────────────────────────
-    try:
-        dt = datetime.fromisoformat(timestamp_str)
-        timestamp = dt.strftime("%Y-%m-%d %H:%M:%S")
-    except Exception:
-        timestamp = timestamp_str
-
-    def escape_markdown(text: str) -> str:
-        if not isinstance(text, str):
-            return str(text)
-        for char in ["_", "*", "[", "`"]:
-            text = text.replace(char, f"\\{char}")
-        return text
-
-    def fmt_volume(v: int) -> str:
-        """Format volume as K/M abbreviation."""
-        if v >= 1_000_000:
-            return f"{v / 1_000_000:.1f}M"
-        if v >= 1_000:
-            return f"{v / 1_000:.0f}K"
-        return str(v)
-
-    def fmt_cap(cap: float) -> str:
-        """Format market cap as M/B."""
-        if cap >= 1_000_000_000:
-            return f"${cap / 1_000_000_000:.1f}B"
-        if cap >= 1_000_000:
-            return f"${cap / 1_000_000:.0f}M"
-        return f"${cap:,.0f}"
-
-    def fmt_float(shares: int) -> str:
-        """Format float shares as M."""
-        if shares >= 1_000_000:
-            return f"{shares / 1_000_000:.1f}M"
-        return f"{shares:,}"
-
-    escaped_symbol = escape_markdown(symbol)
-    tv_link = f"https://www.tradingview.com/chart/?symbol={symbol}"
-    daily_sign = "+" if daily_pct >= 0 else ""
-
-    # ── VWAP and PDH distance lines (shared context block) ───────────────────
-    vwap_line = ""
-    if vwap > 0:
-        vwap_pct = ((price - vwap) / vwap) * 100.0
-        vwap_sign = "+" if vwap_pct >= 0 else ""
-        vwap_line = f"- *VWAP dist:* {vwap_sign}{vwap_pct:.1f}% (VWAP ${vwap:.2f})\n"
-
-    pdh_line = ""
-    if yesterday_high > 0:
-        pdh_pct = ((price - yesterday_high) / yesterday_high) * 100.0
-        pdh_sign = "+" if pdh_pct >= 0 else ""
-        pdh_line = f"- *PDH dist:* {pdh_sign}{pdh_pct:.1f}% (PDH ${yesterday_high:.2f})\n"
-
-    # ── Candle volume line ────────────────────────────────────────────────────
-    candle_vol_line = ""
-    if candle_vol and avg_candle_vol:
-        cvol_ratio = candle_vol / avg_candle_vol if avg_candle_vol > 0 else 0
-        candle_vol_line = f"- *Candle vol:* {fmt_volume(candle_vol)} ({cvol_ratio:.1f}x avg {fmt_volume(avg_candle_vol)})\n"
-
-    # ── Float / Cap line ──────────────────────────────────────────────────────
-    float_line = ""
-    if float_shares or float_category:
-        float_str = fmt_float(float_shares) if float_shares else "N/A"
-        cat_str = f" [{float_category}]" if float_category else ""
-        cap_str = f" | Cap: {fmt_cap(market_cap)}" if market_cap else ""
-        float_line = f"- *Float:* {float_str}{cat_str}{cap_str}\n"
-
-    # ── Build message per alert type ──────────────────────────────────────────
-    if alert_type == "VOLATILITY_HALT":
-        message = (
-            "⏸️ *VOLATILITY HALT* ⏸️\n\n"
-            f"- *Ticker:* [${escaped_symbol}]({tv_link})\n"
-            f"- *Price:* ${price:,.2f} ({daily_sign}{daily_pct:.1f}% day)\n"
-            f"- *Signal:* Volatility Halt (Status H)\n"
-            f"- *Time:* {timestamp}"
-        )
-    elif alert_type == "VOLATILITY_RESUME":
-        message = (
-            "▶️ *VOLATILITY RESUME* ▶️\n\n"
-            f"- *Ticker:* [${escaped_symbol}]({tv_link})\n"
-            f"- *Price:* ${price:,.2f} ({daily_sign}{daily_pct:.1f}% day)\n"
-            f"- *Signal:* Volatility Resume (Status Active)\n"
-            f"- *Time:* {timestamp}"
-        )
-    elif alert_type == "HOD_BREAKOUT":
-        message = (
-            "🏔️ *HOD BREAKOUT* 🏔️\n\n"
-            f"- *Ticker:* [${escaped_symbol}]({tv_link})\n"
-            f"- *Price:* ${price:,.2f} ({daily_sign}{daily_pct:.1f}% day)\n"
-            f"- *RVOL:* {rvol:.1f}x\n"
-            f"{candle_vol_line}"
-            f"{vwap_line}"
-            f"{pdh_line}"
-            f"{float_line}"
-            f"- *Time:* {timestamp}"
-        )
-    elif alert_type == "VOLUME_SPIKE":
-        message = (
-            "🔊 *VOLUME SPIKE* 🔊\n\n"
-            f"- *Ticker:* [${escaped_symbol}]({tv_link})\n"
-            f"- *Price:* ${price:,.2f} ({daily_sign}{daily_pct:.1f}% day)\n"
-            f"- *RVOL:* {rvol:.1f}x\n"
-            f"{candle_vol_line}"
-            f"{vwap_line}"
-            f"{float_line}"
-            f"- *Time:* {timestamp}"
-        )
-    elif alert_type == "PREV_DAY_BREAKOUT":
-        message = (
-            "🚀 *PREV DAY HIGH BREAKOUT* 🚀\n\n"
-            f"- *Ticker:* [${escaped_symbol}]({tv_link})\n"
-            f"- *Price:* ${price:,.2f} ({daily_sign}{daily_pct:.1f}% day)\n"
-            f"- *RVOL:* {rvol:.1f}x\n"
-            f"{candle_vol_line}"
-            f"{pdh_line}"
-            f"{vwap_line}"
-            f"{float_line}"
-            f"- *Time:* {timestamp}"
-        )
-    elif alert_type == "VWAP_CROSSOVER":
-        message = (
-            "🌊 *VWAP CROSSOVER* 🌊\n\n"
-            f"- *Ticker:* [${escaped_symbol}]({tv_link})\n"
-            f"- *Price:* ${price:,.2f} ({daily_sign}{daily_pct:.1f}% day)\n"
-            f"- *RVOL:* {rvol:.1f}x\n"
-            f"{candle_vol_line}"
-            f"{vwap_line}"
-            f"{float_line}"
-            f"- *Time:* {timestamp}"
-        )
-    elif alert_type == "VWAP_BOUNCE":
-        message = (
-            "📈 *VWAP SUPPORT BOUNCE* 📈\n\n"
-            f"- *Ticker:* [${escaped_symbol}]({tv_link})\n"
-            f"- *Price:* ${price:,.2f} ({daily_sign}{daily_pct:.1f}% day)\n"
-            f"- *RVOL:* {rvol:.1f}x\n"
-            f"{candle_vol_line}"
-            f"{vwap_line}"
-            f"{float_line}"
-            f"- *Time:* {timestamp}"
-        )
-    else:
-        escaped_alert_type = escape_markdown(alert_type)
-        message = (
-            "🚨 *BREAKOUT DETECTED* 🚨\n\n"
-            f"- *Ticker:* [${escaped_symbol}]({tv_link})\n"
-            f"- *Price:* ${price:,.2f} ({daily_sign}{daily_pct:.1f}% day)\n"
-            f"- *Signal:* {escaped_alert_type}\n"
-            f"- *RVOL:* {rvol:.1f}x\n"
-            f"{candle_vol_line}"
-            f"{vwap_line}"
-            f"{float_line}"
-            f"- *Time:* {timestamp}"
-        )
-
+    symbol = alert_data.get("symbol", "UNKNOWN")
+    message = _format_alert_message(alert_data)
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
         "chat_id": chat_id,
         "text": message,
-        "parse_mode": "Markdown"
+        "parse_mode": "Markdown",
     }
 
     try:
@@ -258,7 +224,7 @@ def send_telegram_alert_task(alert_data: dict) -> dict:
     except httpx.HTTPStatusError as e:
         logger.error(
             "HTTP error occurred while sending Telegram alert for %s: %s | Response: %s",
-            symbol, e, e.response.text
+            symbol, e, e.response.text,
         )
         raise
     except httpx.RequestError as e:

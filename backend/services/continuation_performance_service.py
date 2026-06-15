@@ -13,6 +13,7 @@ from typing import Dict, Any, List, Optional
 
 from database import get_connection
 from services.schwab_client import get_daily_bars
+from validation import EASTERN_TZ
 from services.fmp_service import get_company_profile, get_cash_position, get_income_statement
 
 log = logging.getLogger(__name__)
@@ -201,7 +202,7 @@ def _extract_daily_performance(candles: List[Dict[str, Any]], date_str: str) -> 
     Finds the candle matching date_str and extracts Day 0 close
     plus Day 1, Day 2, and Day 3 prices.
     """
-    eastern = pytz.timezone('America/New_York')
+    eastern = EASTERN_TZ
     
     # 1. Match candle index for Day 0
     d0_idx = -1
