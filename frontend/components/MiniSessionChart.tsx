@@ -41,13 +41,22 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
   const [hovered, setHovered] = useState<{ o: number; h: number; l: number; c: number } | null>(null)
   const loaded = useRef(false)
 
+  // Ref mirror of `data` so the tick callback can read the latest bars
+  // without recapturing `data` in its closure. Without this, an in-flight
+  // tick from a previous auto-refresh cycle can land after the chart has
+  // been rebuilt with a newer last bar, and candles.update() throws
+  // "Cannot update oldest data" (lightweight-charts v5 guard).
+  const dataRef = useRef<ChartData | null>(null)
+  dataRef.current = data
+
   // In-place tick of the latest candle's close (and high/low) with the
   // current live price from the screener. No chart rebuild — the existing
   // candle is just .update()'d so the wick grows in real time.
   const tickLatestBar = useCallback((price: number) => {
     const candles = candlesRef.current
-    if (!candles || !data?.ohlcv?.length) return
-    const last = data.ohlcv[data.ohlcv.length - 1]
+    const cur = dataRef.current?.ohlcv
+    if (!candles || !cur?.length) return
+    const last = cur[cur.length - 1]
     candles.update({
       time:  last.time,
       open:  last.open,
@@ -55,7 +64,7 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
       low:   Math.min(last.low,  price),
       close: price,
     })
-  }, [data])
+  }, [])
 
   const priceMomentum = useMemo(() => {
     if (!data?.ohlcv || data.ohlcv.length < 3) return null
@@ -273,7 +282,12 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
     })
     ro.observe(containerRef.current)
 
-    return () => { ro.disconnect(); chart.remove() }
+    return () => {
+      ro.disconnect()
+      chart.remove()
+      chartRef.current = null
+      candlesRef.current = null
+    }
   }, [data, height])
 
   const handleMouseDown = (e: React.MouseEvent) => {
