@@ -1,10 +1,7 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import './globals.css'
 import NavBar from '@/components/NavBar'
 import OnboardingWizard from '@/components/OnboardingWizard'
-
-const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'Trading Journal',
@@ -28,7 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           })()
         ` }} />
       </head>
-      <body className={`${inter.className} bg-[var(--background)] text-[var(--foreground)] min-h-screen transition-colors duration-300`}>
+      <body className="font-mono bg-[var(--background)] text-[var(--foreground)] min-h-screen transition-colors duration-300">
         <NavBar />
         <main className="max-w-[1920px] mx-auto px-3 py-6">{children}</main>
         <OnboardingWizard />

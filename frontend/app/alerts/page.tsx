@@ -17,12 +17,12 @@ import {
 } from 'lucide-react'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000'
-const CHART_BG = '#0d0d14'
-const GRID_COLOR = '#1a1a2a'
-const TEXT_COLOR = '#64748b'
-const UP_COLOR = '#22d3a7'
-const DOWN_COLOR = '#f04d5a'
-const EMA21_COL = '#4361ee'
+const CHART_BG = '#000000'
+const GRID_COLOR = '#444444' // Stark dotted grids
+const TEXT_COLOR = '#8e8e8e'
+const UP_COLOR = '#00ff00' // Neon bullish green
+const DOWN_COLOR = '#ff003c' // Neon bearish red
+const EMA21_COL = '#00f0ff'
 
 interface OhlcBar { time: UTCTimestamp; open: number; high: number; low: number; close: number }
 interface LinePt { time: UTCTimestamp; value: number }
@@ -183,12 +183,34 @@ function AlertSessionChart({ ticker, date, alerts, selectedAlertId }: ChartProps
     chartRef.current?.remove()
 
     const chart = createChart(containerRef.current, {
-      layout: { background: { color: CHART_BG }, textColor: TEXT_COLOR, fontSize: 11 },
-      grid: { vertLines: { color: GRID_COLOR }, horzLines: { color: GRID_COLOR } },
-      crosshair: { mode: CrosshairMode.Normal },
-      rightPriceScale: { borderColor: GRID_COLOR, textColor: TEXT_COLOR },
+      layout: { 
+        background: { color: CHART_BG }, 
+        textColor: TEXT_COLOR, 
+        fontSize: 10,
+        fontFamily: "Consolas, 'Roboto Mono', Monaco, ui-monospace, monospace"
+      },
+      grid: { 
+        vertLines: { color: GRID_COLOR, style: 1 }, 
+        horzLines: { color: GRID_COLOR, style: 1 } 
+      },
+      crosshair: { 
+        mode: CrosshairMode.Normal,
+        vertLine: {
+          color: '#555555',
+          width: 1,
+          style: 1, // Dotted
+          labelBackgroundColor: '#00ff00',
+        },
+        horzLine: {
+          color: '#555555',
+          width: 1,
+          style: 1, // Dotted
+          labelBackgroundColor: '#ff003c',
+        }
+      },
+      rightPriceScale: { borderColor: '#262626', textColor: TEXT_COLOR },
       timeScale: {
-        borderColor: GRID_COLOR,
+        borderColor: '#262626',
         timeVisible: true,
         secondsVisible: false,
         fixLeftEdge: true,
@@ -210,18 +232,30 @@ function AlertSessionChart({ ticker, date, alerts, selectedAlertId }: ChartProps
     candlesSeriesRef.current = candles
 
     const vol = chart.addSeries(HistogramSeries, {
-      color: 'rgba(100,116,139,0.3)',
       priceFormat: { type: 'volume' },
       priceScaleId: 'vol',
       lastValueVisible: false,
       priceLineVisible: false,
     })
     chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 }, visible: false })
-    vol.setData(dedupSort(data.volume))
+
+    const ohlcMap = new Map<number, OhlcBar>()
+    data.ohlcv.forEach(c => ohlcMap.set(c.time as number, c))
+
+    const volData = data.volume.map(v => {
+      const candle = ohlcMap.get(v.time as number)
+      const isUp = candle ? candle.close >= candle.open : true
+      return {
+        time: v.time,
+        value: v.value,
+        color: isUp ? 'rgba(0, 255, 0, 0.3)' : 'rgba(255, 0, 60, 0.3)',
+      }
+    })
+    vol.setData(dedupSort(volData))
 
     if (data.ema_21?.length) {
       const ema = chart.addSeries(LineSeries, {
-        color: EMA21_COL, lineWidth: 2,
+        color: EMA21_COL, lineWidth: 1,
         priceLineVisible: false, lastValueVisible: false,
         crosshairMarkerVisible: false,
       })

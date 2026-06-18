@@ -10,16 +10,21 @@
 }
 
 html.dark {
-  --background: #030712;
-  --foreground: #f9fafb;
-  --panel-bg: #09090b;
-  --panel-border: #27272a;
+  --background: #000000;
+  --foreground: #cccccc;
+  --panel-bg: #0a0a0a;
+  --panel-border: #262626;
+}
+
+/* Strict TradeStation zero rounded-corner rule */
+* {
+  border-radius: 0px !important;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: Consolas, "Roboto Mono", ui-monospace, monospace;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
@@ -33,32 +38,27 @@ html {
   scrollbar-gutter: stable;
 }
 
-/* Custom premium scrollbar styling */
+/* Custom premium scrollbar styling - sharp desktop broker look */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  background: #000000;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #27272a; /* zinc-800 */
-  border-radius: 9999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
+  background: #262626;
+  border-radius: 0px !important;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #3f3f46; /* zinc-700 */
-  border-radius: 9999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
+  background: #444444;
 }
 
 /* Firefox scrollbar support */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #27272a transparent;
+  scrollbar-color: #262626 #000000;
 }
