@@ -278,6 +278,8 @@ def _compute_indicators(bars_df: pd.DataFrame, mini_mode: bool) -> tuple[dict, l
 
     if mini_mode:
         df["ema_21"] = df["close"].ewm(span=21, adjust=False).mean()
+        df["ema_50"] = df["close"].ewm(span=50, adjust=False).mean()
+        df["ema_100"] = df["close"].ewm(span=100, adjust=False).mean()
         df = df.dropna(subset=["ema_21"])
     else:
         for span in (8, 13, 21, 34, 55):
@@ -338,6 +340,8 @@ def _compute_indicators(bars_df: pd.DataFrame, mini_mode: bool) -> tuple[dict, l
             "ohlcv": ohlcv_records,
             "volume": vol_records,
             "ema_21": line_series("ema_21"),
+            "ema_50": line_series("ema_50"),
+            "ema_100": line_series("ema_100"),
         }, []
 
     return {

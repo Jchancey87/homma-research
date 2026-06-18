@@ -24,6 +24,7 @@ export interface Gainer {
   open_price: number | null
   // Enrichment fields (2026-05)
   high_price: number | null
+  extended_change_pct: number | null
   low_price: number | null
   prev_close: number | null
   vwap: number | null

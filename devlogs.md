@@ -1205,3 +1205,17 @@ Identified expired/revoked Schwab OAuth token causing infinite restart loop of `
 * **Identified Crash Loop**: Expired/revoked Schwab OAuth token triggers `OAuthError` in `schwab-streamer` login. PM2 configured with `autorestart: true` immediately restarts process, causing infinite loop.
 * **Identified Backend API Errors**: Backend FastAPI server (`fastapi-backend`) constantly retries Schwab API requests, generating high logging volume and 400 Bad Request responses.
 * **Log Bloat**: Large error log accumulation in `/var/log/trading-journal/`.
+
+---
+
+## [2026-06-18] Daily Charts Improvements
+
+### Summary
+Enhanced Daily Charts page with price filtering, multi-EMA overlays, and blinking price momentum indicator.
+
+### What Changed
+* **Backend (`chart_data_service.py`)**: Added `ema_50` and `ema_100` calculations in `mini_mode`.
+* **Backend Tests (`test_chart_data_service.py`)**: Updated unit tests to assert extra EMA keys.
+* **Frontend (`MiniSessionChart.tsx`)**: Plotted `ema_50` (#f59e0b) and `ema_100` (#ec4899) on lightweight-charts. Added price momentum calculation (`current vs 2m ago close >= 1.0%`) and rendered blinking breakout badge in card header.
+* **Frontend Page (`daily-charts/page.tsx`, `lib/api.ts`)**: Added `extended_change_pct` to the type definitions, mapped it inside load API calls, and used it (with `gap_pct` fallback) for sorting and displaying change percentages on mini charts, aligning it with the live screener. Synchronized `$2-$25 Filter` state using `localStorage` and custom events, explicitly sorted list by aligned percentage descending to guarantee grid ranking flow, and rendered top 9 filtered gainers.
+* **Frontend Overhaul (`MiniSessionChart.tsx`, `daily-charts/page.tsx`)**: Re-styled layout elements, chart panels, header bars, inputs, and buttons to use zero rounded corners (`rounded-none`), flat matte black backgrounds (`#000000`/`#0a0a0a`), high-density tiled grid alignment, high-contrast dotted gridlines (`style: 1`), neon candle colors (`#00ff00` and `#ff003c`), thin 1px neon moving averages, and font-mono text.

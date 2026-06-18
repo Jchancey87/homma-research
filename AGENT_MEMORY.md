@@ -40,6 +40,7 @@
 ### 6. Frontend & UI
 * **Interaction:** Toggle row expansion on click. No hover handlers.
 * **Audio/Charts:** Dynamic chimes via Web Audio API. Split chart hooks (init vs decorators) in `page.tsx`.
+* **TradeStation Style:** High density look. Matte black (#000000). Sharp 90deg edges (rounded-none). 1px charcoal grid gaps. Stark dotted canvas grid (#444444, style: 1). Neon series colors (bull #00ff00, bear #ff003c). Overlay HUD info (symbol, change %, EMA coordinates, volume color mapping) inside canvas to minimize vertical padding.
 
 ### 7. Testing & DevOps
 * **Venv Testing:** Execute backend tests using `/opt/trading-journal/backend/venv/bin/pytest`.
@@ -50,7 +51,7 @@
 ## 🔱 Branch: session (Active Intent & Scope)
 * **Goal:** Continue RFC-004 quick-wins batch + RFC-005 db/ module adoption (handoff #014).
 * **Status:** ✅ ALL COMPLETE. QW-1 + QW-2 + QW-3 + QW-4 + RFC-005 + RFC-010 done. 241/241 tests pass, 0 regressions.
-* **This session:** QW-3 (Telegram template collapse, -34L + 19 tests) → QW-4 (ticker + TZ canonicalisation, +12 tests with self-walking grep guard) → RFC-005 (7 new `db/` modules, ~80 SQL strings extracted, gainers.py -160L) → **RFC-010** (`ScheduledTask` class extracted; `premarket_gap.py` 51→22, `refresh.py` 57→22; +18 tests including idempotent-`start()` lock test).
+* **This session:** Daily Charts improvements: added $2-$25 price filter sync, top 9 chart layout, explicit gap % descending sort to guarantee grid ranking flow, aligned change percentages to use `extended_change_pct` (falling back to `gap_pct`) to match live screener, multi-EMA overlays (21, 50, 100) on 1-minute timeframes, and blinking price momentum indicator in chart card headers. Updated backend services and test assertions. Overhauled Daily Charts UI/UX style to match TradeStation professional desktop layout (rounded-none, matte black backgrounds, dotted grids, neon candles/moving averages, high-density font-mono text).
 * **For future sessions:** RFC-006 (frontend type mirroring), RFC-007 (sync database.py async migration), RFC-008 (momentum_screener → backend dep break), RFC-009 (frontend API client consolidation). Pick one when needed.
 
 ## 🗑️ Rot & Pruning Log

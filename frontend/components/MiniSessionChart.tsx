@@ -1,19 +1,20 @@
 'use client'
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import {
   createChart, IChartApi,
   CandlestickSeries, LineSeries, HistogramSeries,
   CrosshairMode, UTCTimestamp,
 } from 'lightweight-charts'
 import { Loader2, AlertTriangle } from 'lucide-react'
+import { PipeScanResult } from '@/lib/api'
 
 const API_BASE   = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000'
-const CHART_BG   = '#0d0d14'
-const GRID_COLOR = '#1a1a2a'
-const TEXT_COLOR = '#64748b'
-const UP_COLOR   = '#22d3a7'
-const DOWN_COLOR = '#f04d5a'
-const EMA21_COL  = '#4361ee'
+const CHART_BG   = '#000000'
+const GRID_COLOR = '#444444' // Stark dotted grids
+const TEXT_COLOR = '#8e8e8e'
+const UP_COLOR   = '#00ff00' // Neon bullish green
+const DOWN_COLOR = '#ff003c' // Neon bearish red
+const EMA21_COL  = '#00f0ff'
 
 interface OhlcBar { time: UTCTimestamp; open: number; high: number; low: number; close: number }
 interface LinePt  { time: UTCTimestamp; value: number }
@@ -23,6 +24,8 @@ interface ChartData {
   ohlcv:  OhlcBar[]
   volume: HistoPt[]
   ema_21: LinePt[]
+  ema_50?: LinePt[]
+  ema_100?: LinePt[]
 }
 
 /** Sort ascending by time and remove duplicate timestamps (keep last occurrence). */
@@ -39,6 +42,8 @@ function shiftMiniChartDataTime(data: ChartData, offsetSec: number): ChartData {
     ohlcv: data.ohlcv ? data.ohlcv.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
     volume: data.volume ? data.volume.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
     ema_21: data.ema_21 ? data.ema_21.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
+    ema_50: data.ema_50 ? data.ema_50.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
+    ema_100: data.ema_100 ? data.ema_100.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
   }
 }
 
@@ -48,6 +53,8 @@ interface Props {
   gapPct:   number | null
   float:    number | null
   rvol:     number | null
+  rank?:    number
+  pipe?:    PipeScanResult | undefined
   onExpand: (ticker: string) => void
 }
 
@@ -61,7 +68,7 @@ function fmtFloat(n: number | null) {
   return m >= 1000 ? `${(m / 1000).toFixed(1)}B` : `${m.toFixed(1)}M`
 }
 
-export default function MiniSessionChart({ ticker, date, gapPct, float: floatShares, rvol, onExpand }: Props) {
+export default function MiniSessionChart({ ticker, date, gapPct, float: floatShares, rvol, rank, pipe, onExpand }: Props) {
   const [clickStart, setClickStart] = useState<{ x: number; y: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef     = useRef<IChartApi | null>(null)
@@ -71,6 +78,17 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
   const [hovered, setHovered] = useState<{ o: number; h: number; l: number; c: number } | null>(null)
   const loaded = useRef(false)
 
+  const priceMomentum = useMemo(() => {
+    if (!data?.ohlcv || data.ohlcv.length < 3) return null
+    const len = data.ohlcv.length
+    const current = data.ohlcv[len - 1].close
+    const prev2 = data.ohlcv[len - 3].close
+    if (!prev2) return 0
+    return ((current - prev2) / prev2) * 100
+  }, [data?.ohlcv])
+
+  const hasMomentumSpike = priceMomentum !== null && priceMomentum >= 1.0
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -79,7 +97,13 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
       // Only extract what we need to keep memory low
-      const rawData = { ohlcv: json.ohlcv, volume: json.volume, ema_21: json.ema_21 }
+      const rawData = {
+        ohlcv: json.ohlcv,
+        volume: json.volume,
+        ema_21: json.ema_21,
+        ema_50: json.ema_50,
+        ema_100: json.ema_100,
+      }
       const localOffset = -new Date().getTimezoneOffset() * 60
       setData(shiftMiniChartDataTime(rawData, localOffset))
     } catch (e) {
@@ -117,12 +141,34 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
     chartRef.current?.remove()
 
     const chart = createChart(containerRef.current, {
-      layout:    { background: { color: CHART_BG }, textColor: TEXT_COLOR, fontSize: 10 },
-      grid:      { vertLines: { color: GRID_COLOR }, horzLines: { color: GRID_COLOR } },
-      crosshair: { mode: CrosshairMode.Normal },
-      rightPriceScale: { borderColor: GRID_COLOR, textColor: TEXT_COLOR },
+      layout: { 
+        background: { color: CHART_BG }, 
+        textColor: TEXT_COLOR, 
+        fontSize: 10,
+        fontFamily: "Consolas, 'Roboto Mono', Monaco, ui-monospace, monospace"
+      },
+      grid: { 
+        vertLines: { color: GRID_COLOR, style: 1 }, 
+        horzLines: { color: GRID_COLOR, style: 1 } 
+      },
+      crosshair: { 
+        mode: CrosshairMode.Normal,
+        vertLine: {
+          color: '#555555',
+          width: 1,
+          style: 1, // Dotted
+          labelBackgroundColor: '#00ff00',
+        },
+        horzLine: {
+          color: '#555555',
+          width: 1,
+          style: 1, // Dotted
+          labelBackgroundColor: '#ff003c',
+        }
+      },
+      rightPriceScale: { borderColor: '#262626', textColor: TEXT_COLOR },
       timeScale: {
-        borderColor:     GRID_COLOR,
+        borderColor:     '#262626',
         timeVisible:     true,
         secondsVisible:  false,
         fixLeftEdge:     true,
@@ -143,16 +189,28 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
     })
     candles.setData(dedupSort(data.ohlcv))
 
-    // Volume (overlaid, small scale)
+    // Volume (overlaid, small scale, colored by up/down candle)
     const vol = chart.addSeries(HistogramSeries, {
-      color: 'rgba(100,116,139,0.3)',
       priceFormat:     { type: 'volume' },
       priceScaleId:    'vol',
       lastValueVisible: false,
       priceLineVisible: false,
     })
     chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.80, bottom: 0 }, visible: false })
-    vol.setData(dedupSort(data.volume))
+
+    const ohlcMap = new Map<number, OhlcBar>()
+    data.ohlcv.forEach(c => ohlcMap.set(c.time as number, c))
+
+    const volData = data.volume.map(v => {
+      const candle = ohlcMap.get(v.time as number)
+      const isUp = candle ? candle.close >= candle.open : true
+      return {
+        time: v.time,
+        value: v.value,
+        color: isUp ? 'rgba(0, 255, 0, 0.3)' : 'rgba(255, 0, 60, 0.3)',
+      }
+    })
+    vol.setData(dedupSort(volData))
 
     // EMA 21
     if (data.ema_21?.length) {
@@ -162,6 +220,26 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
         crosshairMarkerVisible: false,
       })
       ema.setData(dedupSort(data.ema_21))
+    }
+
+    // EMA 50 (neon yellow)
+    if (data.ema_50?.length) {
+      const ema50 = chart.addSeries(LineSeries, {
+        color: '#ffff00', lineWidth: 1,
+        priceLineVisible: false, lastValueVisible: false,
+        crosshairMarkerVisible: false,
+      })
+      ema50.setData(dedupSort(data.ema_50))
+    }
+
+    // EMA 100 (neon pink)
+    if (data.ema_100?.length) {
+      const ema100 = chart.addSeries(LineSeries, {
+        color: '#ff00ff', lineWidth: 1,
+        priceLineVisible: false, lastValueVisible: false,
+        crosshairMarkerVisible: false,
+      })
+      ema100.setData(dedupSort(data.ema_100))
     }
 
     // Crosshair readout
@@ -202,56 +280,81 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
 
   return (
     <div
-      className="bg-[#0d0d14] border border-gray-800 rounded-xl overflow-hidden
-                 hover:border-emerald-500/40 transition-colors group"
+      className="relative bg-black rounded-none overflow-hidden hover:bg-[#050505] transition-colors group font-mono cursor-pointer select-none"
+      style={{ height: 200 }}
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800/80">
-        <div className="flex items-center gap-2">
-          <span className="font-bold text-white text-sm font-mono">{ticker}</span>
-          <span className="text-xs text-emerald-400 font-mono font-semibold">
-            {gapPct != null ? `+${fmt1(gapPct)}%` : ''}
+      {/* HUD / Overlay */}
+      <div className="absolute top-1 left-1.5 right-1.5 z-10 pointer-events-none flex justify-between select-none">
+        {/* Left Side: Rank, Ticker, Gap, Timeframe, Momentum, PIPE */}
+        <div className="flex items-center gap-1.5 bg-black/85 px-1 py-0.5 border border-[#333333] rounded-none">
+          {rank != null && <span className="text-gray-500 text-[9px] font-bold">#{rank}</span>}
+          <span className="font-bold text-white text-[10px] uppercase tracking-wider">{ticker}</span>
+          <span className={`font-bold text-[9.5px] ${gapPct != null && gapPct >= 0 ? 'text-[#00ff00]' : 'text-[#ff003c]'}`}>
+            {gapPct != null ? `${gapPct >= 0 ? '+' : ''}${fmt1(gapPct)}%` : ''}
           </span>
-        </div>
-        <div className="flex items-center gap-3 text-[10px] text-gray-500 font-mono">
-          <span>Float {fmtFloat(floatShares)}</span>
-          {rvol != null && (
-            <span className={rvol >= 5 ? 'text-amber-400' : ''}>{fmt1(rvol)}x RVOL</span>
+          <span className="text-gray-400 text-[8.5px] border border-gray-800 px-0.5">1m</span>
+          
+          {hasMomentumSpike && (
+            <span className="inline-flex items-center gap-0.5 px-0.5 py-[1px] rounded-none text-[8px] font-black uppercase tracking-wider bg-[#ff003c]/20 text-[#ff003c] border border-[#ff003c]/30 animate-pulse">
+              MOM +{priceMomentum.toFixed(1)}%
+            </span>
           )}
-          {hovered && (
-            <span className="hidden group-hover:flex items-center gap-1.5 text-[10px] font-mono">
-              <span className="text-gray-500">O<span className="text-gray-300 ml-0.5">{hovered.o.toFixed(2)}</span></span>
-              <span className="text-gray-500">H<span className="text-emerald-400 ml-0.5">{hovered.h.toFixed(2)}</span></span>
-              <span className="text-gray-500">L<span className="text-red-400 ml-0.5">{hovered.l.toFixed(2)}</span></span>
-              <span className="text-gray-500">C<span className="text-gray-200 ml-0.5">{hovered.c.toFixed(2)}</span></span>
+
+          {pipe?.is_pipe && (
+            <span
+              className={`text-[8px] px-0.5 py-[1px] rounded-none uppercase tracking-wider border font-bold ${
+                (pipe.deal_score ?? 0) >= 4 ? 'bg-emerald-950/45 text-[#00ff00] border-[#00ff00]/30'
+                : (pipe.deal_score ?? 0) <= 2 ? 'bg-red-950/45 text-[#ff003c] border-[#ff003c]/30'
+                : 'bg-yellow-950/45 text-yellow-400 border-yellow-500/30'
+              }`}
+            >
+              PIPE {pipe.deal_score}/5
             </span>
           )}
         </div>
+
+        {/* Right Side: Data stats / Hover coordinates */}
+        <div className="flex flex-col items-end gap-0.5 bg-black/85 px-1 py-0.5 border border-[#333333] rounded-none text-[9px]">
+          {hovered ? (
+            <div className="text-[8.5px] text-gray-300 font-bold tracking-tight">
+              O:<span className="text-[#00ff00]">{hovered.o.toFixed(2)}</span>{' '}
+              H:<span className="text-[#00ff00]">{hovered.h.toFixed(2)}</span>{' '}
+              L:<span className="text-[#ff003c]">{hovered.l.toFixed(2)}</span>{' '}
+              C:<span className={hovered.c >= hovered.o ? 'text-[#00ff00]' : 'text-[#ff003c]'}>{hovered.c.toFixed(2)}</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 text-gray-400">
+              <span>FLT:{fmtFloat(floatShares)}</span>
+              {rvol != null && (
+                <span className={rvol >= 5 ? 'text-[#fff000] font-bold' : ''}>RV:{fmt1(rvol)}x</span>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Chart area */}
-      <div className="relative" style={{ height: 200 }}>
-        {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-[#0d0d14]">
-            <Loader2 size={16} className="animate-spin text-gray-600" />
-          </div>
-        )}
-        {error && !loading && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-gray-600">
-            <AlertTriangle size={16} />
-            <span className="text-[10px]">{error}</span>
-          </div>
-        )}
-        <div ref={containerRef} className="w-full h-full" />
+      {/* Date overlay in bottom-left corner */}
+      <div className="absolute bottom-1 left-1.5 z-10 pointer-events-none bg-black/85 px-1 py-0.25 border border-[#222222] rounded-none text-[8px] text-gray-500 font-mono select-none">
+        {date}
       </div>
 
-      {/* Footer hint */}
-      <div className="px-3 py-1.5 border-t border-gray-900/80 flex items-center justify-between">
-        <span className="text-[10px] text-gray-700">1m · click to research</span>
-        <span className="text-[10px] text-gray-700">{date}</span>
-      </div>
+      {/* Loading & Error States */}
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black z-20">
+          <Loader2 size={16} className="animate-spin text-gray-700" />
+        </div>
+      )}
+      {error && !loading && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-gray-700 z-20">
+          <AlertTriangle size={14} />
+          <span className="text-[9px]">{error}</span>
+        </div>
+      )}
+
+      {/* Chart Canvas */}
+      <div ref={containerRef} className="w-full h-full" />
     </div>
   )
 }

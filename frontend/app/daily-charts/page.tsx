@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback, Suspense } from 'react'
+import { useEffect, useState, useCallback, useMemo, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { getGainersSummary, GainerSummary, getPipeScan, PipeScanResult, Gainer } from '@/lib/api'
 import MiniSessionChart from '@/components/MiniSessionChart'
@@ -29,49 +29,80 @@ function DailyChartsContent() {
     searchParams.get('date') || ''
   )
   const [pipeMap, setPipeMap]   = useState<Record<string, PipeScanResult>>({})
+  const [priceFilterEnabled, setPriceFilterEnabled] = useState(true)
+
+  // Sync price filter with localStorage / main screener
+  useEffect(() => {
+    const val = localStorage.getItem('price-filter-enabled')
+    if (val !== null) {
+      setPriceFilterEnabled(val === 'true')
+    }
+    const handleSync = () => {
+      const syncedVal = localStorage.getItem('price-filter-enabled')
+      if (syncedVal !== null) {
+        setPriceFilterEnabled(syncedVal === 'true')
+      }
+    }
+    window.addEventListener('price-filter-changed', handleSync)
+    return () => window.removeEventListener('price-filter-changed', handleSync)
+  }, [])
 
   // ── Fetch summary for the active date ──────────────────────────────────────
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      // Always fetch latest first to discover the most recent ingest date
+      // Discover the most recent ingest date
       const s = await getGainersSummary()
-      if (!s.date) { setSummary(s); return }
-
-      // If a specific date was requested via URL param, use that date's gainers
-      const targetDate = activeDate || s.date
-      if (targetDate !== s.date) {
-        // Fetch gainers for specific date via the standard gainers endpoint
-        const res  = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000'}/api/gainers?date=${targetDate}`
-        )
-        const rows = await res.json()
-        setSummary({
-          date:    targetDate,
-          total:   rows.length,
-          gainers: rows.slice(0, 9).map((g: Gainer) => ({
-            ticker:       g.ticker,
-            gap_pct:      g.gap_pct,
-            float_shares: g.float_shares,
-            rvol_15m:     g.rvol_15m,
-            sector:       g.sector,
-            news_headline: g.news_headline,
-            news_fresh:   g.news_fresh,
-            close_price:  g.close_price,
-            open_price:   g.open_price,
-          })),
-        })
-        if (!activeDate) setActiveDate(s.date)
-      } else {
-        setSummary(s)
-        if (!activeDate) setActiveDate(s.date)
+      if (!s.date) {
+        setSummary({ date: null, total: 0, gainers: [] })
+        return
       }
+
+      const targetDate = activeDate || s.date
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000'}/api/gainers?date=${targetDate}`
+      )
+      const rows = await res.json()
+
+      setSummary({
+        date:    targetDate,
+        total:   rows.length,
+        gainers: rows.map((g: Gainer) => ({
+          ticker:       g.ticker,
+          gap_pct:      g.gap_pct,
+          extended_change_pct: g.extended_change_pct,
+          float_shares: g.float_shares,
+          rvol_15m:     g.rvol_15m,
+          sector:       g.sector,
+          news_headline: g.news_headline,
+          news_fresh:   g.news_fresh,
+          close_price:  g.close_price,
+          open_price:   g.open_price,
+        })),
+      })
+      if (!activeDate) setActiveDate(s.date)
     } catch {
       setSummary(null)
     } finally {
       setLoading(false)
     }
   }, [activeDate])
+
+  // Filter gainers by price and grab the top 9
+  const displayGainers = useMemo(() => {
+    if (!summary?.gainers) return []
+    const list = [...summary.gainers]
+    // Guarantee descending sort by aligned change % (extended hours close change if available, else gap)
+    list.sort((a, b) => {
+      const valA = a.extended_change_pct ?? a.gap_pct ?? 0
+      const valB = b.extended_change_pct ?? b.gap_pct ?? 0
+      return valB - valA
+    })
+    if (!priceFilterEnabled) return list.slice(0, 9)
+    return list
+      .filter(g => g.close_price != null && g.close_price >= 2.0 && g.close_price <= 25.0)
+      .slice(0, 9)
+  }, [summary, priceFilterEnabled])
 
   useEffect(() => { load() }, [load])
 
@@ -105,28 +136,49 @@ function DailyChartsContent() {
     : ''
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-2 p-2 bg-black min-h-screen text-gray-400 font-mono text-xs">
       {/* ── Header ── */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-center justify-between gap-4 px-3 py-2 bg-[#050505] border border-[#262626] rounded-none">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <BarChart2 className="text-emerald-400" size={22} />
+          <h1 className="text-sm font-bold text-white flex items-center gap-1.5 uppercase">
+            <BarChart2 className="text-[#00ff00]" size={16} />
             Daily Chart Overview
           </h1>
-          <p className="text-gray-500 text-sm mt-0.5">
-            Top 9 intraday sessions · candlestick + volume + EMA 21
+          <p className="text-gray-500 text-[10px] mt-0.5 uppercase">
+            Top 9 intraday sessions · candlestick + volume + EMA 21, 50, 100
           </p>
         </div>
 
         {/* Date controls */}
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0 select-none">
+          <button
+            onClick={() => {
+              const newValue = !priceFilterEnabled
+              setPriceFilterEnabled(newValue)
+              localStorage.setItem('price-filter-enabled', String(newValue))
+              window.dispatchEvent(new Event('price-filter-changed'))
+            }}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[10px] font-bold border transition-all ${
+              priceFilterEnabled
+                ? 'bg-emerald-950/20 border-[#00ff00]/40 text-[#00ff00] hover:bg-emerald-950/40'
+                : 'bg-black border-[#262626] text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            <span>$2-$25 Filter</span>
+            {priceFilterEnabled ? (
+              <span className="w-1.5 h-1.5 bg-[#00ff00] animate-pulse" />
+            ) : (
+              <span className="w-1.5 h-1.5 bg-gray-700" />
+            )}
+          </button>
+
           <button
             id="prev-day"
             onClick={() => activeDate && goDate(addDays(activeDate, -1))}
             disabled={!activeDate}
-            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-30 transition-colors"
+            className="p-1.5 rounded-none border border-[#262626] text-gray-400 hover:text-white bg-black disabled:opacity-30 transition-colors"
           >
-            <ChevronLeft size={16} />
+            <ChevronLeft size={14} />
           </button>
 
           <input
@@ -135,40 +187,40 @@ function DailyChartsContent() {
             value={activeDate}
             max={todayET()}
             onChange={e => e.target.value && goDate(e.target.value)}
-            className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-white text-sm
-                       focus:outline-none focus:border-emerald-500 [color-scheme:dark]"
+            className="bg-black border border-[#262626] rounded-none px-2 py-1 text-white text-[11px] font-mono
+                       focus:outline-none focus:border-[#00ff00] [color-scheme:dark]"
           />
 
           <button
             id="next-day"
             onClick={() => activeDate && activeDate < todayET() && goDate(addDays(activeDate, 1))}
             disabled={!activeDate || activeDate >= todayET()}
-            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 disabled:opacity-30 transition-colors"
+            className="p-1.5 rounded-none border border-[#262626] text-gray-400 hover:text-white bg-black disabled:opacity-30 transition-colors"
           >
-            <ChevronRight size={16} />
+            <ChevronRight size={14} />
           </button>
 
           <button
             id="refresh-charts"
             onClick={load}
-            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+            className="p-1.5 rounded-none border border-[#262626] text-gray-400 hover:text-white bg-black transition-colors"
           >
-            <RefreshCw size={15} />
+            <RefreshCw size={14} />
           </button>
         </div>
       </div>
 
       {/* ── Date label + stats bar ── */}
       {!loading && summary?.date && (
-        <div className="flex items-center gap-4 px-4 py-3 bg-gray-900 border border-gray-800 rounded-xl">
-          <span className="text-sm font-semibold text-gray-200">{dateLabel}</span>
-          <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-500/15 text-emerald-400 font-medium">
+        <div className="flex items-center gap-4 px-3 py-1.5 bg-[#0a0a0a] border border-[#262626] rounded-none text-[11px]">
+          <span className="font-bold text-gray-300 uppercase">{dateLabel}</span>
+          <span className="px-2 py-0.5 rounded-none text-[10px] bg-emerald-950/20 text-[#00ff00] border border-[#00ff00]/25 font-bold">
             {summary.total} gainers ingested
           </span>
-          <span className="text-xs text-gray-500">
-            Showing top {summary.gainers.length} by gap %
+          <span className="text-gray-500">
+            Showing top {displayGainers.length} by gap % {priceFilterEnabled ? '(filtered $2-$25)' : ''}
           </span>
-          <span className="ml-auto text-xs text-gray-600">
+          <span className="ml-auto text-gray-650 text-[10px] uppercase">
             Click any chart to open full research panel
           </span>
         </div>
@@ -176,61 +228,39 @@ function DailyChartsContent() {
 
       {/* ── State: loading ── */}
       {loading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[1px] bg-[#262626] border border-[#262626] rounded-none">
           {Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden animate-pulse">
-              <div className="h-8 bg-gray-800 border-b border-gray-700" />
-              <div className="h-[200px] bg-[#0d0d14]" />
-              <div className="h-6 bg-gray-900 border-t border-gray-900" />
-            </div>
+            <div key={i} className="bg-black h-[200px] rounded-none animate-pulse" />
           ))}
         </div>
       )}
 
       {/* ── State: no data ── */}
-      {!loading && (!summary || !summary.date || summary.gainers.length === 0) && (
-        <div className="flex flex-col items-center justify-center py-24 gap-3">
-          <Search size={36} className="text-gray-700" />
-          <p className="text-gray-500 text-sm">No ingest data found for this date.</p>
-          <p className="text-gray-600 text-xs">Try a different date or run the ingestion job first.</p>
+      {!loading && (!summary || !summary.date || displayGainers.length === 0) && (
+        <div className="flex flex-col items-center justify-center py-24 gap-3 bg-[#050505] border border-[#262626] rounded-none">
+          <Search size={32} className="text-gray-700" />
+          <p className="text-gray-500 text-xs uppercase tracking-wider font-bold">No ingest data found for this date.</p>
+          <p className="text-gray-600 text-[10px] uppercase">Try a different date or run the ingestion job first.</p>
         </div>
       )}
 
       {/* ── Chart grid ── */}
-      {!loading && summary && summary.gainers.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {summary.gainers.map((g, idx) => {
+      {!loading && summary && displayGainers.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[1px] bg-[#262626] border border-[#262626] rounded-none">
+          {displayGainers.map((g, idx) => {
             const pipe = pipeMap[g.ticker]
-            const pipeColor =
-              !pipe || !pipe.is_pipe ? null
-              : (pipe.deal_score ?? 0) >= 4 ? 'bg-emerald-500 text-white'
-              : (pipe.deal_score ?? 0) <= 2 ? 'bg-red-500 text-white'
-              : 'bg-yellow-500 text-black'
-
             return (
-              <div key={g.ticker} className="relative">
-                {/* Rank badge */}
-                <span className="absolute top-2.5 left-[52px] z-10 text-[10px] text-gray-600 font-mono">
-                  #{idx + 1}
-                </span>
-                {/* PIPE badge */}
-                {pipe?.is_pipe && pipeColor && (
-                  <span
-                    className={`absolute top-2.5 right-2 z-10 text-[9px] font-black px-1.5 py-0.5 rounded uppercase tracking-wider ${pipeColor}`}
-                    title={`PIPE detected · score ${pipe.deal_score}/5 · ${pipe.pricing_type ?? 'unknown'} pricing`}
-                  >
-                    PIPE {pipe.deal_score}/5
-                  </span>
-                )}
-                <MiniSessionChart
-                  ticker={g.ticker}
-                  date={summary.date!}
-                  gapPct={g.gap_pct}
-                  float={g.float_shares}
-                  rvol={g.rvol_15m}
-                  onExpand={handleExpand}
-                />
-              </div>
+              <MiniSessionChart
+                key={g.ticker}
+                ticker={g.ticker}
+                date={summary.date!}
+                gapPct={g.extended_change_pct ?? g.gap_pct}
+                float={g.float_shares}
+                rvol={g.rvol_15m}
+                rank={idx + 1}
+                pipe={pipe}
+                onExpand={handleExpand}
+              />
             )
           })}
         </div>

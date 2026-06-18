@@ -55,7 +55,7 @@ def test_compute_indicators_mini_returns_ohlcv_volume_ema21():
     payload, records = _compute_indicators(df, mini_mode=True)
 
     assert records == []  # pure indicator path; insert list built elsewhere
-    assert set(payload.keys()) == {"ohlcv", "volume", "ema_21"}
+    assert set(payload.keys()) == {"ohlcv", "volume", "ema_21", "ema_50", "ema_100"}
 
     # EMA-21 series must have at least 1 point (drops NaN, but the warmup is 21)
     assert len(payload["ema_21"]) >= 1
