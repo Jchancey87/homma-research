@@ -1223,3 +1223,15 @@ Enhanced Daily Charts page with price filters, multi-EMA ribbons, and price mome
 * **Details Modal Viewport (`frontend/components/LiveGainers.tsx`)**: Adjusted chart modal wrapper minimum height from `min-h-[220px]` to `min-h-[250px]` to support expanded views.
 * **Alerts Page Chart (`frontend/app/alerts/page.tsx`)**: Updated styling matching TradeStation style guidelines (CHART_BG to #000000, GRID_COLOR to #444444, UP_COLOR to #00ff00, DOWN_COLOR to #ff003c, EMA21_COL to #00f0ff). Activated dotted grid lines (style: 1). Mapped volume colors dynamically. Set EMA line width to 1px.
 
+---
+
+## [2026-06-18] Live Intraday Chart Refresh Fix
+
+### Summary
+Fixed daily charts not showing real-time intraday candle updates. Cached DB bars blocked API calls on today's active session.
+
+### What Changed
+* **Backend Ingestion (`backend/services/chart_data_service.py`)**: Bypass DB cache check if date is today or future. Always query Schwab / fallback APIs for fresh intraday candles. Insert new ones via `ON CONFLICT DO NOTHING`. Fallback to DB bars only if API query fails.
+* **Testing**: Passed all 241 pytest assertions.
+
+

@@ -71,15 +71,31 @@ async def get_chart_data(
     start_dt = EASTERN.localize(datetime.combine(date, time.min))
     end_dt = EASTERN.localize(datetime.combine(date, time.max))
 
+    today_ny = datetime.now(EASTERN).date()
+    is_today_or_future = (date >= today_ny)
+
     db_bars = await _read_db_bars(db, ticker_val, start_dt, end_dt)
 
-    if db_bars:
-        bars_df = pd.DataFrame(db_bars).set_index("time")
-        records_to_insert: list[tuple] = []
-    else:
+    bars_df = pd.DataFrame()
+    records_to_insert: list[tuple] = []
+
+    if is_today_or_future:
+        # For today/future, always try fetching live data to get newly formed bars
         bars_df, records_to_insert = await asyncio.to_thread(
             _fetch_with_fallback, ticker_val, date_str, start_dt, end_dt
         )
+        if bars_df.empty and db_bars:
+            # Fall back to whatever we have in DB if live fetch failed
+            bars_df = pd.DataFrame(db_bars).set_index("time")
+            records_to_insert = []
+    else:
+        if db_bars:
+            bars_df = pd.DataFrame(db_bars).set_index("time")
+            records_to_insert = []
+        else:
+            bars_df, records_to_insert = await asyncio.to_thread(
+                _fetch_with_fallback, ticker_val, date_str, start_dt, end_dt
+            )
 
     if bars_df.empty:
         raise ChartDataNotFoundError(ticker_val, date_str)

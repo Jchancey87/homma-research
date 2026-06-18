@@ -9,6 +9,7 @@
 * **Unified Candidate Pulling:** Primary source is Schwab Movers, fallback/enrich from TV, plus watchlists. Limit to 150. TV never overwrites Schwab unless its % change is strictly higher.
 * **API Details:** Key Schwab `instruments` by symbol before lookups. `sharesOutstanding` and `marketCap` are absolute ints. Multiply `netPercentChange` by 100.
 * **Live Quotes (RFC-004 QW-1):** All router-side batch quote fetching goes through `services.live_quotes_service.get_live_quotes(tickers, *, polygon_api_key=None)`. Returns `dict[ticker, NormalizedQuote]`. `NormalizedQuote` carries snake_case fields (`last_price`, `open_price`, `volume`, `change_pct`, `prev_close`, `source`). Routers MUST NOT import `get_quotes`/`get_ticker_snapshot`/raw `requests` for quote data.
+* **Intraday Charts Cache Bypassing:** For today's date (or any future date), `get_chart_data` bypasses `price_history_1min` cached bars and queries live API (Schwab / fallbacks) to get the latest intraday candles, caching any new ones in DB via `ON CONFLICT DO NOTHING`. If live fetch fails, it falls back to DB bars.
 
 ### 2. Alerts & Hysteresis State Machine
 * **Scope:** Evaluate symbols in `self.watchlist_symbols` only.
