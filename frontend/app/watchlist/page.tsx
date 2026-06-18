@@ -17,13 +17,13 @@ import {
 const SENTIMENT_TAGS = ['momentum', 'breakout', 'reversal', 'squeeze', 'catalyst', 'earnings', 'watchonly']
 
 const TAG_COLORS: Record<string, string> = {
-  momentum:  'bg-blue-500/20 text-blue-300 border-blue-500/30',
-  breakout:  'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-  reversal:  'bg-orange-500/20 text-orange-300 border-orange-500/30',
-  squeeze:   'bg-violet-500/20 text-violet-300 border-violet-500/30',
-  catalyst:  'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
-  earnings:  'bg-pink-500/20 text-pink-300 border-pink-500/30',
-  watchonly: 'bg-gray-500/20 text-gray-400 border-gray-600/30',
+  momentum:  'bg-blue-950/20 text-blue-400 border-blue-500/25',
+  breakout:  'bg-emerald-950/20 text-[#00ff00] border-[#00ff00]/25',
+  reversal:  'bg-orange-950/20 text-orange-400 border-orange-500/25',
+  squeeze:   'bg-purple-950/20 text-purple-400 border-purple-500/25',
+  catalyst:  'bg-yellow-950/20 text-amber-400 border-yellow-500/25',
+  earnings:  'bg-pink-950/20 text-pink-400 border-pink-500/25',
+  watchonly: 'bg-[#111] text-gray-500 border-[#262626]',
 }
 
 function parseTags(raw: string): string[] {
@@ -40,12 +40,12 @@ function fmt(n: number | null | undefined, suffix = '', decimals = 1): string {
 // ── Tag Badge ─────────────────────────────────────────────────────────────────
 
 function TagBadge({ tag, onRemove }: { tag: string; onRemove?: () => void }) {
-  const colorClass = TAG_COLORS[tag] ?? 'bg-gray-700/50 text-gray-400 border-gray-600/30'
+  const colorClass = TAG_COLORS[tag] ?? 'bg-[#111] text-gray-500 border-[#262626]'
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${colorClass}`}>
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 border text-[10px] font-mono rounded-none ${colorClass} uppercase`}>
       {tag}
       {onRemove && (
-        <button onClick={onRemove} className="hover:text-white transition-colors ml-0.5">
+        <button onClick={onRemove} className="hover:text-[#ff003c] transition-colors ml-0.5">
           <X size={10} />
         </button>
       )}
@@ -55,12 +55,12 @@ function TagBadge({ tag, onRemove }: { tag: string; onRemove?: () => void }) {
 
 // ── Metric Pill ───────────────────────────────────────────────────────────────
 
-function MetricPill({ label, value, color = 'text-gray-700 dark:text-gray-300' }: {
+function MetricPill({ label, value, color = 'text-gray-300' }: {
   label: string; value: string; color?: string
 }) {
   return (
-    <span className="flex items-center gap-1 text-[11px] bg-gray-100 dark:bg-gray-800/60 rounded-md px-2 py-0.5 border border-gray-200 dark:border-gray-700/50">
-      <span className="text-gray-500 font-medium">{label}</span>
+    <span className="flex items-center gap-1 text-[10px] font-mono bg-[#111] border border-[#262626] rounded-none px-2 py-0.5">
+      <span className="text-gray-500 uppercase">{label}</span>
       <span className={`font-bold ${color}`}>{value}</span>
     </span>
   )

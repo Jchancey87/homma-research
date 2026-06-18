@@ -164,7 +164,7 @@ export default function ResearchPage() {
 
   const runRisk = useCallback(async (force = false) => {
     if (!ticker) return
-    setRisk({ ...EMPTY_FEATURE, loading: true, status: 'Scanning SEC filings & corporate actions…' })
+    setRisk({ ...EMPTY_FEATURE, loading: true, status: 'Scanning SEC filings & corporate actions\u2026' })
     setRiskMeta(EMPTY_META)
     try {
       const res = await startRiskDetection(ticker, force)
@@ -177,7 +177,7 @@ export default function ResearchPage() {
 
   const runCatalyst = useCallback(async (force = false) => {
     if (!ticker) return
-    setCatalyst({ ...EMPTY_FEATURE, loading: true, status: 'Parsing news & regulatory events…' })
+    setCatalyst({ ...EMPTY_FEATURE, loading: true, status: 'Parsing news & regulatory events\u2026' })
     setCatalystMeta(EMPTY_META)
     try {
       const res = await startCatalystAnalysis(ticker, date || undefined, force)
@@ -190,7 +190,7 @@ export default function ResearchPage() {
 
   const runContext = useCallback(async (force = false) => {
     if (!ticker) return
-    setContext({ ...EMPTY_FEATURE, loading: true, status: 'Building multi-timeframe technical picture…' })
+    setContext({ ...EMPTY_FEATURE, loading: true, status: 'Building multi-timeframe technical picture\u2026' })
     setContextMeta(EMPTY_META)
     try {
       const res = await startDeepContext(ticker, force)
@@ -203,7 +203,7 @@ export default function ResearchPage() {
 
   const runPipe = useCallback(async () => {
     if (!ticker) return
-    setPipe({ ...EMPTY_FEATURE, loading: true, status: 'Scanning SEC 8-K filings for PIPE signals…' })
+    setPipe({ ...EMPTY_FEATURE, loading: true, status: 'Scanning SEC 8-K filings for PIPE signals\u2026' })
     try {
       const res = await startPipeAnalysis(ticker, date || undefined)
       if ('job_id' in res) setPipe(s => ({ ...s, jobId: res.job_id }))
@@ -236,11 +236,11 @@ export default function ResearchPage() {
     const sym = ticker.trim().toUpperCase()
     if (!sym) return
 
-    setMain({ ...EMPTY_MAIN, loading: true, status: 'Gathering market data…' })
-    setRisk({ ...EMPTY_FEATURE, loading: true, status: 'Scanning SEC filings & corporate actions…' })
-    setCatalyst({ ...EMPTY_FEATURE, loading: true, status: 'Parsing news & regulatory events…' })
-    setContext({ ...EMPTY_FEATURE, loading: true, status: 'Building multi-timeframe technical picture…' })
-    setPipe({ ...EMPTY_FEATURE, loading: true, status: 'Scanning SEC 8-K filings for PIPE signals…' })
+    setMain({ ...EMPTY_MAIN, loading: true, status: 'Gathering market data\u2026' })
+    setRisk({ ...EMPTY_FEATURE, loading: true, status: 'Scanning SEC filings & corporate actions\u2026' })
+    setCatalyst({ ...EMPTY_FEATURE, loading: true, status: 'Parsing news & regulatory events\u2026' })
+    setContext({ ...EMPTY_FEATURE, loading: true, status: 'Building multi-timeframe technical picture\u2026' })
+    setPipe({ ...EMPTY_FEATURE, loading: true, status: 'Scanning SEC 8-K filings for PIPE signals\u2026' })
     setRiskMeta(EMPTY_META); setCatalystMeta(EMPTY_META); setContextMeta(EMPTY_META)
     setActiveTab('report')
 
@@ -257,7 +257,7 @@ export default function ResearchPage() {
       if (mainRes.status === 'fulfilled') {
         const r = mainRes.value
         if ('cached' in r && r.cached) setMain({ ...EMPTY_MAIN, loading: false, report: r.report })
-        else if ('job_id' in r) setMain(s => ({ ...s, jobId: r.job_id, status: 'AI Analyst is investigating…' }))
+        else if ('job_id' in r) setMain(s => ({ ...s, jobId: r.job_id, status: 'AI Analyst is investigating\u2026' }))
       } else setMain({ ...EMPTY_MAIN, error: 'Failed to start main report' })
 
       if (riskRes.status === 'fulfilled')    applyFeatureRes(riskRes.value, setRisk, setRiskMeta, 'Failed to start risk detection')
@@ -286,46 +286,44 @@ export default function ResearchPage() {
   const anyReport = main.report || risk.report || catalyst.report || context.report || pipe.report
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 pb-20">
+    <div className="space-y-2 p-0">
 
       {/* Header */}
-      <div className="text-center space-y-2 pt-2">
-        <h1 className="text-3xl font-bold text-white tracking-tight">Deep Ticker Research</h1>
-        <p className="text-gray-400">
-          Enter a symbol for a comprehensive fundamental, technical, and risk analysis.
-        </p>
+      <div className="flex items-center justify-between px-3 py-2 bg-[#050505] border border-[#262626]">
+        <div>
+          <h1 className="font-mono text-sm font-bold text-white uppercase flex items-center gap-1.5">
+            <Search size={14} className="text-[#00f0ff]" />
+            Deep Ticker Research
+          </h1>
+          <p className="font-mono text-[10px] text-gray-500 mt-0.5">
+            Comprehensive fundamental, technical, and risk analysis
+          </p>
+        </div>
       </div>
 
       {/* Search Bar */}
-      <form onSubmit={handleSearch} className="space-y-4">
-        {/* Ticker - Now Full Width */}
-        <div className="relative group">
-          <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-gray-500 group-focus-within:text-emerald-500 transition-colors">
-            <Search size={24} />
-          </div>
+      <form onSubmit={handleSearch}>
+        <div className="flex items-center gap-1.5 px-3 py-2 bg-[#0a0a0a] border border-[#262626]">
+          {/* Ticker input */}
           <input
             id="research-ticker-input"
             type="text"
             value={ticker}
             onChange={(e) => setTicker(e.target.value.toUpperCase())}
             placeholder="TICKER (e.g. NVDA, TSLA, GME)"
-            className="w-full bg-gray-900 border-2 border-gray-800 rounded-2xl py-5 pl-14 pr-4 text-2xl font-bold tracking-widest text-white focus:outline-none focus:border-emerald-500 transition-all shadow-xl placeholder:text-gray-700"
+            className="flex-1 bg-black border border-[#262626] text-white font-mono text-sm px-3 py-2 focus:outline-none focus:border-[#00ff00] rounded-none [color-scheme:dark] uppercase placeholder:text-gray-700"
             disabled={anyActive}
           />
-        </div>
 
-        <div className="flex flex-col sm:flex-row gap-3 items-center justify-center">
           {/* Optional date picker */}
-          <div className="relative group w-full sm:w-auto">
-            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-gray-600 group-focus-within:text-blue-400 transition-colors">
-              <CalendarDays size={16} />
-            </div>
+          <div className="relative">
+            <CalendarDays size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-600 pointer-events-none" />
             <input
               id="research-date-input"
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="bg-gray-900 border-2 border-gray-800 rounded-2xl py-3 pl-10 pr-4 text-sm text-gray-400 focus:outline-none focus:border-blue-500 transition-all shadow-xl w-full sm:w-48"
+              className="bg-black border border-[#262626] text-gray-400 font-mono text-[11px] pl-7 pr-2 py-2 focus:outline-none focus:border-[#00ff00] rounded-none [color-scheme:dark] w-36"
               disabled={anyActive}
               title="Optional: anchor analysis to a specific trading date"
             />
@@ -336,17 +334,17 @@ export default function ResearchPage() {
             id="research-analyze-btn"
             type="submit"
             disabled={anyActive || !ticker}
-            className="w-full sm:w-auto px-12 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-gray-800 disabled:text-gray-500 text-white font-bold rounded-2xl transition-all flex items-center justify-center gap-2 shadow-xl"
+            className="flex items-center justify-center gap-1.5 px-4 py-2 border border-[#00ff00]/40 bg-emerald-950/20 text-[#00ff00] font-mono text-xs font-bold rounded-none transition-colors hover:bg-emerald-950/40 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {anyActive
-              ? <Loader2 className="animate-spin" size={18} />
+              ? <Loader2 className="animate-spin text-[#00ff00]" size={13} />
               : 'ANALYZE'}
           </button>
         </div>
 
         {date && (
-          <p className="text-xs text-gray-600 text-center">
-            Catalyst analysis anchored to <span className="text-blue-400 font-mono">{date}</span>
+          <p className="font-mono text-[10px] text-gray-600 px-3 pt-1">
+            Catalyst analysis anchored to <span className="text-[#00f0ff] font-mono">{date}</span>
           </p>
         )}
       </form>
@@ -355,7 +353,7 @@ export default function ResearchPage() {
       {anyReport || anyActive ? (
         <>
           {/* Tab bar */}
-          <div className="flex gap-1 bg-gray-900/80 border border-gray-800 rounded-2xl p-1">
+          <div className="flex bg-black border-b border-[#262626]">
             {TABS.map(({ id, label, icon: Icon }) => {
               const isActive = activeTab === id
               const isLoading =
@@ -376,19 +374,19 @@ export default function ResearchPage() {
                   key={id}
                   id={`research-tab-${id}`}
                   onClick={() => setActiveTab(id)}
-                  className={`flex-1 flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-sm font-semibold transition-all ${
+                  className={
                     isActive
-                      ? 'bg-gray-800 text-white'
-                      : 'text-gray-500 hover:text-gray-300'
-                  }`}
+                      ? 'flex items-center gap-1.5 px-4 py-2 text-[11px] font-mono font-bold text-[#00ff00] border-b-2 border-[#00ff00] bg-[#0a0a0a] -mb-px'
+                      : 'flex items-center gap-1.5 px-4 py-2 text-[11px] font-mono text-gray-500 hover:text-gray-300 transition-colors'
+                  }
                 >
                   {isLoading
-                    ? <Loader2 size={14} className="animate-spin text-gray-400" />
-                    : <Icon size={14} className={isActive ? TAB_ACCENT[id].split(' ')[0] : ''} />
+                    ? <Loader2 size={12} className="animate-spin text-[#00ff00]" />
+                    : <Icon size={12} className={isActive ? 'text-[#00ff00]' : ''} />
                   }
                   <span className="hidden sm:inline">{label}</span>
                   {hasReport && !isLoading && (
-                    <span className={`w-1.5 h-1.5 rounded-full ${TAB_ACCENT[id].split(' ')[0].replace('text-', 'bg-')}`} />
+                    <span className="w-1 h-1 bg-[#00ff00] rounded-none" />
                   )}
                 </button>
               )
@@ -401,33 +399,33 @@ export default function ResearchPage() {
             {activeTab === 'report' && (
               <div>
                 {main.loading && (
-                  <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-8 text-center space-y-4 animate-pulse">
-                    <Loader2 className="mx-auto text-emerald-500 animate-spin" size={32} />
-                    <p className="text-lg font-medium text-emerald-400">{main.status}</p>
-                    <p className="text-sm text-gray-500">Checking SEC filings, short interest, and technical levels…</p>
+                  <div className="bg-emerald-950/20 border border-[#00ff00]/20 p-8 text-center space-y-3 animate-pulse rounded-none">
+                    <Loader2 className="mx-auto text-[#00ff00] animate-spin" size={28} />
+                    <p className="font-mono text-sm text-[#00ff00]">{main.status}</p>
+                    <p className="font-mono text-[11px] text-gray-500">Checking SEC filings, short interest, and technical levels\u2026</p>
                   </div>
                 )}
                 {main.error && !main.loading && (
-                  <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-6 flex items-start gap-4">
-                    <AlertCircle className="text-red-500 shrink-0" size={24} />
+                  <div className="bg-red-950/20 border border-[#ff003c]/20 p-4 flex items-start gap-3 rounded-none">
+                    <AlertCircle className="text-[#ff003c] shrink-0" size={16} />
                     <div>
-                      <p className="font-bold text-red-400">Research Error</p>
-                      <p className="text-sm text-gray-400">{main.error}</p>
+                      <p className="font-mono text-xs font-bold text-[#ff003c]">RESEARCH ERROR</p>
+                      <p className="font-mono text-xs text-gray-400 mt-0.5">{main.error}</p>
                     </div>
                   </div>
                 )}
                 {main.report && !main.loading && (
-                  <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden shadow-2xl">
-                    <div className="bg-gray-800/50 px-6 py-4 border-b border-gray-700 flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-emerald-400 font-bold tracking-tight">
-                        <FileText size={18} />
+                  <div className="bg-[#050505] border border-[#262626] rounded-none overflow-hidden">
+                    <div className="flex items-center justify-between px-3 py-2 bg-[#0a0a0a] border-b border-[#262626]">
+                      <div className="flex items-center gap-2 font-mono text-[11px] font-bold text-[#00ff00] uppercase tracking-wider">
+                        <FileText size={12} />
                         ANALYSIS REPORT: {ticker}
                       </div>
-                      <div className="text-xs text-gray-500 font-mono uppercase tracking-widest">
-                        Generated by {main.model || 'AI Analyst'}
+                      <div className="font-mono text-[10px] text-gray-500 uppercase tracking-widest">
+                        {main.model || 'AI Analyst'}
                       </div>
                     </div>
-                    <div className="p-8 prose prose-invert prose-emerald max-w-none prose-headings:text-white prose-strong:text-emerald-400 prose-code:text-emerald-300 prose-pre:bg-black/50">
+                    <div className="p-4 font-mono text-xs text-gray-300 leading-relaxed prose-invert">
                       <ReactMarkdown>{main.report}</ReactMarkdown>
                     </div>
                   </div>
@@ -501,53 +499,74 @@ export default function ResearchPage() {
 
             {/* History tab */}
             {activeTab === 'history' && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-gray-300">Past Reports for <span className="text-white font-mono">{ticker}</span></h3>
-                  <button onClick={loadHistory} className="text-xs text-gray-500 hover:text-white transition-colors">Refresh</button>
+              <div className="space-y-2 pt-2">
+                <div className="flex items-center justify-between px-1">
+                  <span className="font-mono text-[10px] text-gray-500 uppercase tracking-wider">
+                    Past Reports for <span className="text-white font-mono">{ticker}</span>
+                  </span>
+                  <button
+                    onClick={loadHistory}
+                    className="font-mono text-[10px] text-gray-500 hover:text-white transition-colors border border-[#262626] px-2 py-0.5 rounded-none"
+                  >
+                    REFRESH
+                  </button>
                 </div>
                 {historyLoading ? (
-                  <div className="flex items-center justify-center py-12 text-gray-600 gap-2">
-                    <Loader2 size={16} className="animate-spin" /> Loading history…
+                  <div className="flex items-center justify-center py-12 gap-2 border border-[#262626] bg-[#050505]">
+                    <Loader2 size={14} className="animate-spin text-[#00ff00]" />
+                    <span className="font-mono text-xs text-gray-500 uppercase tracking-wider">Loading history\u2026</span>
                   </div>
                 ) : historyItems.length === 0 ? (
-                  <p className="text-center py-12 text-gray-600 text-sm">No cached reports yet for {ticker}. Run an analysis first.</p>
+                  <div className="flex flex-col items-center justify-center py-16 gap-2 border border-[#262626] bg-[#050505]">
+                    <History size={24} className="text-gray-700" />
+                    <p className="font-mono text-xs text-gray-500 uppercase tracking-wider">No cached reports for {ticker}</p>
+                  </div>
                 ) : (
                   historyItems.map(item => (
-                    <div key={item.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-start justify-between gap-4 hover:border-gray-700 transition-colors">
-                      <div className="space-y-1 flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold uppercase tracking-wide text-gray-400 bg-gray-800 px-2 py-0.5 rounded">{item.report_type.replace('_', ' ')}</span>
-                          <span className="text-[10px] font-mono text-gray-600 bg-gray-800 px-1.5 py-0.5 rounded">v{item.version}</span>
-                          {item.date && <span className="text-[10px] text-gray-600">{item.date}</span>}
+                    <div key={item.id} className="bg-[#0a0a0a] border border-[#262626] p-2 space-y-1 hover:border-[#444] transition-colors rounded-none">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-1 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {/* Report type badge */}
+                            <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-[#111] text-gray-500 border border-[#262626] rounded-none uppercase">
+                              {item.report_type.replace('_', ' ')}
+                            </span>
+                            {/* Version badge */}
+                            <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-[#111] text-gray-500 border border-[#262626] rounded-none">
+                              v{item.version}
+                            </span>
+                            {item.date && (
+                              <span className="font-mono text-[10px] text-gray-500">{item.date}</span>
+                            )}
+                          </div>
+                          <p className="font-mono text-[10px] text-gray-500">
+                            {new Date(item.created_at).toLocaleString()} · {item.model_used || 'unknown model'}
+                          </p>
                         </div>
-                        <p className="text-xs text-gray-500">
-                          {new Date(item.created_at).toLocaleString()} · {item.model_used || 'unknown model'}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          onClick={async () => {
-                            if (expandedReport?.id === item.id) { setExpandedReport(null); return }
-                            const full = await getCachedReport(item.id)
-                            setExpandedReport(full)
-                          }}
-                          className="text-xs text-gray-400 hover:text-emerald-400 transition-colors px-2 py-1.5 rounded bg-gray-800 hover:bg-gray-700"
-                        >
-                          {expandedReport?.id === item.id ? 'Collapse' : 'View'}
-                        </button>
-                        <a
-                          href={getResearchExportUrl(item.id)}
-                          download
-                          className="flex items-center gap-1 text-xs text-gray-400 hover:text-white px-2 py-1.5 rounded bg-gray-800 hover:bg-gray-700 transition-colors"
-                          title="Download .md"
-                        >
-                          <Download size={12} />
-                        </a>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={async () => {
+                              if (expandedReport?.id === item.id) { setExpandedReport(null); return }
+                              const full = await getCachedReport(item.id)
+                              setExpandedReport(full)
+                            }}
+                            className="font-mono text-[10px] text-[#00f0ff] border border-[#00f0ff]/30 px-1.5 py-0.5 hover:bg-[#00f0ff]/5 transition-colors rounded-none"
+                          >
+                            {expandedReport?.id === item.id ? 'COLLAPSE' : 'VIEW'}
+                          </button>
+                          <a
+                            href={getResearchExportUrl(item.id)}
+                            download
+                            className="flex items-center gap-1 font-mono text-[10px] text-gray-400 border border-[#262626] px-1.5 py-0.5 hover:text-white hover:border-[#444] transition-colors rounded-none"
+                            title="Download .md"
+                          >
+                            <Download size={10} />
+                          </a>
+                        </div>
                       </div>
                       {/* Expanded report viewer */}
                       {expandedReport?.id === item.id && expandedReport.output && (
-                        <div className="col-span-full w-full mt-3 pt-3 border-t border-gray-800 prose prose-invert prose-sm max-w-none prose-headings:text-white prose-strong:text-emerald-400">
+                        <div className="mt-2 pt-2 border-t border-[#262626] font-mono text-xs text-gray-300 leading-relaxed prose-invert">
                           <ReactMarkdown>{expandedReport.output}</ReactMarkdown>
                         </div>
                       )}
@@ -560,37 +579,37 @@ export default function ResearchPage() {
         </>
       ) : (
         /* Empty state — placeholder cards */
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
           {[
             {
               Icon: ShieldAlert,
-              color: 'text-orange-400',
+              color: 'text-amber-400',
               title: 'Risk Detection',
               desc: 'Identifies reverse-splits, toxic financing, and high short interest traps.',
             },
             {
               Icon: TrendingUp,
-              color: 'text-emerald-400',
+              color: 'text-[#00ff00]',
               title: 'Catalyst Analysis',
               desc: 'Scans recent news and SEC headlines to verify the quality of the move.',
             },
             {
               Icon: BarChart3,
-              color: 'text-blue-400',
+              color: 'text-[#00f0ff]',
               title: 'Deep Context',
               desc: 'Combines technical SMA levels with fundamental EPS and float data.',
             },
             {
               Icon: Landmark,
-              color: 'text-violet-400',
+              color: 'text-gray-400',
               title: 'PIPE Detection',
               desc: 'Scans 8-K filings for private placement signals and classifies deals as favorable or toxic.',
             },
           ].map(({ Icon, color, title, desc }) => (
-            <div key={title} className="bg-gray-900/50 border border-gray-800 p-6 rounded-2xl space-y-3">
-              <Icon className={color} size={24} />
-              <h3 className="font-bold text-white">{title}</h3>
-              <p className="text-xs text-gray-400">{desc}</p>
+            <div key={title} className="bg-[#050505] border border-[#262626] p-3 space-y-2 rounded-none">
+              <Icon className={color} size={16} />
+              <h3 className="font-mono text-xs font-bold text-white uppercase tracking-wider">{title}</h3>
+              <p className="font-mono text-[10px] text-gray-500">{desc}</p>
             </div>
           ))}
         </div>

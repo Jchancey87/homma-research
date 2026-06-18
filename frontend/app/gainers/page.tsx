@@ -69,7 +69,7 @@ export default function GainersPage() {
 
   const Th = ({ col, label }: { col: keyof Gainer; label: string }) => (
     <th onClick={() => toggleSort(col)}
-      className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase tracking-wide cursor-pointer hover:text-white select-none whitespace-nowrap">
+      className="px-3 py-2 text-left text-[10px] font-mono text-gray-500 uppercase tracking-wider cursor-pointer hover:text-white select-none whitespace-nowrap">
       {label} {sortKey === col ? (sortDir === 'desc' ? '↓' : '↑') : ''}
     </th>
   )
@@ -77,57 +77,58 @@ export default function GainersPage() {
   const exportUrl = getGainersExportUrl({ date, min_gap: minGap, max_float: maxFloat, min_rvol: minRvol, sector })
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-2 p-0">
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 py-2 bg-[#050505] border border-[#262626]">
         <div>
-          <h1 className="text-2xl font-bold text-white">Daily Gainers</h1>
-          <p className="text-gray-400 text-sm mt-1">{gainers.length} records</p>
+          <h1 className="font-mono text-sm font-bold text-white uppercase">Daily Gainers</h1>
+          <p className="font-mono text-[10px] text-gray-500">{gainers.length} records</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-1.5">
           <button onClick={load}
-            className="flex items-center gap-1.5 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 hover:border-gray-500 transition-colors">
-            <RefreshCw size={14} /> Refresh
+            className="flex items-center gap-1.5 px-2.5 py-1 border border-[#262626] bg-black text-gray-400 text-[11px] font-mono hover:text-white transition-colors rounded-none">
+            <RefreshCw size={12} /> Refresh
           </button>
           <a href={exportUrl} download="gainers.csv"
-            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 rounded-lg text-sm hover:bg-emerald-600/30 transition-colors">
-            <Download size={14} /> Export CSV
+            className="flex items-center gap-1.5 px-2.5 py-1 border border-[#00ff00]/40 bg-emerald-950/20 text-[#00ff00] text-[11px] font-mono hover:bg-emerald-950/30 transition-colors rounded-none">
+            <Download size={12} /> Export CSV
           </a>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-1.5 bg-[#0a0a0a] border border-[#262626] p-2">
         <input type="date" value={date} onChange={e => setDate(e.target.value)}
-          className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500" />
+          className="bg-black border border-[#262626] text-white font-mono text-[11px] px-2 py-1.5 focus:outline-none focus:border-[#00ff00] rounded-none [color-scheme:dark] w-full" />
         <input type="number" placeholder="Min Gap %" value={minGap} onChange={e => setMinGap(e.target.value)}
-          className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500" />
+          className="bg-black border border-[#262626] text-white font-mono text-[11px] px-2 py-1.5 focus:outline-none focus:border-[#00ff00] rounded-none [color-scheme:dark] w-full" />
         <input type="number" placeholder="Max Float (M)" value={maxFloat} onChange={e => setMaxFloat(e.target.value)}
-          className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500" />
+          className="bg-black border border-[#262626] text-white font-mono text-[11px] px-2 py-1.5 focus:outline-none focus:border-[#00ff00] rounded-none [color-scheme:dark] w-full" />
         <input type="number" placeholder="Min RVOL" value={minRvol} onChange={e => setMinRvol(e.target.value)}
-          className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500" />
-        <div className="flex gap-2">
+          className="bg-black border border-[#262626] text-white font-mono text-[11px] px-2 py-1.5 focus:outline-none focus:border-[#00ff00] rounded-none [color-scheme:dark] w-full" />
+        <div className="flex gap-1.5">
           <select value={sector} onChange={e => setSector(e.target.value)}
-            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-emerald-500">
+            className="flex-1 bg-black border border-[#262626] text-white font-mono text-[11px] px-2 py-1.5 focus:outline-none focus:border-[#00ff00] rounded-none [color-scheme:dark] w-full">
             <option value="">All sectors</option>
             {sectors.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
           <button onClick={load}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium rounded-lg transition-colors">
+            className="px-4 py-1.5 bg-black border border-[#00ff00]/40 text-[#00ff00] text-[11px] font-mono hover:bg-emerald-950/20 transition-colors rounded-none">
             Filter
           </button>
         </div>
       </div>
 
       {/* Table */}
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+      <div className="bg-black border border-[#262626] overflow-hidden">
         {loading ? (
-          <div className="p-12 text-center text-gray-500 text-sm">Loading…</div>
+          <div className="p-8 text-center text-gray-600 text-xs font-mono animate-pulse">Loading…</div>
         ) : sorted.length === 0 ? (
-          <div className="p-12 text-center text-gray-500 text-sm">No gainers found. Run the ingestion job or adjust filters.</div>
+          <div className="p-8 text-center text-gray-600 text-xs font-mono">No gainers found. Run the ingestion job or adjust filters.</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-800/60 border-b border-gray-700">
+              <thead className="bg-[#050505] border-b border-[#262626]">
                 <tr>
                   <Th col="date"         label="Date" />
                   <Th col="ticker"       label="Ticker" />
@@ -137,28 +138,26 @@ export default function GainersPage() {
                   <Th col="sector"       label="Sector" />
                   <Th col="market_cap"   label="Mkt Cap" />
                   <Th col="close_price"  label="Close" />
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-400 uppercase">News</th>
+                  <th className="px-3 py-2 text-left text-[10px] font-mono text-gray-500 uppercase tracking-wider">News</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-800">
+              <tbody>
                 {sorted.map(g => (
-                  <tr key={g.id} className="hover:bg-gray-800/40 transition-colors">
-                    <td className="px-4 py-3 text-gray-400">{g.date}</td>
-                    <td className="px-4 py-3 font-semibold text-white">{g.ticker}</td>
-                    <td className="px-4 py-3">
-                      <span className={`font-medium ${(g.gap_pct ?? 0) >= 10 ? 'text-emerald-400' : 'text-emerald-300'}`}>
-                        {g.gap_pct != null ? `+${g.gap_pct}%` : '—'}
-                      </span>
+                  <tr key={g.id} className="border-b border-[#1a1a1a] hover:bg-[#0a0a0a] transition-colors">
+                    <td className="px-3 py-2 font-mono text-xs text-gray-500">{g.date}</td>
+                    <td className="px-3 py-2 font-mono text-xs font-bold text-white">{g.ticker}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-[#00ff00]">
+                      {g.gap_pct != null ? `+${g.gap_pct}%` : '—'}
                     </td>
-                    <td className="px-4 py-3 text-gray-300">{fmtFloat(g.float_shares)}</td>
-                    <td className="px-4 py-3 text-gray-300">{g.rvol_15m != null ? `${g.rvol_15m}x` : '—'}</td>
-                    <td className="px-4 py-3 text-gray-400">{g.sector ?? '—'}</td>
-                    <td className="px-4 py-3 text-gray-400">{fmtCap(g.market_cap)}</td>
-                    <td className="px-4 py-3 text-gray-300">{g.close_price != null ? `$${g.close_price}` : '—'}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2 font-mono text-xs text-gray-400">{fmtFloat(g.float_shares)}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-gray-400">{g.rvol_15m != null ? `${g.rvol_15m}x` : '—'}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-gray-400">{g.sector ?? '—'}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-gray-400">{fmtCap(g.market_cap)}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-gray-400">{g.close_price != null ? `$${g.close_price}` : '—'}</td>
+                    <td className="px-3 py-2">
                       {g.news_fresh == null ? '—' : g.news_fresh
-                        ? <span className="text-xs bg-emerald-500/15 text-emerald-300 px-2 py-0.5 rounded-full">Fresh</span>
-                        : <span className="text-xs bg-gray-700 text-gray-400 px-2 py-0.5 rounded-full">Stale</span>}
+                        ? <span className="text-[10px] bg-emerald-950/20 text-[#00ff00] border border-[#00ff00]/25 px-1.5 py-0.5 font-mono rounded-none">Fresh</span>
+                        : <span className="text-[10px] bg-[#111] text-gray-500 border border-[#262626] px-1.5 py-0.5 font-mono rounded-none">Stale</span>}
                     </td>
                   </tr>
                 ))}

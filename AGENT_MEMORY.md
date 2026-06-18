@@ -40,7 +40,7 @@
 ### 6. Frontend & UI
 * **Interaction:** Toggle row expansion on click. No hover handlers.
 * **Audio/Charts:** Dynamic chimes via Web Audio API. Split chart hooks (init vs decorators) in `page.tsx`.
-* **TradeStation Style:** High density look. Matte black (#000000). Sharp 90deg edges (rounded-none). 1px charcoal grid gaps. Stark dotted canvas grid (#444444, style: 1). Neon series colors (bull #00ff00, bear #ff003c). Overlay HUD info (symbol, change %, EMA coordinates, volume color mapping) inside canvas to minimize vertical padding.
+* **TradeStation Style:** High density look. Matte black (#000000). Sharp 90deg edges (rounded-none). 1px charcoal grid gaps. Stark dotted canvas grid (#444444, style: 1). Neon series colors (bull #00ff00, bear #ff003c). Overlay HUD info (symbol, change %, EMA coordinates, volume color mapping) inside canvas to minimize vertical padding. Applied universally across all pages, NavBar, tables, details, badges, inputs.
 
 ### 7. Testing & DevOps
 * **Venv Testing:** Execute backend tests using `/opt/trading-journal/backend/venv/bin/pytest`.
@@ -49,9 +49,9 @@
 * **Deploy:** Run `sudo /opt/trading-journal/deploy.sh` (push from `/home/jackc/projects/homma-research` first).
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Continue RFC-004 quick-wins batch + RFC-005 db/ module adoption (handoff #014).
-* **Status:** ✅ ALL COMPLETE. QW-1 + QW-2 + QW-3 + QW-4 + RFC-005 + RFC-010 done. 241/241 tests pass, 0 regressions.
-* **This session:** Daily Charts improvements: added $2-$25 price filter sync, top 9 chart layout, explicit gap % descending sort to guarantee grid ranking flow, aligned change percentages to use `extended_change_pct` (falling back to `gap_pct`) to match live screener, multi-EMA overlays (21, 50, 100) on 1-minute timeframes, and blinking price momentum indicator in chart card headers. Updated backend services and test assertions. Overhauled Daily Charts UI/UX style to match TradeStation professional desktop layout (rounded-none, matte black backgrounds, dotted grids, neon candles/moving averages, high-density font-mono text). Expanded mini chart heights globally by 25% (to 250px) and adjusted loading skeletons and details modal containers. Overhauled CSS style rules globally in `globals.css` and `layout.tsx` to enforce the TradeStation theme (zero border-radius global reset, matte black dark-mode variables, system-wide monospace layout, custom sharp-edge scrollbars) and updated the Alerts page charting component configuration to match.
+* **Goal:** Apply strict TradeStation-style dark terminal UI to all pages.
+* **Status:** ✅ ALL COMPLETE. NavBar, layout, home, gainers, observations, alerts, research, charts, history, watchlist, continuation pages rewritten. TS compilation clean.
+* **This session:** Overhauled navbar, panels, badges, tables, search inputs, active-states, controls, details, lists, scorecards, headers across 11 pages to strict TradeStation aesthetic (monochrome borders, flat neon badges, UPPERCASE labels, high-density monospace font layout, zero border-radius).
 * **For future sessions:** RFC-006 (frontend type mirroring), RFC-007 (sync database.py async migration), RFC-008 (momentum_screener → backend dep break), RFC-009 (frontend API client consolidation). Pick one when needed.
 
 ## 🗑️ Rot & Pruning Log

@@ -52,56 +52,58 @@ function TickerDetail({
   }, [ticker, period])
 
   if (loading) return (
-    <div className="px-6 py-4 text-gray-600 text-sm animate-pulse">Loading appearances…</div>
+    <div className="px-3 py-4 text-gray-600 text-xs font-mono animate-pulse">Loading appearances…</div>
   )
 
   return (
-    <div className="px-4 pb-4">
-      <div className="bg-gray-950 rounded-xl border border-gray-800/60 overflow-hidden">
+    <div className="px-4 pb-3">
+      <div className="bg-[#050505] border border-[#262626] overflow-hidden w-full rounded-none">
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-gray-500 border-b border-gray-800">
-              <th className="px-4 py-2 text-left font-medium">Date</th>
-              <th className="px-4 py-2 text-right font-medium">Gap %</th>
-              <th className="px-4 py-2 text-right font-medium">Float</th>
-              <th className="px-4 py-2 text-right font-medium">RVOL</th>
-              <th className="px-4 py-2 text-left font-medium">Catalyst</th>
-              <th className="px-4 py-2"></th>
+            <tr className="border-b border-[#262626]">
+              <th className="px-3 py-2 text-left text-[10px] font-mono text-gray-600 uppercase tracking-wider">Date</th>
+              <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-600 uppercase tracking-wider">Gap %</th>
+              <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-600 uppercase tracking-wider">Float</th>
+              <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-600 uppercase tracking-wider">RVOL</th>
+              <th className="px-3 py-2 text-left text-[10px] font-mono text-gray-600 uppercase tracking-wider">Catalyst</th>
+              <th className="px-3 py-2"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-800/50">
+          <tbody>
             {rows.map(r => (
-              <tr key={r.date} className="hover:bg-gray-800/30 transition-colors">
-                <td className="px-4 py-2 font-mono text-gray-300">{r.date}</td>
-                <td className="px-4 py-2 text-right font-mono text-emerald-400 font-semibold">
+              <tr key={r.date} className="border-b border-[#1a1a1a] hover:bg-[#0a0a0a] transition-colors">
+                <td className="px-3 py-2 font-mono text-xs text-gray-400">{r.date}</td>
+                <td className="px-3 py-2 text-right font-mono text-xs text-[#00ff00] font-bold">
                   +{fmt1(r.gap_pct)}%
                 </td>
-                <td className="px-4 py-2 text-right font-mono text-gray-400">
+                <td className="px-3 py-2 text-right font-mono text-xs text-gray-500">
                   {fmtFloat(r.float_shares != null ? r.float_shares / 1e6 : null)}
                 </td>
-                <td className="px-4 py-2 text-right font-mono">
-                  <span className={r.rvol_15m != null && r.rvol_15m >= 5 ? 'text-amber-400' : 'text-gray-400'}>
+                <td className="px-3 py-2 text-right font-mono text-xs">
+                  <span className={r.rvol_15m != null && r.rvol_15m >= 5 ? 'text-amber-400' : 'text-gray-500'}>
                     {fmt1(r.rvol_15m)}x
                   </span>
                 </td>
-                <td className="px-4 py-2 max-w-xs">
+                <td className="px-3 py-2 max-w-xs">
                   {r.news_fresh != null && (
-                    <span className={`mr-2 px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                      r.news_fresh ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-700 text-gray-500'
+                    <span className={`mr-2 px-1.5 py-0.5 font-mono text-[10px] border rounded-none ${
+                      r.news_fresh
+                        ? 'bg-emerald-950/20 text-[#00ff00] border-[#00ff00]/25'
+                        : 'bg-[#111] text-gray-500 border-[#262626]'
                     }`}>
                       {r.news_fresh ? '🗞 Fresh' : 'Stale'}
                     </span>
                   )}
-                  <span className="text-gray-500 truncate">
+                  <span className="font-mono text-[10px] px-1.5 py-0.5 border border-[#262626] bg-[#111] text-gray-500 rounded-none">
                     {r.news_headline || '—'}
                   </span>
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-3 py-2">
                   <div className="flex items-center gap-1.5 justify-end">
                     <button
                       id={`research-${ticker}-${r.date}`}
                       onClick={() => onResearch(ticker, r.date)}
-                      className="flex items-center gap-1 text-gray-600 hover:text-emerald-400 transition-colors"
+                      className="font-mono text-[10px] text-[#00f0ff] border border-[#00f0ff]/30 px-1.5 py-0.5 hover:bg-[#00f0ff]/5 transition-colors rounded-none flex items-center gap-1"
                       title="Open Research"
                     >
                       <ExternalLink size={11} />
@@ -110,7 +112,7 @@ function TickerDetail({
                     <button
                       id={`chart-${ticker}-${r.date}`}
                       onClick={() => window.open(`/daily-charts?date=${r.date}`, '_blank')}
-                      className="flex items-center gap-1 text-gray-600 hover:text-sky-400 transition-colors"
+                      className="font-mono text-[10px] text-gray-600 border border-[#262626] px-1.5 py-0.5 hover:text-white transition-colors rounded-none flex items-center gap-1"
                       title="Open Daily Charts"
                     >
                       <BarChart2 size={11} />
@@ -141,60 +143,62 @@ function TickerRow({
   return (
     <>
       <tr
-        className="hover:bg-gray-800/40 transition-colors cursor-pointer group"
+        className="border-b border-[#1a1a1a] hover:bg-[#0a0a0a] transition-colors cursor-pointer group"
         onClick={() => setExpanded(v => !v)}
       >
-        <td className="px-4 py-3">
-          <div className="flex items-center gap-2">
+        <td className="px-3 py-2">
+          <div className="font-mono font-bold text-white text-xs flex items-center gap-1.5">
             {expanded
-              ? <ChevronUp size={13} className="text-emerald-400 shrink-0" />
+              ? <ChevronUp size={13} className="text-gray-600 shrink-0" />
               : <ChevronDown size={13} className="text-gray-600 group-hover:text-gray-400 shrink-0" />
             }
-            <span className="font-bold text-white font-mono text-sm">{item.ticker}</span>
+            <span>{item.ticker}</span>
             {item.sector && (
-              <span className="text-xs text-gray-600 hidden sm:block">{item.sector}</span>
+              <span className="text-[10px] text-gray-600 hidden sm:block">{item.sector}</span>
             )}
           </div>
         </td>
-        <td className="px-4 py-3 text-center">
-          <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold ${
-            item.appearances >= 5 ? 'bg-emerald-500/20 text-emerald-400' :
-            item.appearances >= 2 ? 'bg-sky-500/20 text-sky-400' :
-            'bg-gray-800 text-gray-400'
+        <td className="px-3 py-2 text-center">
+          <span className={`px-2 py-0.5 text-[10px] font-mono font-bold border rounded-none ${
+            item.appearances >= 5
+              ? 'bg-emerald-950/20 text-[#00ff00] border-[#00ff00]/25'
+              : item.appearances >= 2
+              ? 'bg-[#111] text-gray-400 border-[#262626]'
+              : 'bg-[#111] text-gray-500 border-[#262626]'
           }`}>
             {item.appearances}
           </span>
         </td>
-        <td className="px-4 py-3 font-mono text-xs text-gray-400 hidden md:table-cell">
+        <td className="px-3 py-2 font-mono text-xs text-gray-500 hidden md:table-cell">
           {item.first_seen}
           {spanDays > 0 && (
             <span className="text-gray-600 ml-1">→ {spanDays}d span</span>
           )}
         </td>
-        <td className="px-4 py-3 font-mono text-xs text-gray-300">{item.last_seen}</td>
-        <td className="px-4 py-3 text-right font-mono text-emerald-400 font-semibold text-sm">
+        <td className="px-3 py-2 font-mono text-xs text-gray-500">{item.last_seen}</td>
+        <td className="px-3 py-2 text-right font-mono text-xs text-[#00ff00] font-bold">
           +{fmt1(item.avg_gap_pct)}%
         </td>
-        <td className="px-4 py-3 text-right font-mono text-xs text-gray-400 hidden lg:table-cell">
+        <td className="px-3 py-2 text-right font-mono text-xs text-gray-400 hidden lg:table-cell">
           {fmt1(item.max_gap_pct)}%
         </td>
-        <td className="px-4 py-3 text-right font-mono text-xs text-gray-400 hidden lg:table-cell">
+        <td className="px-3 py-2 text-right font-mono text-xs text-gray-400 hidden lg:table-cell">
           {fmt1(item.avg_rvol)}x
         </td>
-        <td className="px-4 py-3 text-right font-mono text-xs text-gray-500 hidden xl:table-cell">
+        <td className="px-3 py-2 text-right font-mono text-xs text-gray-500 hidden xl:table-cell">
           {fmtFloat(item.avg_float_m)}
         </td>
-        <td className="px-4 py-3 text-right font-mono text-xs text-gray-400">
+        <td className="px-3 py-2 text-right font-mono text-xs text-gray-400">
           {item.last_close ? `$${item.last_close.toFixed(2)}` : '—'}
         </td>
-        <td className="px-4 py-3 text-right font-mono text-xs text-gray-500 hidden sm:table-cell">
+        <td className="px-3 py-2 text-right font-mono text-xs text-gray-500 hidden sm:table-cell">
           {item.last_market_cap ? (item.last_market_cap >= 1e9 ? `$${(item.last_market_cap/1e9).toFixed(1)}B` : `$${(item.last_market_cap/1e6).toFixed(0)}M`) : '—'}
         </td>
-        <td className="px-4 py-3">
+        <td className="px-3 py-2">
           <button
             id={`research-latest-${item.ticker}`}
             onClick={e => { e.stopPropagation(); onResearch(item.ticker, item.last_seen) }}
-            className="opacity-0 group-hover:opacity-100 flex items-center gap-1 text-xs text-gray-500 hover:text-emerald-400 transition-all"
+            className="opacity-0 group-hover:opacity-100 text-gray-600 hover:text-[#00f0ff] transition-colors flex items-center gap-1"
           >
             <ExternalLink size={11} />
           </button>
@@ -202,7 +206,7 @@ function TickerRow({
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={9} className="p-0 bg-gray-900/60">
+          <td colSpan={9} className="p-0 bg-[#0a0a0a] border-b border-[#262626]">
             <TickerDetail ticker={item.ticker} period={period} onResearch={onResearch} />
           </td>
         </tr>
@@ -223,10 +227,10 @@ function SortTh({
   const active = current === sortKey
   return (
     <th
-      className="px-4 py-3 text-xs font-medium text-gray-500 cursor-pointer hover:text-gray-300 transition-colors select-none"
+      className={`px-3 py-2 text-[10px] font-mono uppercase tracking-wider cursor-pointer hover:text-white select-none whitespace-nowrap transition-colors ${active ? 'text-[#00ff00]' : 'text-gray-500'}`}
       onClick={() => onSort(sortKey)}
     >
-      <span className={`flex items-center gap-1 ${active ? 'text-emerald-400' : ''}`}>
+      <span className="flex items-center gap-1">
         {label}
         <ArrowUpDown size={10} />
       </span>
@@ -245,7 +249,6 @@ export default function HistoryPage() {
   const [sort,     setSort]     = useState<SortKey>('last_seen')
   const [search,   setSearch]   = useState('')
 
-  // Gainer-style filters with new defaults
   const [date,      setDate]     = useState('')
   const [minGap,    setMinGap]   = useState('')
   const [maxFloat,  setMaxFloat] = useState('200')
@@ -292,170 +295,145 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-2">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-center justify-between px-3 py-2 bg-[#050505] border border-[#262626]">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <LayoutGrid className="text-emerald-400" size={22} />
+          <h1 className="font-mono text-sm font-bold text-white uppercase flex items-center gap-1.5">
+            <LayoutGrid size={14} className="text-[#00ff00]" />
             Command Center
           </h1>
-          <p className="text-gray-500 text-sm mt-0.5">
-            Real-time gainers, heatmaps, and full ticker history
+          <p className="font-mono text-[10px] text-gray-500">
+            {!loading && `${items.length} ticker${items.length !== 1 ? 's' : ''}${date ? ` on ${date}` : period !== 'all' ? ` · ${PERIOD_LABELS[period].toLowerCase()}` : ''}`}
           </p>
         </div>
-        <div className="flex gap-2 mt-1">
+        <div className="flex items-center gap-1.5">
           <a
             href={getGainersExportUrl({ date, min_gap: minGap, max_float: maxFloat, min_rvol: minRvol, sector, min_price: minPrice, max_price: maxPrice })}
             download="history_export.csv"
-            className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600/10 border border-emerald-500/30 text-emerald-400 rounded-lg text-xs hover:bg-emerald-600/20 transition-colors"
+            className="flex items-center gap-1 px-2.5 py-1 border border-[#00ff00]/40 bg-emerald-950/20 text-[#00ff00] text-[11px] font-mono hover:bg-emerald-950/30 transition-colors rounded-none"
           >
-            <Download size={13} />
+            <Download size={11} />
             <span>Export CSV</span>
           </a>
           <button
             id="refresh-history"
             onClick={load}
-            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+            className="p-1.5 border border-[#262626] bg-black text-gray-400 hover:text-white transition-colors rounded-none"
           >
-            <RefreshCw size={15} />
+            <RefreshCw size={13} />
           </button>
         </div>
       </div>
 
-      {/* Controls */}
-      <div className="space-y-4">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center gap-3">
-          {/* Search */}
-          <div className="relative">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-            <input
-              id="history-search"
-              ref={searchRef}
-              placeholder="Search ticker…"
-              value={search}
-              onChange={e => setSearch(e.target.value.toUpperCase())}
-              className="bg-gray-800 border border-gray-700 rounded-lg pl-8 pr-3 py-2 text-white text-sm
-                         placeholder-gray-500 focus:outline-none focus:border-emerald-500 w-40 font-mono"
-            />
-          </div>
-
-          {/* Period tabs (hidden if date filter is active) */}
-          {!date && (
-            <div className="flex items-center bg-gray-800/60 border border-gray-700 rounded-lg p-0.5 gap-0.5">
-              {(Object.keys(PERIOD_LABELS) as Period[]).map(p => (
-                <button
-                  key={p}
-                  id={`period-${p}`}
-                  onClick={() => setPeriod(p)}
-                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                    period === p
-                      ? 'bg-emerald-500/20 text-emerald-400'
-                      : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  {PERIOD_LABELS[p]}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Result count */}
-          {!loading && (
-            <span className="text-xs text-gray-600 lg:ml-auto">
-              {items.length} ticker{items.length !== 1 ? 's' : ''}
-              {date ? ` on ${date}` : period !== 'all' ? ` in ${PERIOD_LABELS[period].toLowerCase()}` : ''}
-            </span>
-          )}
+      {/* Filter/Search Bar */}
+      <div className="flex flex-wrap items-center gap-1.5 p-2 bg-[#0a0a0a] border border-[#262626]">
+        {/* Search */}
+        <div className="relative">
+          <Search size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-500" />
+          <input
+            id="history-search"
+            ref={searchRef}
+            placeholder="Search ticker…"
+            value={search}
+            onChange={e => setSearch(e.target.value.toUpperCase())}
+            className="bg-black border border-[#262626] text-white font-mono text-[11px] focus:outline-none focus:border-[#00ff00] rounded-none pl-6 pr-2 py-1 w-36 [color-scheme:dark]"
+          />
         </div>
 
-        {/* Multi-Filter Bar */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 bg-gray-900/50 border border-gray-800 rounded-xl p-3">
-          <div className="space-y-1">
-            <label className="text-[10px] uppercase font-bold text-gray-500 ml-1">Specific Date</label>
-            <input
-              type="date"
-              value={date}
-              onChange={e => setDate(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-[10px] uppercase font-bold text-gray-500 ml-1">Price Range</label>
-            <div className="flex items-center gap-1">
-              <input
-                type="number"
-                placeholder="Min"
-                value={minPrice}
-                onChange={e => setMinPrice(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
-              />
-              <span className="text-gray-600">-</span>
-              <input
-                type="number"
-                placeholder="Max"
-                value={maxPrice}
-                onChange={e => setMaxPrice(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
-              />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <label className="text-[10px] uppercase font-bold text-gray-500 ml-1">Max Float (M)</label>
-            <input
-              type="number"
-              placeholder="e.g. 10"
-              value={maxFloat}
-              onChange={e => setMaxFloat(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-[10px] uppercase font-bold text-gray-500 ml-1">Min RVOL</label>
-            <input
-              type="number"
-              placeholder="e.g. 5"
-              value={minRvol}
-              onChange={e => setMinRvol(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500"
-            />
-          </div>
-          <div className="space-y-1 min-w-0">
-            <label className="text-[10px] uppercase font-bold text-gray-500 ml-1">Sector</label>
-            <div className="flex gap-2">
-              <select
-                value={sector}
-                onChange={e => setSector(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500 min-w-0"
+        {/* Period tabs (hidden if date filter is active) */}
+        {!date && (
+          <div className="flex bg-black border border-[#262626]">
+            {(Object.keys(PERIOD_LABELS) as Period[]).map(p => (
+              <button
+                key={p}
+                id={`period-${p}`}
+                onClick={() => setPeriod(p)}
+                className={`px-2.5 py-1 text-[11px] font-mono border-r border-[#262626] last:border-r-0 transition-colors rounded-none ${
+                  period === p
+                    ? 'border-b-2 border-b-[#00ff00] text-[#00ff00] bg-emerald-950/10'
+                    : 'text-gray-500 hover:text-white'
+                }`}
               >
-                <option value="">All Sectors</option>
-                {sectors.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-              {(date || minGap || maxFloat || minRvol || sector || minPrice || maxPrice) && (
-                <button
-                  onClick={() => { setDate(''); setMinGap(''); setMaxFloat(''); setMinRvol(''); setSector(''); setMinPrice(''); setMaxPrice('') }}
-                  className="px-2 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-[10px] text-gray-400 hover:text-white shrink-0"
-                >
-                  RESET
-                </button>
-              )}
-            </div>
+                {PERIOD_LABELS[p]}
+              </button>
+            ))}
           </div>
+        )}
+
+        <div className="flex items-center gap-1 ml-auto">
+          {/* Specific Date */}
+          <input
+            type="date"
+            value={date}
+            onChange={e => setDate(e.target.value)}
+            className="bg-black border border-[#262626] text-white font-mono text-[11px] focus:outline-none focus:border-[#00ff00] rounded-none px-2 py-1 [color-scheme:dark]"
+          />
+          {/* Price Min */}
+          <input
+            type="number"
+            placeholder="$Min"
+            value={minPrice}
+            onChange={e => setMinPrice(e.target.value)}
+            className="bg-black border border-[#262626] text-white font-mono text-[11px] focus:outline-none focus:border-[#00ff00] rounded-none px-2 py-1 w-16 [color-scheme:dark]"
+          />
+          {/* Price Max */}
+          <input
+            type="number"
+            placeholder="$Max"
+            value={maxPrice}
+            onChange={e => setMaxPrice(e.target.value)}
+            className="bg-black border border-[#262626] text-white font-mono text-[11px] focus:outline-none focus:border-[#00ff00] rounded-none px-2 py-1 w-16 [color-scheme:dark]"
+          />
+          {/* Max Float */}
+          <input
+            type="number"
+            placeholder="Float≤"
+            value={maxFloat}
+            onChange={e => setMaxFloat(e.target.value)}
+            className="bg-black border border-[#262626] text-white font-mono text-[11px] focus:outline-none focus:border-[#00ff00] rounded-none px-2 py-1 w-16 [color-scheme:dark]"
+          />
+          {/* Min RVOL */}
+          <input
+            type="number"
+            placeholder="RVOL≥"
+            value={minRvol}
+            onChange={e => setMinRvol(e.target.value)}
+            className="bg-black border border-[#262626] text-white font-mono text-[11px] focus:outline-none focus:border-[#00ff00] rounded-none px-2 py-1 w-16 [color-scheme:dark]"
+          />
+          {/* Sector */}
+          <select
+            value={sector}
+            onChange={e => setSector(e.target.value)}
+            className="bg-black border border-[#262626] text-white font-mono text-[11px] focus:outline-none focus:border-[#00ff00] rounded-none px-2 py-1 [color-scheme:dark]"
+          >
+            <option value="">All Sectors</option>
+            {sectors.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          {/* Reset */}
+          {(date || minGap || maxFloat || minRvol || sector || minPrice || maxPrice) && (
+            <button
+              onClick={() => { setDate(''); setMinGap(''); setMaxFloat(''); setMinRvol(''); setSector(''); setMinPrice(''); setMaxPrice('') }}
+              className="px-2.5 py-1 border border-[#262626] bg-black text-gray-500 hover:text-white font-mono text-[11px] transition-colors rounded-none"
+            >
+              RESET
+            </button>
+          )}
         </div>
       </div>
 
       {/* Heatmap — period-reactive */}
-      <details className="bg-gray-900 border border-gray-800 rounded-2xl group" open>
-        <summary className="flex items-center gap-2 px-5 py-3.5 cursor-pointer list-none select-none
-                            text-sm font-semibold text-gray-400 hover:text-gray-200 transition-colors">
-          <LayoutGrid size={14} className="text-emerald-400 shrink-0" />
+      <details className="bg-[#050505] border border-[#262626] group" open>
+        <summary className="flex items-center gap-2 px-3 py-2 cursor-pointer list-none select-none
+                            font-mono text-[11px] font-bold text-gray-400 uppercase tracking-widest hover:text-gray-200 transition-colors">
+          <LayoutGrid size={12} className="text-[#00ff00] shrink-0" />
           Float × RVOL Heatmap
-          <span className="text-xs font-normal text-gray-600 ml-1">
+          <span className="text-[10px] font-normal text-gray-600 ml-1 normal-case tracking-normal">
             — {PERIOD_LABELS[period].toLowerCase()} avg gap %
           </span>
-          <ChevronDown size={13} className="ml-auto text-gray-600 group-open:rotate-180 transition-transform" />
+          <ChevronDown size={12} className="ml-auto text-gray-600 group-open:rotate-180 transition-transform" />
         </summary>
-        <div className="px-5 pb-5 border-t border-gray-800/60 pt-3">
+        <div className="px-3 pb-3 border-t border-[#262626] pt-2">
           <HeatMap
             period={date ? undefined : period}
             date={date || undefined}
@@ -465,58 +443,62 @@ export default function HistoryPage() {
             sector={sector || undefined}
             height={300}
           />
-          <p className="text-[11px] text-gray-700 mt-2">
+          <p className="text-[10px] font-mono text-gray-700 mt-2">
             Each cell = average gap % for gainers in that float + RVOL bucket · hover for sample count
           </p>
         </div>
       </details>
 
       {/* Table */}
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+      <div className="bg-black border border-[#262626] overflow-hidden">
         <table className="w-full">
-          <thead className="border-b border-gray-800 bg-gray-900/80">
+          <thead className="bg-[#050505] border-b border-[#262626]">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Ticker</th>
+              <th className="px-3 py-2 text-left text-[10px] font-mono text-gray-500 uppercase tracking-wider">Ticker</th>
               <SortTh label="×" sortKey="appearances" current={sort} onSort={handleSort} />
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 hidden md:table-cell">
+              <th className="px-3 py-2 text-left text-[10px] font-mono text-gray-500 uppercase tracking-wider hidden md:table-cell">
                 First Seen
               </th>
               <SortTh label="Last Seen"  sortKey="last_seen"    current={sort} onSort={handleSort} />
               <SortTh label="Avg Gap"    sortKey="avg_gap"      current={sort} onSort={handleSort} />
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 hidden lg:table-cell">
+              <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-500 uppercase tracking-wider hidden lg:table-cell">
                 Best Gap
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 hidden lg:table-cell">
+              <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-500 uppercase tracking-wider hidden lg:table-cell">
                 Avg RVOL
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 hidden xl:table-cell">
+              <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-500 uppercase tracking-wider hidden xl:table-cell">
                 Avg Float
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500">
+              <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-500 uppercase tracking-wider">
                 Close
               </th>
-              <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 hidden sm:table-cell">
+              <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-500 uppercase tracking-wider hidden sm:table-cell">
                 Mkt Cap
               </th>
-              <th className="px-4 py-3 w-8" />
+              <th className="px-3 py-2 w-8" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-800/60">
+          <tbody>
             {loading ? (
               Array.from({ length: 12 }).map((_, i) => (
-                <tr key={i} className="animate-pulse">
+                <tr key={i} className="border-b border-[#1a1a1a]">
                   {Array.from({ length: 9 }).map((_, j) => (
-                    <td key={j} className="px-4 py-3">
-                      <div className="h-3 bg-gray-800 rounded w-16" />
+                    <td key={j} className="px-3 py-2">
+                      <div className="animate-pulse bg-[#111] h-3 w-16 rounded-none" />
                     </td>
                   ))}
                 </tr>
               ))
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-16 text-center text-gray-600 text-sm">
-                  No tickers found for this period
-                  {search ? ` matching "${search}"` : ''}.
+                <td colSpan={9}>
+                  <div className="flex flex-col items-center justify-center py-16 gap-2 bg-[#050505]">
+                    <BarChart2 size={24} className="text-gray-700" />
+                    <span className="text-gray-500 text-xs uppercase tracking-wider font-mono">
+                      No tickers found{search ? ` matching "${search}"` : ' for this period'}
+                    </span>
+                  </div>
                 </td>
               </tr>
             ) : (
@@ -534,9 +516,9 @@ export default function HistoryPage() {
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 text-xs text-gray-600">
+      <div className="flex items-center gap-4 px-1 font-mono text-[10px] text-gray-600">
         <span className="flex items-center gap-1.5">
-          <span className="w-5 h-5 rounded-full bg-emerald-500/20 inline-flex items-center justify-center text-emerald-400 font-bold text-[10px]">5</span>
+          <span className="px-1.5 py-0.5 bg-emerald-950/20 text-[#00ff00] border border-[#00ff00]/25 font-bold rounded-none">5+</span>
           5+ appearances
         </span>
         <span className="flex items-center gap-1.5">

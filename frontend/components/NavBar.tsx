@@ -44,14 +44,14 @@ export default function NavBar() {
   }
 
   return (
-    <nav className="border-b border-gray-200 dark:border-gray-800 bg-white/90 dark:bg-gray-900/80 backdrop-blur sticky top-0 z-50 transition-colors duration-300">
+    <nav className="bg-black border-b border-[#262626] sticky top-0 z-50">
       <div className="max-w-screen-2xl mx-auto px-4">
         <div className="flex items-center justify-between h-14">
           
           {/* Brand/Logo */}
           <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <BarChart2 className="text-emerald-500 dark:text-emerald-400 animate-pulse" size={22} />
-            <span className="font-bold tracking-tight text-gray-950 dark:text-white">TradeJournal</span>
+            <BarChart2 className="text-[#00ff00]" size={22} />
+            <span className="font-mono font-bold text-white text-sm uppercase tracking-widest">TradeJournal</span>
           </Link>
 
           {/* Desktop Nav Links */}
@@ -60,10 +60,10 @@ export default function NavBar() {
               <Link
                 key={href}
                 href={href}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200
+                className={`flex items-center gap-1.5 rounded-none transition-colors
                   ${path === href
-                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-950 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800/60'}`}
+                    ? 'font-mono text-[11px] uppercase tracking-wider px-3 py-1.5 border border-[#00ff00]/30 text-[#00ff00] bg-emerald-950/10 rounded-none'
+                    : 'font-mono text-[11px] uppercase tracking-wider px-3 py-1.5 border border-transparent text-gray-400 hover:text-white hover:border-[#262626] rounded-none'}`}
               >
                 <Icon size={14} />
                 {label}
@@ -77,7 +77,7 @@ export default function NavBar() {
             {/* Theme Toggle Button */}
             <button
               onClick={toggleTheme}
-              className="p-2 rounded-xl text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-150 dark:hover:bg-gray-800 transition-all duration-300 border border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700"
+              className="p-1.5 border border-[#262626] text-gray-400 hover:text-white bg-black rounded-none transition-colors"
               aria-label="Toggle theme"
             >
               {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
@@ -86,7 +86,7 @@ export default function NavBar() {
             {/* Mobile Hamburger Burger Button */}
             <button
               onClick={() => setMenuOpen(!menuOpen)}
-              className="lg:hidden p-2 rounded-xl text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-150 dark:hover:bg-gray-800 transition-all duration-200 border border-gray-200 dark:border-gray-800"
+              className="lg:hidden p-1.5 border border-[#262626] text-gray-400 hover:text-white bg-black rounded-none transition-colors"
               aria-label="Toggle navigation menu"
             >
               {menuOpen ? <X size={16} /> : <Menu size={16} />}
@@ -96,16 +96,16 @@ export default function NavBar() {
 
         {/* Mobile Navigation Drawer */}
         {menuOpen && (
-          <div className="lg:hidden border-t border-gray-100 dark:border-gray-805 py-3 space-y-1 transition-all duration-300">
+          <div className="lg:hidden bg-black border-t border-[#262626] py-2 space-y-0.5">
             {links.map(({ href, label, icon: Icon }) => (
               <Link
                 key={href}
                 href={href}
                 onClick={() => setMenuOpen(false)}
-                className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors
+                className={`flex items-center gap-2.5 w-full transition-colors rounded-none
                   ${path === href
-                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold'
-                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800/50'}`}
+                    ? 'font-mono text-[11px] uppercase tracking-wider px-3 py-2 border border-[#00ff00]/30 text-[#00ff00] bg-emerald-950/10 rounded-none'
+                    : 'font-mono text-[11px] uppercase tracking-wider px-3 py-2 border border-transparent text-gray-400 hover:text-white hover:border-[#262626] rounded-none'}`}
               >
                 <Icon size={16} />
                 {label}

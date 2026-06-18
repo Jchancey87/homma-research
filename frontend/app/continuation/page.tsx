@@ -95,11 +95,11 @@ export default function ContinuationPage() {
   }
 
   const getPerformanceBadge = (maxExt: number | null | undefined) => {
-    if (maxExt == null) return <span className="text-gray-400">—</span>
-    if (maxExt >= 30.0) return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">🏆 D3 Runner ({maxExt.toFixed(1)}%)</span>
-    if (maxExt >= 10.0) return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-green-500/10 text-green-400 border border-green-500/20">🟢 Win ({maxExt.toFixed(1)}%)</span>
-    if (maxExt >= 0.0) return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">🟡 Flat ({maxExt.toFixed(1)}%)</span>
-    return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/20">🔴 Fade ({maxExt.toFixed(1)}%)</span>
+    if (maxExt == null) return <span className="text-gray-500 font-mono">—</span>
+    if (maxExt >= 30.0) return <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-emerald-950/20 text-[#00ff00] border border-[#00ff00]/25 rounded-none">RUNNER ({maxExt.toFixed(1)}%)</span>
+    if (maxExt >= 10.0) return <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-green-950/10 text-green-400 border border-green-500/20 rounded-none">WIN ({maxExt.toFixed(1)}%)</span>
+    if (maxExt >= 0.0) return <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-yellow-950/10 text-yellow-400 border border-yellow-500/20 rounded-none">FLAT ({maxExt.toFixed(1)}%)</span>
+    return <span className="px-1.5 py-0.5 text-[9px] font-mono font-bold bg-red-950/10 text-[#ff003c] border border-[#ff003c]/20 rounded-none">FADE ({maxExt.toFixed(1)}%)</span>
   }
 
   return (
@@ -156,9 +156,9 @@ export default function ContinuationPage() {
       </div>
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3">
-          <RefreshCw className="animate-spin text-emerald-500 h-8 w-8" />
-          <span className="text-base text-gray-500">Loading continuation journal details...</span>
+        <div className="flex flex-col items-center justify-center py-20 bg-[#050505] border border-[#262626] gap-2 rounded-none">
+          <RefreshCw className="animate-spin text-amber-500 h-6 w-6" />
+          <span className="text-xs font-mono text-gray-550 uppercase">Loading continuation journal details...</span>
         </div>
       ) : (
         <>
@@ -166,25 +166,25 @@ export default function ContinuationPage() {
           {activeTab === 'journal' && (
             <div className="space-y-4">
               {/* Filters Panel */}
-              <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-                <div className="relative w-full sm:max-w-xs">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-400" />
+              <div className="flex flex-wrap items-center gap-1.5 p-2 bg-[#0a0a0a] border border-[#262626]">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-500" />
                   <input
                     type="text"
-                    placeholder="Search ticker, sector, catalyst..."
+                    placeholder="SEARCH CONTINUATIONS..."
                     value={search}
                     onChange={e => setSearch(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 rounded-lg border border-gray-200 dark:border-gray-850 bg-white dark:bg-gray-900 text-sm focus:ring-1 focus:ring-emerald-500 focus:outline-none"
+                    className="bg-black border border-[#262626] text-white font-mono text-[11px] pl-8 pr-2 py-1 focus:outline-none focus:border-[#00ff00] rounded-none [color-scheme:dark] w-52 uppercase"
                   />
                 </div>
 
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                <div className="flex items-center gap-4 ml-auto">
+                  <label className="flex items-center gap-1.5 text-[11px] font-mono text-gray-500 uppercase cursor-pointer hover:text-white">
                     <input
                       type="checkbox"
                       checked={showHistory}
                       onChange={e => setShowHistory(e.target.checked)}
-                      className="rounded border-gray-300 dark:border-gray-800 text-emerald-500 focus:ring-emerald-500 h-4 w-4 bg-white dark:bg-gray-900"
+                      className="rounded-none border-[#262626] bg-black text-[#00ff00] focus:ring-0 focus:ring-offset-0 h-3.5 w-3.5"
                     />
                     Include expired picks (older than 3 days)
                   </label>
@@ -477,32 +477,32 @@ export default function ContinuationPage() {
           {activeTab === 'performance' && performance && (
             <div className="space-y-6">
               {/* Summary Stats Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                <div className="bg-white dark:bg-gray-900 border border-gray-250/50 dark:border-gray-800 p-4.5 rounded-xl shadow-sm">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">Total Studies</span>
-                  <span className="text-2xl font-bold font-mono">{performance.summary.total_picks || 0}</span>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-1.5">
+                <div className="bg-[#0a0a0a] border border-[#262626] p-3 rounded-none">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500 block mb-0.5 font-mono">Total Studies</span>
+                  <span className="text-lg font-bold font-mono text-white">{performance.summary.total_picks || 0}</span>
                 </div>
-                <div className="bg-white dark:bg-gray-900 border border-gray-250/50 dark:border-gray-800 p-4.5 rounded-xl shadow-sm">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">Win Rate (≥10%)</span>
-                  <span className="text-2xl font-bold font-mono text-green-500">{performance.summary.win_rate || 0}%</span>
+                <div className="bg-[#0a0a0a] border border-[#262626] p-3 rounded-none">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500 block mb-0.5 font-mono">Win Rate (≥10%)</span>
+                  <span className="text-lg font-bold font-mono text-[#00ff00]">{performance.summary.win_rate || 0}%</span>
                 </div>
-                <div className="bg-white dark:bg-gray-900 border border-gray-250/50 dark:border-gray-800 p-4.5 rounded-xl shadow-sm">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">Super Rate (≥30%)</span>
-                  <span className="text-2xl font-bold font-mono text-emerald-500">{performance.summary.super_win_rate || 0}%</span>
+                <div className="bg-[#0a0a0a] border border-[#262626] p-3 rounded-none">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500 block mb-0.5 font-mono">Super Rate (≥30%)</span>
+                  <span className="text-lg font-bold font-mono text-[#00ff00]">{performance.summary.super_win_rate || 0}%</span>
                 </div>
-                <div className="bg-white dark:bg-gray-900 border border-gray-250/50 dark:border-gray-800 p-4.5 rounded-xl shadow-sm">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">Avg Max Extension</span>
-                  <span className="text-2xl font-bold font-mono text-emerald-400">+{performance.summary.avg_max_ext || 0}%</span>
+                <div className="bg-[#0a0a0a] border border-[#262626] p-3 rounded-none">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500 block mb-0.5 font-mono">Avg Max Extension</span>
+                  <span className="text-lg font-bold font-mono text-[#00ff00]">+{performance.summary.avg_max_ext || 0}%</span>
                 </div>
-                <div className="bg-white dark:bg-gray-900 border border-gray-250/50 dark:border-gray-800 p-4.5 rounded-xl shadow-sm">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">Avg Day 1 Close</span>
-                  <span className={`text-2xl font-bold font-mono ${performance.summary.avg_d1_ret >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                <div className="bg-[#0a0a0a] border border-[#262626] p-3 rounded-none">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500 block mb-0.5 font-mono">Avg Day 1 Close</span>
+                  <span className={`text-lg font-bold font-mono ${performance.summary.avg_d1_ret >= 0 ? 'text-[#00ff00]' : 'text-[#ff003c]'}`}>
                     {performance.summary.avg_d1_ret >= 0 ? '+' : ''}{performance.summary.avg_d1_ret || 0}%
                   </span>
                 </div>
-                <div className="bg-white dark:bg-gray-900 border border-gray-250/50 dark:border-gray-800 p-4.5 rounded-xl shadow-sm">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">Avg Day 3 Close</span>
-                  <span className={`text-2xl font-bold font-mono ${performance.summary.avg_d3_ret >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                <div className="bg-[#0a0a0a] border border-[#262626] p-3 rounded-none">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-gray-500 block mb-0.5 font-mono">Avg Day 3 Close</span>
+                  <span className={`text-lg font-bold font-mono ${performance.summary.avg_d3_ret >= 0 ? 'text-[#00ff00]' : 'text-[#ff003c]'}`}>
                     {performance.summary.avg_d3_ret >= 0 ? '+' : ''}{performance.summary.avg_d3_ret || 0}%
                   </span>
                 </div>

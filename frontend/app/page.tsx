@@ -27,14 +27,14 @@ function PanelLabel({
 }: { icon: React.ElementType; label: string; href?: string }) {
   return (
     <div className="flex items-center justify-between mb-3">
-      <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
-        <Icon size={12} className="text-gray-400 dark:text-gray-650" />
+      <span className="text-[11px] font-mono font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+        <Icon size={12} className="text-gray-500" />
         {label}
       </span>
       {href && (
         <Link
           href={href}
-          className="flex items-center gap-1 text-[11px] text-gray-600 dark:text-gray-400 hover:text-gray-950 dark:hover:text-white transition-colors"
+          className="text-[11px] font-mono text-gray-500 hover:text-white transition-colors flex items-center gap-1"
         >
           View all <ArrowRight size={10} />
         </Link>
@@ -47,7 +47,7 @@ function Panel({
   children, className = '',
 }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800/80 rounded-2xl p-5 shadow-sm hover:shadow-md dark:hover:shadow-black/30 hover:border-gray-300 dark:hover:border-gray-700/80 transition-all duration-300 ${className}`}>
+    <div className={`bg-[#050505] border border-[#262626] rounded-none p-3 ${className}`}>
       {children}
     </div>
   )
@@ -63,14 +63,14 @@ function MorningHeader() {
   const greeting = hour < 9 ? 'Pre-market briefing' : hour < 16 ? 'Market open' : 'After-hours'
 
   return (
-    <div className="flex items-baseline justify-between border-b border-gray-200 dark:border-gray-850 pb-3 flex-wrap gap-2">
+    <div className="flex items-baseline justify-between pb-3 flex-wrap gap-2">
       <div>
-        <h1 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">{dayName}</h1>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{dateStr} · {greeting}</p>
+        <h1 className="font-mono text-lg font-bold text-white uppercase tracking-tight">{dayName}</h1>
+        <p className="font-mono text-[11px] text-gray-500 mt-0.5">{dateStr} · {greeting}</p>
       </div>
       <Link
         href="/history"
-        className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 transition-colors flex items-center gap-1 bg-emerald-50 dark:bg-emerald-500/10 px-3 py-1.5 rounded-lg border border-emerald-250/20"
+        className="font-mono text-[11px] text-[#00ff00] border border-[#00ff00]/30 bg-emerald-950/10 px-3 py-1 flex items-center gap-1 hover:bg-emerald-950/20 transition-colors rounded-none"
       >
         Command Center <ArrowRight size={11} />
       </Link>
@@ -90,19 +90,19 @@ async function ContinuationPicksPanel() {
     <Panel>
       <PanelLabel icon={Zap} label="AI Continuation Picks" href="/watchlist" />
       {active.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-6 border border-dashed border-gray-200 dark:border-gray-800 rounded-xl gap-2 text-center bg-gray-50/50 dark:bg-gray-900/10">
-          <Zap size={22} className="text-gray-400 dark:text-gray-650" />
-          <p className="text-gray-500 dark:text-gray-400 text-xs font-medium">No active picks found</p>
+        <div className="flex flex-col items-center justify-center py-16 gap-2 border border-[#262626] bg-[#050505]">
+          <Zap size={22} className="text-gray-700" />
+          <p className="text-gray-500 text-xs uppercase tracking-wider font-mono">No active picks found</p>
           <Link
             href="/watchlist"
-            className="text-[11.5px] font-bold text-emerald-600 dark:text-emerald-400 hover:underline"
+            className="text-[11px] font-mono text-[#00ff00] hover:underline"
           >
             Configure picks in Watchlist
           </Link>
         </div>
       ) : (
         <div className="space-y-0.5">
-          <div className="flex text-[10px] text-gray-400 dark:text-gray-700 uppercase tracking-wide font-semibold px-2 pb-1 border-b border-gray-100 dark:border-gray-900 mb-1">
+          <div className="flex text-[10px] font-mono text-gray-600 uppercase tracking-wider px-2 pb-1 border-b border-[#1a1a1a] mb-1">
             <span className="w-6 shrink-0">#</span>
             <span className="flex-1">Ticker</span>
             <span className="w-16 text-right">Sel. Gap</span>
@@ -112,19 +112,19 @@ async function ContinuationPicksPanel() {
             <Link
               key={p.id}
               href={`/research?ticker=${p.ticker}`}
-              className="group flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800/50 transition-colors"
+              className="group flex items-center gap-2 px-2 py-1.5 font-mono hover:bg-[#0a0a0a] border-b border-[#1a1a1a] transition-colors rounded-none"
             >
-              <span className="text-[11px] text-gray-400 dark:text-gray-700 w-6 shrink-0">#{i + 1}</span>
-              <span className="text-sm font-bold text-gray-900 dark:text-white font-mono flex-1 group-hover:text-emerald-400 transition-colors">{p.ticker}</span>
+              <span className="text-[11px] text-gray-500 w-6 shrink-0">#{i + 1}</span>
+              <span className="text-sm font-bold text-white font-mono flex-1 group-hover:text-[#00ff00] transition-colors">{p.ticker}</span>
               {p.gap_pct != null && (
-                <span className="text-xs font-mono text-gray-550 dark:text-gray-400 w-16 text-right">
+                <span className="text-xs font-mono text-gray-400 w-16 text-right">
                   +{p.gap_pct.toFixed(1)}%
                 </span>
               )}
               <div className="w-24 text-right flex flex-col items-end shrink-0">
                 {p.today_change_pct != null ? (
                   <>
-                    <span className={`text-xs font-mono font-bold leading-none ${p.today_change_pct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    <span className={`text-xs font-mono font-bold leading-none ${p.today_change_pct >= 0 ? 'text-[#00ff00]' : 'text-[#ff003c]'}`}>
                       {p.today_change_pct >= 0 ? '+' : ''}{p.today_change_pct.toFixed(1)}%
                     </span>
                     {p.today_last != null && (
@@ -149,34 +149,34 @@ async function ContinuationPicksPanel() {
 
 export default async function DashboardPage() {
   return (
-    <div className="space-y-6 max-w-[1920px] mx-auto">
+    <div className="space-y-2 max-w-[1920px] mx-auto">
 
       {/* ── Morning header ── */}
       <MorningHeader />
 
       {/* ── Market breadth strip (full width) ── */}
-      <Suspense fallback={<div className="h-10 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800/80 rounded-2xl animate-pulse" />}>
+      <Suspense fallback={<div className="h-10 bg-[#111] border border-[#262626] rounded-none animate-pulse" />}>
         <MarketBreadthBar />
       </Suspense>
 
       {/* ── Momentum Breadth & Market Health Banner ── */}
-      <Suspense fallback={<div className="h-24 bg-white dark:bg-gray-950 border border-gray-200 dark:border-gray-800/80 rounded-2xl animate-pulse" />}>
+      <Suspense fallback={<div className="h-24 bg-[#111] border border-[#262626] rounded-none animate-pulse" />}>
         <MomentumBreadthBanner />
       </Suspense>
 
 
       {/* ── Row 1: Live screener (full width) ── */}
       <Panel>
-        <div className="flex items-center justify-between mb-3 border-b border-gray-100 dark:border-gray-900/50 pb-2">
-          <span className="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
-            <TrendingUp size={12} className="text-gray-400 dark:text-gray-650" />
+        <div className="flex items-center justify-between mb-3 border-b border-[#1a1a1a] pb-2">
+          <span className="text-[11px] font-mono font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+            <TrendingUp size={12} className="text-gray-500" />
             Live Gainer Screener
           </span>
           <div className="flex items-center gap-3">
-            <Link href="/daily-charts" className="text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1 font-semibold">
+            <Link href="/daily-charts" className="text-[11px] font-mono text-[#00ff00] hover:underline flex items-center gap-1">
               Charts <ArrowRight size={10} />
             </Link>
-            <Link href="/history" className="text-[11px] text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors flex items-center gap-1">
+            <Link href="/history" className="text-[11px] font-mono text-gray-500 hover:text-white transition-colors flex items-center gap-1">
               History <ArrowRight size={10} />
             </Link>
           </div>
@@ -185,55 +185,55 @@ export default async function DashboardPage() {
       </Panel>
 
       {/* ── Row 2: Repeat runners + Follow-through (stacked on mobile, side-by-side on lg) ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
         <Panel>
           <PanelLabel icon={RotateCcw} label="Repeat Runners" href="/history" />
-          <Suspense fallback={<div className="space-y-2 animate-pulse">{[1,2].map(i=><div key={i} className="h-10 bg-gray-150 dark:bg-gray-800/60 rounded-lg" />)}</div>}>
+          <Suspense fallback={<div className="space-y-2 animate-pulse">{[1,2].map(i=><div key={i} className="h-10 bg-[#111] rounded-none" />)}</div>}>
             <RepeatRunnerAlert />
           </Suspense>
         </Panel>
 
         <Panel>
           <PanelLabel icon={TrendingDown} label="Yesterday's Follow-Through" />
-          <Suspense fallback={<div className="space-y-2 animate-pulse">{[1,2,3].map(i=><div key={i} className="h-8 bg-gray-150 dark:bg-gray-800/60 rounded" />)}</div>}>
+          <Suspense fallback={<div className="space-y-2 animate-pulse">{[1,2,3].map(i=><div key={i} className="h-8 bg-[#111] rounded-none" />)}</div>}>
             <FollowThrough />
           </Suspense>
         </Panel>
       </div>
 
       {/* ── Row 3: Float buckets + Sector rotation + AI picks (stacked on mobile, 3-cols on xl) ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
         <Panel>
           <PanelLabel icon={Layers} label="Float in Play" />
-          <Suspense fallback={<div className="space-y-2 animate-pulse">{[1,2,3].map(i=><div key={i} className="h-8 bg-gray-150 dark:bg-gray-800/60 rounded" />)}</div>}>
+          <Suspense fallback={<div className="space-y-2 animate-pulse">{[1,2,3].map(i=><div key={i} className="h-8 bg-[#111] rounded-none" />)}</div>}>
             <FloatBucketSummary />
           </Suspense>
         </Panel>
 
         <Panel>
           <PanelLabel icon={BarChart2} label="Sector Rotation" />
-          <Suspense fallback={<div className="space-y-2 animate-pulse">{[1,2,3,4].map(i=><div key={i} className="h-7 bg-gray-150 dark:bg-gray-800/60 rounded" />)}</div>}>
+          <Suspense fallback={<div className="space-y-2 animate-pulse">{[1,2,3,4].map(i=><div key={i} className="h-7 bg-[#111] rounded-none" />)}</div>}>
             <SectorRotation />
           </Suspense>
         </Panel>
 
-        <Suspense fallback={<Panel><div className="animate-pulse h-32 bg-gray-150 dark:bg-gray-800/40 rounded" /></Panel>}>
+        <Suspense fallback={<Panel><div className="animate-pulse h-32 bg-[#111] rounded-none" /></Panel>}>
           <ContinuationPicksPanel />
         </Suspense>
       </div>
 
       {/* ── Row 4: Watchlist (live prices) + Observations (stacked on mobile, side-by-side on lg) ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
         <Panel>
           <PanelLabel icon={Bookmark} label="Watchlist" href="/watchlist" />
-          <Suspense fallback={<div className="space-y-1.5 animate-pulse">{[1,2,3].map(i=><div key={i} className="h-9 bg-gray-150 dark:bg-gray-800/60 rounded-lg" />)}</div>}>
+          <Suspense fallback={<div className="space-y-1.5 animate-pulse">{[1,2,3].map(i=><div key={i} className="h-9 bg-[#111] rounded-none" />)}</div>}>
             <WatchlistQuickAccess />
           </Suspense>
         </Panel>
 
         <Panel>
           <PanelLabel icon={FileText} label="Recent Observations" href="/observations" />
-          <Suspense fallback={<div className="h-32 bg-gray-150 dark:bg-gray-800/40 rounded animate-pulse" />}>
+          <Suspense fallback={<div className="h-32 bg-[#111] rounded-none animate-pulse" />}>
             <RecentObservations />
           </Suspense>
         </Panel>
@@ -242,7 +242,7 @@ export default async function DashboardPage() {
       {/* ── Economic calendar (full width, compact) ── */}
       <Panel>
         <PanelLabel icon={CalendarDays} label="This Week's Calendar" />
-        <Suspense fallback={<div className="h-8 bg-gray-150 dark:bg-gray-800/40 rounded animate-pulse" />}>
+        <Suspense fallback={<div className="h-8 bg-[#111] rounded-none animate-pulse" />}>
           <EconomicCalendar />
         </Suspense>
       </Panel>

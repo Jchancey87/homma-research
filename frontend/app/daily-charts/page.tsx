@@ -1,9 +1,9 @@
 'use client'
 import { useEffect, useState, useCallback, useMemo, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { getGainersSummary, GainerSummary, getPipeScan, PipeScanResult, Gainer } from '@/lib/api'
+import { getGainersSummary, GainerSummary, getPipeScan, PipeScanResult, Gainer, getLiveGainers, LiveGainerRow } from '@/lib/api'
 import MiniSessionChart from '@/components/MiniSessionChart'
-import { BarChart2, RefreshCw, ChevronLeft, ChevronRight, Search } from 'lucide-react'
+import { BarChart2, RefreshCw, ChevronLeft, ChevronRight, Search, Radio } from 'lucide-react'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -30,6 +30,9 @@ function DailyChartsContent() {
   )
   const [pipeMap, setPipeMap]   = useState<Record<string, PipeScanResult>>({})
   const [priceFilterEnabled, setPriceFilterEnabled] = useState(true)
+  // Live fallback state — populated when today has no DB ingest yet
+  const [liveRows, setLiveRows] = useState<LiveGainerRow[] | null>(null)
+  const [isLiveFallback, setIsLiveFallback] = useState(false)
 
   // Sync price filter with localStorage / main screener
   useEffect(() => {
@@ -50,37 +53,55 @@ function DailyChartsContent() {
   // ── Fetch summary for the active date ──────────────────────────────────────
   const load = useCallback(async () => {
     setLoading(true)
+    setIsLiveFallback(false)
+    setLiveRows(null)
     try {
       // Discover the most recent ingest date
       const s = await getGainersSummary()
-      if (!s.date) {
-        setSummary({ date: null, total: 0, gainers: [] })
-        return
-      }
+      const today = todayET()
+      const targetDate = activeDate || s.date || today
 
-      const targetDate = activeDate || s.date
+      // Fetch DB rows for the target date
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000'}/api/gainers?date=${targetDate}`
       )
       const rows = await res.json()
 
-      setSummary({
-        date:    targetDate,
-        total:   rows.length,
-        gainers: rows.map((g: Gainer) => ({
-          ticker:       g.ticker,
-          gap_pct:      g.gap_pct,
-          extended_change_pct: g.extended_change_pct,
-          float_shares: g.float_shares,
-          rvol_15m:     g.rvol_15m,
-          sector:       g.sector,
-          news_headline: g.news_headline,
-          news_fresh:   g.news_fresh,
-          close_price:  g.close_price,
-          open_price:   g.open_price,
-        })),
-      })
-      if (!activeDate) setActiveDate(s.date)
+      if (rows && rows.length > 0) {
+        // DB has data — normal path
+        setSummary({
+          date:    targetDate,
+          total:   rows.length,
+          gainers: rows.map((g: Gainer) => ({
+            ticker:       g.ticker,
+            gap_pct:      g.gap_pct,
+            extended_change_pct: g.extended_change_pct,
+            float_shares: g.float_shares,
+            rvol_15m:     g.rvol_15m,
+            sector:       g.sector,
+            news_headline: g.news_headline,
+            news_fresh:   g.news_fresh,
+            close_price:  g.close_price,
+            open_price:   g.open_price,
+          })),
+        })
+        if (!activeDate) setActiveDate(targetDate)
+      } else if (!activeDate || activeDate === today) {
+        // No DB data for today — fall back to live screener
+        const snapshot = await getLiveGainers()
+        if (snapshot?.gainers?.length) {
+          setLiveRows(snapshot.gainers)
+          setIsLiveFallback(true)
+          setSummary({ date: today, total: snapshot.gainers.length, gainers: [] })
+          if (!activeDate) setActiveDate(today)
+        } else {
+          // Live screener also empty — show no-data state
+          setSummary({ date: null, total: 0, gainers: [] })
+        }
+      } else {
+        // Historical date with no ingest data
+        setSummary({ date: null, total: 0, gainers: [] })
+      }
     } catch {
       setSummary(null)
     } finally {
@@ -88,8 +109,28 @@ function DailyChartsContent() {
     }
   }, [activeDate])
 
-  // Filter gainers by price and grab the top 9
+  // Gainers to display — DB rows or live-fallback rows
   const displayGainers = useMemo(() => {
+    if (isLiveFallback && liveRows) {
+      // Map live rows into the same shape MiniSessionChart needs
+      const list = [...liveRows]
+      list.sort((a, b) => (b.gap_pct ?? 0) - (a.gap_pct ?? 0))
+      const filtered = priceFilterEnabled
+        ? list.filter(g => g.last_price != null && g.last_price >= 2.0 && g.last_price <= 25.0)
+        : list
+      return filtered.slice(0, 9).map(g => ({
+        ticker:              g.ticker,
+        gap_pct:             g.gap_pct,
+        extended_change_pct: null,
+        float_shares:        g.float_shares ?? null,
+        rvol_15m:            g.rvol_15m ?? null,
+        sector:              g.sector ?? null,
+        news_headline:       g.news_headline ?? null,
+        news_fresh:          g.news_fresh ?? null,
+        close_price:         g.last_price ?? null,
+        open_price:          g.open_price ?? null,
+      }))
+    }
     if (!summary?.gainers) return []
     const list = [...summary.gainers]
     // Guarantee descending sort by aligned change % (extended hours close change if available, else gap)
@@ -102,7 +143,7 @@ function DailyChartsContent() {
     return list
       .filter(g => g.close_price != null && g.close_price >= 2.0 && g.close_price <= 25.0)
       .slice(0, 9)
-  }, [summary, priceFilterEnabled])
+  }, [summary, liveRows, isLiveFallback, priceFilterEnabled])
 
   useEffect(() => { load() }, [load])
 
@@ -143,9 +184,17 @@ function DailyChartsContent() {
           <h1 className="text-sm font-bold text-white flex items-center gap-1.5 uppercase">
             <BarChart2 className="text-[#00ff00]" size={16} />
             Daily Chart Overview
+            {isLiveFallback && (
+              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-none text-[9px] font-bold bg-amber-950/30 border border-amber-500/40 text-amber-400 animate-pulse">
+                <Radio size={9} />
+                LIVE
+              </span>
+            )}
           </h1>
           <p className="text-gray-500 text-[10px] mt-0.5 uppercase">
-            Top 9 intraday sessions · candlestick + volume + EMA 21, 50, 100
+            {isLiveFallback
+              ? 'Live screener data · no ingest yet for today · candlestick + volume + EMA 21, 50, 100'
+              : 'Top 9 intraday sessions · candlestick + volume + EMA 21, 50, 100'}
           </p>
         </div>
 
@@ -214,9 +263,15 @@ function DailyChartsContent() {
       {!loading && summary?.date && (
         <div className="flex items-center gap-4 px-3 py-1.5 bg-[#0a0a0a] border border-[#262626] rounded-none text-[11px]">
           <span className="font-bold text-gray-300 uppercase">{dateLabel}</span>
-          <span className="px-2 py-0.5 rounded-none text-[10px] bg-emerald-950/20 text-[#00ff00] border border-[#00ff00]/25 font-bold">
-            {summary.total} gainers ingested
-          </span>
+          {isLiveFallback ? (
+            <span className="px-2 py-0.5 rounded-none text-[10px] bg-amber-950/20 text-amber-400 border border-amber-500/25 font-bold">
+              {summary.total} live gainers (no ingest yet)
+            </span>
+          ) : (
+            <span className="px-2 py-0.5 rounded-none text-[10px] bg-emerald-950/20 text-[#00ff00] border border-[#00ff00]/25 font-bold">
+              {summary.total} gainers ingested
+            </span>
+          )}
           <span className="text-gray-500">
             Showing top {displayGainers.length} by gap % {priceFilterEnabled ? '(filtered $2-$25)' : ''}
           </span>

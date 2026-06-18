@@ -25,9 +25,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           })()
         ` }} />
       </head>
-      <body className="font-mono bg-[var(--background)] text-[var(--foreground)] min-h-screen transition-colors duration-300">
+      <body className="font-mono bg-black text-[var(--foreground)] min-h-screen">
         <NavBar />
-        <main className="max-w-[1920px] mx-auto px-3 py-6">{children}</main>
+        <main className="max-w-[1920px] mx-auto px-3 py-4">{children}</main>
         <OnboardingWizard />
       </body>
     </html>
