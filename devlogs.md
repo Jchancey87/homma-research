@@ -1208,14 +1208,18 @@ Identified expired/revoked Schwab OAuth token causing infinite restart loop of `
 
 ---
 
-## [2026-06-18] Daily Charts Improvements
+## [2026-06-18] Daily Charts Improvements & TradeStation Site-Wide UI Overhaul
 
 ### Summary
-Enhanced Daily Charts page with price filtering, multi-EMA overlays, and blinking price momentum indicator.
+Enhanced Daily Charts page with price filters, multi-EMA ribbons, and price momentum tracking. Overhauled global stylesheets and page wrappers to establish flat black colors, sharp 90-degree corners, and system monospace layout site-wide. Expanded mini chart viewports by 25% (to 250px) globally.
 
 ### What Changed
-* **Backend (`chart_data_service.py`)**: Added `ema_50` and `ema_100` calculations in `mini_mode`.
-* **Backend Tests (`test_chart_data_service.py`)**: Updated unit tests to assert extra EMA keys.
-* **Frontend (`MiniSessionChart.tsx`)**: Plotted `ema_50` (#f59e0b) and `ema_100` (#ec4899) on lightweight-charts. Added price momentum calculation (`current vs 2m ago close >= 1.0%`) and rendered blinking breakout badge in card header.
-* **Frontend Page (`daily-charts/page.tsx`, `lib/api.ts`)**: Added `extended_change_pct` to the type definitions, mapped it inside load API calls, and used it (with `gap_pct` fallback) for sorting and displaying change percentages on mini charts, aligning it with the live screener. Synchronized `$2-$25 Filter` state using `localStorage` and custom events, explicitly sorted list by aligned percentage descending to guarantee grid ranking flow, and rendered top 9 filtered gainers.
-* **Frontend Overhaul (`MiniSessionChart.tsx`, `daily-charts/page.tsx`)**: Re-styled layout elements, chart panels, header bars, inputs, and buttons to use zero rounded corners (`rounded-none`), flat matte black backgrounds (`#000000`/`#0a0a0a`), high-density tiled grid alignment, high-contrast dotted gridlines (`style: 1`), neon candle colors (`#00ff00` and `#ff003c`), thin 1px neon moving averages, and font-mono text.
+* **Backend Ingestion (`backend/services/chart_data_service.py`)**: Added `ema_50` and `ema_100` calculations in `mini_mode` candles.
+* **Backend Tests (`backend/tests/test_chart_data_service.py`)**: Updated unit assertions to cover extra EMA keys.
+* **Mini Chart Component (`frontend/components/MiniSessionChart.tsx`)**: Plotted `ema_50` (#ffff00) and `ema_100` (#ff00ff) on lightweight-charts. Added price momentum tracking (current vs 2m ago close >= 1.0%) with blinking header badge. Shifted grid line color to `#444444` and enabled dotted pattern (style: 1). Added `height` prop (defaults 250), mapped it to `createChart` and container styles. Added `height` to hook dependency array. Replaced headers/footers with canvas overlays for Ticker, aligned Gap%, Float, RVOL, and hover coordinates.
+* **Daily Charts Page (`frontend/app/daily-charts/page.tsx`, `frontend/lib/api.ts`)**: Added `extended_change_pct` type definitions, mapped inside load API calls, and sorted grid by aligned change percent descending. Unified `$2-$25 Filter` using localStorage sync. Simplified skeleton loaders to 250px flat black cards. Removed outer margins.
+* **Global CSS Styles (`frontend/app/globals.css`)**: Overwrote dark variables to flat black background (`--background: #000000`), panel background (`--panel-bg: #0a0a0a`), borders (`--panel-border: #262626`), and text (`--foreground: #cccccc`). Removed all rounded corners using global `* { border-radius: 0px !important; }`. Configured sharp scrollbars. Replaced body font family with system monospace.
+* **Root Layout (`frontend/app/layout.tsx`)**: Removed Inter google font, applied `font-mono` class directly to root body.
+* **Details Modal Viewport (`frontend/components/LiveGainers.tsx`)**: Adjusted chart modal wrapper minimum height from `min-h-[220px]` to `min-h-[250px]` to support expanded views.
+* **Alerts Page Chart (`frontend/app/alerts/page.tsx`)**: Updated styling matching TradeStation style guidelines (CHART_BG to #000000, GRID_COLOR to #444444, UP_COLOR to #00ff00, DOWN_COLOR to #ff003c, EMA21_COL to #00f0ff). Activated dotted grid lines (style: 1). Mapped volume colors dynamically. Set EMA line width to 1px.
+
