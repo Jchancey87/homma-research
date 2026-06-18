@@ -230,7 +230,7 @@ function DailyChartsContent() {
       {loading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[1px] bg-[#262626] border border-[#262626] rounded-none">
           {Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} className="bg-black h-[200px] rounded-none animate-pulse" />
+            <div key={i} className="bg-black h-[250px] rounded-none animate-pulse" />
           ))}
         </div>
       )}

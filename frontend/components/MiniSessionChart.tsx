@@ -55,6 +55,7 @@ interface Props {
   rvol:     number | null
   rank?:    number
   pipe?:    PipeScanResult | undefined
+  height?:  number
   onExpand: (ticker: string) => void
 }
 
@@ -68,7 +69,7 @@ function fmtFloat(n: number | null) {
   return m >= 1000 ? `${(m / 1000).toFixed(1)}B` : `${m.toFixed(1)}M`
 }
 
-export default function MiniSessionChart({ ticker, date, gapPct, float: floatShares, rvol, rank, pipe, onExpand }: Props) {
+export default function MiniSessionChart({ ticker, date, gapPct, float: floatShares, rvol, rank, pipe, height = 250, onExpand }: Props) {
   const [clickStart, setClickStart] = useState<{ x: number; y: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef     = useRef<IChartApi | null>(null)
@@ -177,7 +178,7 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
       handleScroll: true,
       handleScale:  true,
       width:  containerRef.current.clientWidth,
-      height: 200,
+      height: height,
     })
     chartRef.current = chart
 
@@ -261,7 +262,7 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
     ro.observe(containerRef.current)
 
     return () => { ro.disconnect(); chart.remove() }
-  }, [data])
+  }, [data, height])
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setClickStart({ x: e.clientX, y: e.clientY })
@@ -281,7 +282,7 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
   return (
     <div
       className="relative bg-black rounded-none overflow-hidden hover:bg-[#050505] transition-colors group font-mono cursor-pointer select-none"
-      style={{ height: 200 }}
+      style={{ height: height }}
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
     >

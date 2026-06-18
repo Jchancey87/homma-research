@@ -1225,7 +1225,7 @@ export default function LiveGainers() {
                   </h4>
                   <span className="text-[10px] text-gray-500 select-none">Drag to scroll · Scroll to zoom</span>
                 </div>
-                <div className="min-h-[220px]">
+                <div className="min-h-[250px]">
                   <MiniSessionChart 
                     ticker={modalGainer.ticker}
                     date={new Date().toISOString().slice(0, 10)}
