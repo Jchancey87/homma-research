@@ -80,14 +80,12 @@ async def get_chart_data(
     records_to_insert: list[tuple] = []
 
     if is_today_or_future:
-        # For today/future, always try fetching live data to get newly formed bars
+        # For today/future, always fetch live. Stale DB bars are NOT a
+        # acceptable substitute — surfacing the not-found error is better
+        # than showing a chart that looks live but is frozen hours behind.
         bars_df, records_to_insert = await asyncio.to_thread(
             _fetch_with_fallback, ticker_val, date_str, start_dt, end_dt
         )
-        if bars_df.empty and db_bars:
-            # Fall back to whatever we have in DB if live fetch failed
-            bars_df = pd.DataFrame(db_bars).set_index("time")
-            records_to_insert = []
     else:
         if db_bars:
             bars_df = pd.DataFrame(db_bars).set_index("time")

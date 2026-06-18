@@ -12,6 +12,7 @@ import {
   updateWatchlistItem,
   WatchlistItem
 } from '@/lib/api'
+import { getMomStyle } from '@/lib/momentum'
 import { useRouter } from 'next/navigation'
 import {
   RefreshCw,
@@ -130,15 +131,6 @@ function getSpreadBadgeStyle(spreadPct: number | null) {
     return { label: `${formatted} (High)`, className: 'bg-orange-500/10 text-orange-400 border border-orange-500/20 px-1.5 py-0.5 rounded text-[10px] font-mono' }
   }
   return { label: `${formatted} (Extreme)`, className: 'bg-rose-500/20 text-rose-300 border border-rose-500/30 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono' }
-}
-
-function getMomStyle(mom: number | null | undefined) {
-  if (mom == null) return 'text-slate-500'
-  if (mom >= 4.0) return 'text-emerald-950 bg-emerald-400 font-extrabold shadow-sm shadow-emerald-400/50 animate-pulse px-1.5 py-0.5 rounded'
-  if (mom <= -3.0) return 'text-red-100 bg-red-800 font-extrabold shadow-sm shadow-red-800/50 px-1.5 py-0.5 rounded'
-  if (mom > 0) return 'text-emerald-400'
-  if (mom < 0) return 'text-red-400'
-  return 'text-slate-350'
 }
 
 function getAtrHodColor(val: number | null | undefined) {

@@ -128,6 +128,10 @@ app.include_router(watchlist.router,    prefix="/api")
 app.include_router(observations.router, prefix="/api")
 app.include_router(continuation.router, prefix="/api")
 
+# Lightweight live-screener-backed read endpoints for chart components.
+from .routers import chart as chart_router
+app.include_router(chart_router.router, prefix="/api")
+
 # Phase 4 routers
 from .routers import analysis, alerts, market_data, strategies
 app.include_router(analysis.router, prefix="/api")

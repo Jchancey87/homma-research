@@ -1,9 +1,9 @@
 'use client'
 import { useEffect, useState, useCallback, useMemo, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { getGainersSummary, GainerSummary, getPipeScan, PipeScanResult, Gainer, getLiveGainers, LiveGainerRow } from '@/lib/api'
+import { getGainersSummary, getPipeScan, PipeScanResult, Gainer, getLiveGainers, LiveGainerRow } from '@/lib/api'
 import MiniSessionChart from '@/components/MiniSessionChart'
-import { BarChart2, RefreshCw, ChevronLeft, ChevronRight, Search, Radio } from 'lucide-react'
+import { BarChart2, RefreshCw, ChevronLeft, ChevronRight, Search, Radio, Wifi } from 'lucide-react'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -15,6 +15,79 @@ function addDays(dateStr: string, n: number): string {
 
 function todayET(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+}
+
+// Unified shape the chart renders off of. Both live screener rows and DB
+// rows are normalised to this. Kept local to this file since the chart's
+// minimal needs differ from the broader Gainer type in lib/api.
+export interface GainerRow {
+  ticker:              string
+  gap_pct:             number | null
+  extended_change_pct: number | null
+  float_shares:        number | null
+  rvol_15m:            number | null
+  sector:              string | null
+  news_headline:       string | null
+  news_fresh:          boolean | null
+  close_price:         number | null
+  open_price:          number | null
+  mom_2m:              number | null
+}
+
+// Local redefinition of the api.ts GainerSummary with a `source` discriminator
+// so renderers can branch on live vs DB without a separate flag.
+export interface GainerSummary {
+  date:    string | null
+  total:   number
+  source:  'live' | 'db' | null
+  gainers: GainerRow[]
+}
+
+// Normalise raw `/api/gainers?date=...` rows into the unified summary shape.
+function mapDbRowsToSummary(rows: Gainer[], date: string): GainerSummary | null {
+  if (!rows || rows.length === 0) return null
+  return {
+    date,
+    total: rows.length,
+    source: 'db',
+    gainers: rows.map((g) => ({
+      ticker:              g.ticker,
+      gap_pct:             g.gap_pct,
+      extended_change_pct: g.extended_change_pct,
+      float_shares:        g.float_shares,
+      rvol_15m:            g.rvol_15m,
+      sector:              g.sector,
+      news_headline:       g.news_headline,
+      news_fresh:          g.news_fresh,
+      close_price:         g.close_price,
+      open_price:          g.open_price,
+      mom_2m:              null,
+    })),
+  }
+}
+
+// Normalise live screener rows into the unified summary shape. Live rows
+// don't carry extended_change_pct; we map last_price → close_price so the
+// downstream sort/filter can use the same field.
+function mapLiveRowsToSummary(rows: LiveGainerRow[], date: string): GainerSummary {
+  return {
+    date,
+    total: rows.length,
+    source: 'live',
+    gainers: rows.map((g) => ({
+      ticker:              g.ticker,
+      gap_pct:             g.gap_pct,
+      extended_change_pct: null,
+      float_shares:        g.float_shares ?? null,
+      rvol_15m:            g.rvol_15m ?? null,
+      sector:              g.sector ?? null,
+      news_headline:       g.news_headline ?? null,
+      news_fresh:          g.news_fresh ?? null,
+      close_price:         g.last_price ?? null,
+      open_price:          g.open_price ?? null,
+      mom_2m:              g.mom_2m ?? null,
+    })),
+  }
 }
 
 // ── Page ─────────────────────────────────────────────────────────────────────
@@ -30,9 +103,11 @@ function DailyChartsContent() {
   )
   const [pipeMap, setPipeMap]   = useState<Record<string, PipeScanResult>>({})
   const [priceFilterEnabled, setPriceFilterEnabled] = useState(true)
-  // Live fallback state — populated when today has no DB ingest yet
-  const [liveRows, setLiveRows] = useState<LiveGainerRow[] | null>(null)
-  const [isLiveFallback, setIsLiveFallback] = useState(false)
+  // True when the displayed list is the live screener (today, in-session).
+  // Drives the header badges, subtitle, and the 30s ticker-list-rotation
+  // timer. Separate from `summary.source` so the page-level effect doesn't
+  // need to reach into the summary object.
+  const [isLiveMode, setIsLiveMode] = useState(false)
 
   // Sync price filter with localStorage / main screener
   useEffect(() => {
@@ -50,102 +125,111 @@ function DailyChartsContent() {
     return () => window.removeEventListener('price-filter-changed', handleSync)
   }, [])
 
-  // ── Fetch summary for the active date ──────────────────────────────────────
-  const load = useCallback(async () => {
+  // ── Initial load — dispatches live vs DB vs past-date ─────────────────────
+  const loadSummary = useCallback(async () => {
     setLoading(true)
-    setIsLiveFallback(false)
-    setLiveRows(null)
     try {
-      // Discover the most recent ingest date
-      const s = await getGainersSummary()
       const today = todayET()
-      const targetDate = activeDate || s.date || today
+      const isToday = !activeDate || activeDate === today
+      const targetDate = activeDate || today
 
-      // Fetch DB rows for the target date
+      if (isToday) {
+        // Today: try live screener first.
+        const snapshot = await getLiveGainers()
+        if (snapshot?.gainers?.length) {
+          setSummary(mapLiveRowsToSummary(snapshot.gainers, today))
+          setIsLiveMode(true)
+          if (!activeDate) setActiveDate(today)
+          return
+        }
+        // Defensive: live screener empty (closed session, pre-4 AM, backend
+        // down) — one-shot fallback to the most recent DB ingest. The 30s
+        // ticker-rotation timer must NOT re-trigger this path; it's only
+        // meant to fire on initial mount / manual refresh.
+        const s = await getGainersSummary()
+        const dbDate = s.date || today
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000'}/api/gainers?date=${dbDate}`
+        )
+        const rows: Gainer[] = await res.json()
+        const mapped = mapDbRowsToSummary(rows, dbDate)
+        if (mapped) {
+          setSummary(mapped)
+          setIsLiveMode(false)
+          if (!activeDate) setActiveDate(dbDate)
+        } else {
+          setSummary({ date: null, total: 0, source: null, gainers: [] })
+          setIsLiveMode(false)
+        }
+        return
+      }
+
+      // Past date: static DB ingest (no live data for closed sessions).
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000'}/api/gainers?date=${targetDate}`
       )
-      const rows = await res.json()
-
-      if (rows && rows.length > 0) {
-        // DB has data — normal path
-        setSummary({
-          date:    targetDate,
-          total:   rows.length,
-          gainers: rows.map((g: Gainer) => ({
-            ticker:       g.ticker,
-            gap_pct:      g.gap_pct,
-            extended_change_pct: g.extended_change_pct,
-            float_shares: g.float_shares,
-            rvol_15m:     g.rvol_15m,
-            sector:       g.sector,
-            news_headline: g.news_headline,
-            news_fresh:   g.news_fresh,
-            close_price:  g.close_price,
-            open_price:   g.open_price,
-          })),
-        })
-        if (!activeDate) setActiveDate(targetDate)
-      } else if (!activeDate || activeDate === today) {
-        // No DB data for today — fall back to live screener
-        const snapshot = await getLiveGainers()
-        if (snapshot?.gainers?.length) {
-          setLiveRows(snapshot.gainers)
-          setIsLiveFallback(true)
-          setSummary({ date: today, total: snapshot.gainers.length, gainers: [] })
-          if (!activeDate) setActiveDate(today)
-        } else {
-          // Live screener also empty — show no-data state
-          setSummary({ date: null, total: 0, gainers: [] })
-        }
+      const rows: Gainer[] = await res.json()
+      const mapped = mapDbRowsToSummary(rows, targetDate)
+      if (mapped) {
+        setSummary(mapped)
+        setIsLiveMode(false)
       } else {
-        // Historical date with no ingest data
-        setSummary({ date: null, total: 0, gainers: [] })
+        setSummary({ date: null, total: 0, source: null, gainers: [] })
+        setIsLiveMode(false)
       }
     } catch {
       setSummary(null)
+      setIsLiveMode(false)
     } finally {
       setLoading(false)
     }
   }, [activeDate])
 
-  // Gainers to display — DB rows or live-fallback rows
-  const displayGainers = useMemo(() => {
-    if (isLiveFallback && liveRows) {
-      // Map live rows into the same shape MiniSessionChart needs
-      const list = [...liveRows]
-      list.sort((a, b) => (b.gap_pct ?? 0) - (a.gap_pct ?? 0))
-      const filtered = priceFilterEnabled
-        ? list.filter(g => g.last_price != null && g.last_price >= 2.0 && g.last_price <= 25.0)
-        : list
-      return filtered.slice(0, 9).map(g => ({
-        ticker:              g.ticker,
-        gap_pct:             g.gap_pct,
-        extended_change_pct: null,
-        float_shares:        g.float_shares ?? null,
-        rvol_15m:            g.rvol_15m ?? null,
-        sector:              g.sector ?? null,
-        news_headline:       g.news_headline ?? null,
-        news_fresh:          g.news_fresh ?? null,
-        close_price:         g.last_price ?? null,
-        open_price:          g.open_price ?? null,
-      }))
+  // ── 30s ticker list rotation (live mode only) ────────────────────────────
+  // Sole job: pull the live screener so displayed tickers rotate as gaps
+  // change. Does NOT re-run the DB fallback — that path is a one-shot for
+  // closed-session / pre-4 AM, handled in loadSummary().
+  const refreshLiveGainers = useCallback(async () => {
+    try {
+      const snapshot = await getLiveGainers()
+      if (snapshot?.gainers?.length) {
+        setSummary(mapLiveRowsToSummary(snapshot.gainers, todayET()))
+      }
+    } catch {
+      // Best-effort: keep the last good summary on transient errors.
     }
-    if (!summary?.gainers) return []
+  }, [])
+
+  // Gainers to display — sort, price-filter, slice the unified array.
+  const displayGainers = useMemo(() => {
+    if (!summary?.gainers?.length) return []
     const list = [...summary.gainers]
-    // Guarantee descending sort by aligned change % (extended hours close change if available, else gap)
+    // Descending by aligned change % (extended hours close change if
+    // available, else gap). Live rows always have extended_change_pct=null.
     list.sort((a, b) => {
       const valA = a.extended_change_pct ?? a.gap_pct ?? 0
       const valB = b.extended_change_pct ?? b.gap_pct ?? 0
       return valB - valA
     })
-    if (!priceFilterEnabled) return list.slice(0, 9)
-    return list
-      .filter(g => g.close_price != null && g.close_price >= 2.0 && g.close_price <= 25.0)
-      .slice(0, 9)
-  }, [summary, liveRows, isLiveFallback, priceFilterEnabled])
+    const filtered = priceFilterEnabled
+      ? list.filter(g => g.close_price != null && g.close_price >= 2.0 && g.close_price <= 25.0)
+      : list
+    return filtered.slice(0, 9)
+  }, [summary, priceFilterEnabled])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { loadSummary() }, [loadSummary])
+
+  // Live polling — keep the screener list and mom_2m values fresh. The live
+  // screener's background refresh runs at 60s (live_screener.py CACHE_TTL_SECONDS)
+  // but mom_2m is updated inline between refreshes, so 30s is a reasonable
+  // cadence for ticker rotation.
+  useEffect(() => {
+    if (!isLiveMode) return
+    const id = setInterval(() => {
+      refreshLiveGainers()
+    }, 30_000)
+    return () => clearInterval(id)
+  }, [isLiveMode, refreshLiveGainers])
 
   // Auto-scan for PIPE activity whenever the date and gainers are loaded
   useEffect(() => {
@@ -184,16 +268,22 @@ function DailyChartsContent() {
           <h1 className="text-sm font-bold text-white flex items-center gap-1.5 uppercase">
             <BarChart2 className="text-[#00ff00]" size={16} />
             Daily Chart Overview
-            {isLiveFallback && (
+            {isLiveMode && (
               <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-none text-[9px] font-bold bg-amber-950/30 border border-amber-500/40 text-amber-400 animate-pulse">
                 <Radio size={9} />
                 LIVE
               </span>
             )}
+            {isLiveMode && (
+              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-none text-[9px] font-bold bg-emerald-950/20 border border-emerald-500/30 text-emerald-400">
+                <Wifi size={9} />
+                live · top 9 by gap %
+              </span>
+            )}
           </h1>
           <p className="text-gray-500 text-[10px] mt-0.5 uppercase">
-            {isLiveFallback
-              ? 'Live screener data · no ingest yet for today · candlestick + volume + EMA 21, 50, 100'
+            {isLiveMode
+              ? 'bars 15s · tick 5s · list 30s · candlestick + volume + EMA 21, 50, 100'
               : 'Top 9 intraday sessions · candlestick + volume + EMA 21, 50, 100'}
           </p>
         </div>
@@ -251,7 +341,7 @@ function DailyChartsContent() {
 
           <button
             id="refresh-charts"
-            onClick={load}
+            onClick={loadSummary}
             className="p-1.5 rounded-none border border-[#262626] text-gray-400 hover:text-white bg-black transition-colors"
           >
             <RefreshCw size={14} />
@@ -263,9 +353,9 @@ function DailyChartsContent() {
       {!loading && summary?.date && (
         <div className="flex items-center gap-4 px-3 py-1.5 bg-[#0a0a0a] border border-[#262626] rounded-none text-[11px]">
           <span className="font-bold text-gray-300 uppercase">{dateLabel}</span>
-          {isLiveFallback ? (
+          {isLiveMode ? (
             <span className="px-2 py-0.5 rounded-none text-[10px] bg-amber-950/20 text-amber-400 border border-amber-500/25 font-bold">
-              {summary.total} live gainers (no ingest yet)
+              live · {displayGainers.length} displayed
             </span>
           ) : (
             <span className="px-2 py-0.5 rounded-none text-[10px] bg-emerald-950/20 text-[#00ff00] border border-[#00ff00]/25 font-bold">
@@ -314,6 +404,8 @@ function DailyChartsContent() {
                 rvol={g.rvol_15m}
                 rank={idx + 1}
                 pipe={pipe}
+                mom_2m={g.mom_2m ?? null}
+                autoRefreshMs={isLiveMode || summary.date === todayET() ? 15_000 : undefined}
                 onExpand={handleExpand}
               />
             )
@@ -335,4 +427,3 @@ export default function DailyChartsPage() {
     </Suspense>
   )
 }
-

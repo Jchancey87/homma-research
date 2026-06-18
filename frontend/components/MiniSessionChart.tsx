@@ -1,12 +1,13 @@
 'use client'
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import {
-  createChart, IChartApi,
+  createChart, IChartApi, ISeriesApi,
   CandlestickSeries, LineSeries, HistogramSeries,
   CrosshairMode, UTCTimestamp,
 } from 'lightweight-charts'
 import { Loader2, AlertTriangle } from 'lucide-react'
-import { PipeScanResult } from '@/lib/api'
+import { PipeScanResult, getLivePrices } from '@/lib/api'
+import { getMomStyle, fmtMom } from '@/lib/momentum'
 
 const API_BASE   = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000'
 const CHART_BG   = '#000000'
@@ -56,6 +57,8 @@ interface Props {
   rank?:    number
   pipe?:    PipeScanResult | undefined
   height?:  number
+  mom_2m?:  number | null
+  autoRefreshMs?: number
   onExpand: (ticker: string) => void
 }
 
@@ -69,15 +72,32 @@ function fmtFloat(n: number | null) {
   return m >= 1000 ? `${(m / 1000).toFixed(1)}B` : `${m.toFixed(1)}M`
 }
 
-export default function MiniSessionChart({ ticker, date, gapPct, float: floatShares, rvol, rank, pipe, height = 250, onExpand }: Props) {
+export default function MiniSessionChart({ ticker, date, gapPct, float: floatShares, rvol, rank, pipe, height = 250, mom_2m = null, autoRefreshMs, onExpand }: Props) {
   const [clickStart, setClickStart] = useState<{ x: number; y: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef     = useRef<IChartApi | null>(null)
+  const candlesRef   = useRef<ISeriesApi<'Candlestick'> | null>(null)
   const [data,    setData]    = useState<ChartData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string | null>(null)
   const [hovered, setHovered] = useState<{ o: number; h: number; l: number; c: number } | null>(null)
   const loaded = useRef(false)
+
+  // In-place tick of the latest candle's close (and high/low) with the
+  // current live price from the screener. No chart rebuild — the existing
+  // candle is just .update()'d so the wick grows in real time.
+  const tickLatestBar = useCallback((price: number) => {
+    const candles = candlesRef.current
+    if (!candles || !data?.ohlcv?.length) return
+    const last = data.ohlcv[data.ohlcv.length - 1]
+    candles.update({
+      time:  last.time,
+      open:  last.open,
+      high:  Math.max(last.high, price),
+      low:   Math.min(last.low,  price),
+      close: price,
+    })
+  }, [data])
 
   const priceMomentum = useMemo(() => {
     if (!data?.ohlcv || data.ohlcv.length < 3) return null
@@ -134,6 +154,38 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
     return () => observer.disconnect()
   }, [fetchData])
 
+  // Auto-refresh + tick — two cadences in live mode:
+  //   • autoRefreshMs (e.g. 15s) → re-fetch OHLCV bars (new minute, new row)
+  //   • TICK_MS (5s)            → pull the single ticker's last_price from
+  //                                /api/chart/live-price and update the last
+  //                                candle's close in place
+  // The tick keeps the chart "alive" between completed-minute bar fetches.
+  // Page-level 30s interval handles the ticker list rotation separately.
+  useEffect(() => {
+    if (!autoRefreshMs || autoRefreshMs <= 0) return
+
+    const TICK_MS = 5_000
+    const fetchId = setInterval(() => {
+      loaded.current = true   // bypass IntersectionObserver gate
+      fetchData()
+    }, autoRefreshMs)
+
+    const tickId = setInterval(async () => {
+      try {
+        const prices = await getLivePrices([ticker])
+        const price  = prices[ticker]
+        if (price != null) tickLatestBar(price)
+      } catch {
+        // Tick is best-effort — the next bar poll will resync the close.
+      }
+    }, TICK_MS)
+
+    return () => {
+      clearInterval(fetchId)
+      clearInterval(tickId)
+    }
+  }, [autoRefreshMs, fetchData, ticker, tickLatestBar])
+
   // Build chart
   useEffect(() => {
     if (!data || !containerRef.current) return
@@ -189,6 +241,7 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
       wickUpColor: UP_COLOR, wickDownColor: DOWN_COLOR,
     })
     candles.setData(dedupSort(data.ohlcv))
+    candlesRef.current = candles
 
     // Volume (overlaid, small scale, colored by up/down candle)
     const vol = chart.addSeries(HistogramSeries, {
@@ -297,7 +350,16 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
           </span>
           <span className="text-gray-400 text-[8.5px] border border-gray-800 px-0.5">1m</span>
           
-          {hasMomentumSpike && (
+          {mom_2m != null && (
+            <span
+              className={`inline-flex items-center gap-0.5 px-1 py-[1px] rounded-none text-[8px] font-black uppercase tracking-wider border border-black/40 ${getMomStyle(mom_2m)}`}
+              title="Server-computed 2-min momentum (live screener)"
+            >
+              MOM {fmtMom(mom_2m)}
+            </span>
+          )}
+
+          {mom_2m == null && hasMomentumSpike && (
             <span className="inline-flex items-center gap-0.5 px-0.5 py-[1px] rounded-none text-[8px] font-black uppercase tracking-wider bg-[#ff003c]/20 text-[#ff003c] border border-[#ff003c]/30 animate-pulse">
               MOM +{priceMomentum.toFixed(1)}%
             </span>
@@ -340,6 +402,14 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
       <div className="absolute bottom-1 left-1.5 z-10 pointer-events-none bg-black/85 px-1 py-0.25 border border-[#222222] rounded-none text-[8px] text-gray-500 font-mono select-none">
         {date}
       </div>
+
+      {/* Live auto-refresh indicator (bottom-right) */}
+      {autoRefreshMs && data && !loading && !error && (
+        <div className="absolute bottom-1 right-1.5 z-10 pointer-events-none flex items-center gap-1 bg-black/85 px-1.5 py-0.5 border border-[#00ff00]/30 rounded-none text-[8px] text-[#00ff00] font-mono select-none">
+          <span className="w-1.5 h-1.5 bg-[#00ff00] rounded-full animate-pulse" />
+          LIVE {Math.round(autoRefreshMs / 1000)}s
+        </div>
+      )}
 
       {/* Loading & Error States */}
       {loading && (

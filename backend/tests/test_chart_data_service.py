@@ -9,11 +9,14 @@ by tests/test_routers_timeseries.py:306.
 from __future__ import annotations
 
 import sys
-from datetime import datetime, timezone
+from datetime import date as _date, datetime, timezone
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
 
 import pandas as pd
 import pytest
+
+from validation import EASTERN_TZ  # noqa: E402
 
 _BACKEND = Path(__file__).resolve().parent.parent
 if str(_BACKEND) not in sys.path:
@@ -22,10 +25,12 @@ _REPO = _BACKEND.parent
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
+import services.chart_data_service as cds  # noqa: E402
 from services.chart_data_service import (  # noqa: E402
     ChartDataNotFoundError,
     _bars_to_insert_records,
     _compute_indicators,
+    get_chart_data,
 )
 
 
@@ -159,3 +164,197 @@ def test_chart_data_not_found_error_carries_ticker_and_date():
     assert exc.date_str == "2026-06-01"
     assert "AAPL" in str(exc)
     assert "2026-06-01" in str(exc)
+
+
+# ── get_chart_data: is_today_or_future bypass (commit b917471) ────────────────
+#
+#  Branch matrix (post no-silent-DB-fallback fix):
+#    ┌────────────────┬──────────────┬──────────────────────────────────┐
+#    │ date vs today  │ DB has bars? │ Expected path                    │
+#    ├────────────────┼──────────────┼──────────────────────────────────┤
+#    │ past           │ yes          │ use DB; do NOT call fetch        │
+#    │ past           │ no           │ call fetch                       │
+#    │ today / future │ yes          │ call fetch (bypass DB cache)     │
+#    │ today / future │ no           │ call fetch                       │
+#    │ today / future │ yes          │ fetch empty → raise NotFound     │
+#    │ today / future │ no           │ fetch empty → raise NotFound     │
+#    └────────────────┴──────────────┴──────────────────────────────────┘
+#  Stale DB rows are NEVER a substitute for a failed live fetch on today.
+#
+#  `datetime.now(EASTERN).date()` is monkeypatched via _FrozenClock so the
+#  "today" boundary is deterministic.
+
+FROZEN_TODAY = datetime(2026, 6, 1, 12, 0, tzinfo=EASTERN_TZ)
+
+
+class _FrozenClock(datetime):
+    """Stand-in for the module's `datetime` import — only .now(tz) is overridden.
+
+    Subclassing the real `datetime` preserves `.combine`, `.fromisoformat`, etc.
+    so the production code path is exercised unchanged; only the clock is frozen.
+    """
+    @classmethod
+    def now(cls, tz=None):
+        return FROZEN_TODAY if tz is None else FROZEN_TODAY.astimezone(tz)
+
+
+def _make_ny_bars(n: int = 5, hour_offset: int = 0) -> pd.DataFrame:
+    base = pd.Timestamp("2026-06-01 09:30", tz="America/New_York") + pd.Timedelta(hours=hour_offset)
+    idx = pd.date_range(base, periods=n, freq="1min")
+    return pd.DataFrame(
+        {
+            "open":   [10.0 + i for i in range(n)],
+            "high":   [10.5 + i for i in range(n)],
+            "low":    [ 9.5 + i for i in range(n)],
+            "close":  [10.2 + i for i in range(n)],
+            "volume": [1000 + i   for i in range(n)],
+        },
+        index=idx,
+    )
+
+
+def _df_to_db_rows(df: pd.DataFrame) -> list[dict]:
+    """Mimic _read_db_bars() output: list[dict] keyed by 'time' (tz-aware dt)."""
+    return [
+        {
+            "time": ts.to_pydatetime(),
+            "open":  float(row["open"]),
+            "high":  float(row["high"]),
+            "low":   float(row["low"]),
+            "close": float(row["close"]),
+            "volume": int(row["volume"]),
+        }
+        for ts, row in df.iterrows()
+    ]
+
+
+def _install_frozen_clock(monkeypatch):
+    monkeypatch.setattr(cds, "datetime", _FrozenClock)
+
+
+def _mock_db():
+    """MagicMock db whose .transaction() is a no-op async context manager.
+    The cache-write branch catches all exceptions, so any error here is
+    logged-and-swallowed and won't poison the test assertion."""
+    db = MagicMock()
+    tx = MagicMock()
+    tx.__aenter__ = AsyncMock(return_value=None)
+    tx.__aexit__ = AsyncMock(return_value=None)
+    db.transaction = MagicMock(return_value=tx)
+    return db
+
+
+# ── Past date: use DB cache, do not call fetch ────────────────────────────────
+
+async def test_past_date_with_db_bars_uses_cache_skips_fetch(monkeypatch):
+    db_rows = _df_to_db_rows(_make_ny_bars(7))
+    _install_frozen_clock(monkeypatch)
+    monkeypatch.setattr(cds, "_read_db_bars", AsyncMock(return_value=db_rows))
+    fetch_mock = MagicMock(return_value=(pd.DataFrame(), []))
+    monkeypatch.setattr(cds, "_fetch_with_fallback", fetch_mock)
+
+    result = await get_chart_data(_mock_db(), "TEST", _date(2026, 5, 30), mini=True)
+
+    fetch_mock.assert_not_called()
+    assert len(result["ohlcv"]) == 7
+
+
+async def test_past_date_without_db_bars_calls_fetch(monkeypatch):
+    _install_frozen_clock(monkeypatch)
+    monkeypatch.setattr(cds, "_read_db_bars", AsyncMock(return_value=[]))
+    fetch_mock = MagicMock(return_value=(_make_ny_bars(4), []))
+    monkeypatch.setattr(cds, "_fetch_with_fallback", fetch_mock)
+
+    result = await get_chart_data(_mock_db(), "TEST", _date(2026, 5, 30), mini=True)
+
+    fetch_mock.assert_called_once()
+    assert len(result["ohlcv"]) == 4
+
+
+# ── Today: ALWAYS bypass DB cache, ALWAYS call fetch ──────────────────────────
+
+async def test_today_with_db_bars_bypasses_cache_calls_fetch(monkeypatch):
+    """The whole point of the fix: today/future, fetch live even if DB has bars."""
+    db_rows = _df_to_db_rows(_make_ny_bars(5))
+    live_df = _make_ny_bars(3, hour_offset=1)  # different timestamps → different bars
+    _install_frozen_clock(monkeypatch)
+    monkeypatch.setattr(cds, "_read_db_bars", AsyncMock(return_value=db_rows))
+    fetch_mock = MagicMock(return_value=(live_df, []))
+    monkeypatch.setattr(cds, "_fetch_with_fallback", fetch_mock)
+
+    result = await get_chart_data(_mock_db(), "TEST", _date(2026, 6, 1), mini=True)
+
+    fetch_mock.assert_called_once()
+    assert len(result["ohlcv"]) == 3  # live wins over DB (5)
+
+
+async def test_today_with_empty_db_calls_fetch(monkeypatch):
+    _install_frozen_clock(monkeypatch)
+    monkeypatch.setattr(cds, "_read_db_bars", AsyncMock(return_value=[]))
+    fetch_mock = MagicMock(return_value=(_make_ny_bars(6), []))
+    monkeypatch.setattr(cds, "_fetch_with_fallback", fetch_mock)
+
+    result = await get_chart_data(_mock_db(), "TEST", _date(2026, 6, 1), mini=True)
+
+    fetch_mock.assert_called_once()
+    assert len(result["ohlcv"]) == 6
+
+
+# ── Today: live fetch fails → never silently fall back to DB (raise) ────────
+# Rationale: a "live" chart that secretly shows hours-old DB bars is worse
+# than a not-found error. The frontend can surface the error and retry.
+
+async def test_today_live_fetch_fails_with_db_bars_still_raises(monkeypatch):
+    """Even when the DB has bars for today, a failed live fetch must NOT
+    substitute stale DB rows. The user explicitly asked for live data —
+    showing frozen DB data as if it were live is the bug we are eliminating."""
+    db_rows = _df_to_db_rows(_make_ny_bars(8))
+    _install_frozen_clock(monkeypatch)
+    monkeypatch.setattr(cds, "_read_db_bars", AsyncMock(return_value=db_rows))
+    fetch_mock = MagicMock(return_value=(pd.DataFrame(), []))  # live chain exhausted
+    monkeypatch.setattr(cds, "_fetch_with_fallback", fetch_mock)
+
+    with pytest.raises(ChartDataNotFoundError) as ei:
+        await get_chart_data(_mock_db(), "TEST", _date(2026, 6, 1), mini=True)
+    assert ei.value.ticker == "TEST"
+    assert ei.value.date_str == "2026-06-01"
+    # Sanity: live fetch was attempted (we don't give up before trying)
+    fetch_mock.assert_called_once()
+
+
+async def test_today_live_fetch_fails_db_empty_raises_not_found(monkeypatch):
+    _install_frozen_clock(monkeypatch)
+    monkeypatch.setattr(cds, "_read_db_bars", AsyncMock(return_value=[]))
+    monkeypatch.setattr(cds, "_fetch_with_fallback", MagicMock(return_value=(pd.DataFrame(), [])))
+
+    with pytest.raises(ChartDataNotFoundError) as ei:
+        await get_chart_data(_mock_db(), "TEST", _date(2026, 6, 1), mini=True)
+    assert ei.value.ticker == "TEST"
+    assert ei.value.date_str == "2026-06-01"
+
+
+# ── Future date: bypasses DB entirely ─────────────────────────────────────────
+
+async def test_future_date_calls_fetch_even_when_db_has_bars(monkeypatch):
+    db_rows = _df_to_db_rows(_make_ny_bars(2))
+    _install_frozen_clock(monkeypatch)
+    monkeypatch.setattr(cds, "_read_db_bars", AsyncMock(return_value=db_rows))
+    fetch_mock = MagicMock(return_value=(_make_ny_bars(2, hour_offset=2), []))
+    monkeypatch.setattr(cds, "_fetch_with_fallback", fetch_mock)
+
+    result = await get_chart_data(_mock_db(), "TEST", _date(2026, 6, 2), mini=True)
+
+    fetch_mock.assert_called_once()
+    assert len(result["ohlcv"]) == 2  # live data used, not DB
+
+
+async def test_future_date_without_db_bars_calls_fetch(monkeypatch):
+    _install_frozen_clock(monkeypatch)
+    monkeypatch.setattr(cds, "_read_db_bars", AsyncMock(return_value=[]))
+    fetch_mock = MagicMock(return_value=(_make_ny_bars(1, hour_offset=3), []))
+    monkeypatch.setattr(cds, "_fetch_with_fallback", fetch_mock)
+
+    result = await get_chart_data(_mock_db(), "TEST", _date(2026, 6, 2), mini=True)
+
+    fetch_mock.assert_called_once()
+    assert len(result["ohlcv"]) == 1

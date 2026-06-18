@@ -139,6 +139,11 @@ export const getLiveGainers = (force = false) =>
     params: force ? { force: 1 } : undefined
   }).then(r => r.data)
 
+export const getLivePrices = (tickers: string[]) =>
+  api.get<{ prices: Record<string, number | null> }>('/api/chart/live-price', {
+    params: { tickers: tickers.join(',') },
+  }).then(r => r.data.prices)
+
 export interface TickerHistoryItem {
   ticker:       string
   sector:       string | null
