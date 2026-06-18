@@ -10,6 +10,7 @@ import {
   Search, ChevronDown, ChevronUp, ExternalLink,
   BarChart2, RefreshCw, ArrowUpDown, LayoutGrid, Download,
 } from 'lucide-react'
+import { fmt1, fmtFloat } from '@/lib/format'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Period = 'week' | 'month' | 'year' | 'all'
@@ -20,14 +21,6 @@ const PERIOD_LABELS: Record<Period, string> = {
   week: 'This Week', month: 'This Month', year: 'This Year', all: 'All Time',
 }
 
-function fmt1(n: number | null, suffix = '') {
-  if (n == null) return '—'
-  return `${n.toFixed(1)}${suffix}`
-}
-function fmtFloat(n: number | null) {
-  if (n == null) return '—'
-  return n >= 1000 ? `${(n / 1000).toFixed(1)}B` : `${n.toFixed(1)}M`
-}
 function daysBetween(a: string, b: string) {
   return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86400000)
 }
@@ -77,7 +70,7 @@ function TickerDetail({
                   +{fmt1(r.gap_pct)}%
                 </td>
                 <td className="px-3 py-2 text-right font-mono text-xs text-gray-500">
-                  {fmtFloat(r.float_shares != null ? r.float_shares / 1e6 : null)}
+                  {fmtFloat(r.float_shares)}
                 </td>
                 <td className="px-3 py-2 text-right font-mono text-xs">
                   <span className={r.rvol_15m != null && r.rvol_15m >= 5 ? 'text-amber-400' : 'text-gray-500'}>
@@ -186,7 +179,7 @@ function TickerRow({
           {fmt1(item.avg_rvol)}x
         </td>
         <td className="px-3 py-2 text-right font-mono text-xs text-gray-500 hidden xl:table-cell">
-          {fmtFloat(item.avg_float_m)}
+          {fmtFloat(item.avg_float_m != null ? item.avg_float_m * 1e6 : null)}
         </td>
         <td className="px-3 py-2 text-right font-mono text-xs text-gray-400">
           {item.last_close ? `$${item.last_close.toFixed(2)}` : '—'}

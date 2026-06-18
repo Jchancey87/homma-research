@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { Download, RefreshCw } from 'lucide-react'
 import { getGainers, getSectors, getGainersExportUrl, Gainer } from '@/lib/api'
+import { fmtFloat } from '@/lib/format'
 
 export default function GainersPage() {
   const [gainers, setGainers]   = useState<Gainer[]>([])
@@ -64,7 +65,6 @@ export default function GainersPage() {
     else { setSortKey(k); setSortDir('desc') }
   }
 
-  const fmtFloat = (v: number | null) => v == null ? '—' : `${(v / 1e6).toFixed(1)}M`
   const fmtCap   = (v: number | null) => v == null ? '—' : v >= 1e9 ? `$${(v/1e9).toFixed(1)}B` : `$${(v/1e6).toFixed(0)}M`
 
   const Th = ({ col, label }: { col: keyof Gainer; label: string }) => (

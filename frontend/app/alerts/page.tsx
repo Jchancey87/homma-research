@@ -9,46 +9,19 @@ import {
 } from 'lightweight-charts'
 import {
   getAlertDates, getAlertsDailySummary, saveAlertFeedback, getAlertsPerformance,
+  getChartData,
   AlertDailySummary, AlertTickerSummary, AlertInstance, ScorecardRow
 } from '@/lib/api'
 import {
   Bell, ChevronLeft, ChevronRight, Loader2,
   AlertCircle, ThumbsUp, ThumbsDown, Save, CheckCircle, Info, BarChart2
 } from 'lucide-react'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000'
-const CHART_BG = '#000000'
-const GRID_COLOR = '#444444' // Stark dotted grids
-const TEXT_COLOR = '#8e8e8e'
-const UP_COLOR = '#00ff00' // Neon bullish green
-const DOWN_COLOR = '#ff003c' // Neon bearish red
-const EMA21_COL = '#00f0ff'
-
-interface OhlcBar { time: UTCTimestamp; open: number; high: number; low: number; close: number }
-interface LinePt { time: UTCTimestamp; value: number }
-interface HistoPt { time: UTCTimestamp; value: number; color?: string }
-
-interface ChartData {
-  ohlcv: OhlcBar[]
-  volume: HistoPt[]
-  ema_21: LinePt[]
-}
-
-function dedupSort<T extends { time: UTCTimestamp }>(data: T[]): T[] {
-  const map = new Map<number, T>()
-  for (const bar of data) map.set(bar.time as number, bar)
-  return Array.from(map.values()).sort((a, b) => (a.time as number) - (b.time as number))
-}
-
-function shiftChartDataTime(data: ChartData, offsetSec: number): ChartData {
-  if (offsetSec === 0) return data
-  const shiftTime = (t: UTCTimestamp) => (typeof t === 'number' ? (t + offsetSec) as UTCTimestamp : t)
-  return {
-    ohlcv: data.ohlcv ? data.ohlcv.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
-    volume: data.volume ? data.volume.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
-    ema_21: data.ema_21 ? data.ema_21.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
-  }
-}
+import {
+  CHART_BG, GRID_COLOR, TEXT_COLOR, UP_COLOR, DOWN_COLOR, EMA21_COL,
+  ChartData, OhlcBar, LinePt, HistoPt,
+  dedupSort, shiftChartDataTime,
+} from '@/lib/chart'
+import { fmtFloat } from '@/lib/format'
 
 function getMarkerConfig(type: string): { shape: 'arrowUp' | 'arrowDown' | 'circle' | 'square'; color: string } {
   switch (type) {
@@ -67,12 +40,6 @@ function getMarkerConfig(type: string): { shape: 'arrowUp' | 'arrowDown' | 'circ
     default:
       return { shape: 'circle', color: '#f59e0b' }
   }
-}
-
-function formatFloat(n: number | null) {
-  if (n == null) return '—'
-  const m = n / 1_000_000
-  return m >= 1000 ? `${(m / 1000).toFixed(1)}B` : `${m.toFixed(1)}M`
 }
 
 function updateChartDecorations(
@@ -157,12 +124,14 @@ function AlertSessionChart({ ticker, date, alerts, selectedAlertId }: ChartProps
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch(`${API_BASE}/api/research/chart-data?ticker=${ticker}&date=${date}&mini=true`)
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const json = await res.json()
+        const json = await getChartData(ticker, date, true)
         if (!active) return
 
-        const rawData = { ohlcv: json.ohlcv, volume: json.volume, ema_21: json.ema_21 }
+        const rawData = {
+          ohlcv:  json.ohlcv  as OhlcBar[],
+          volume: json.volume as HistoPt[],
+          ema_21: json.ema_21 as LinePt[] ?? [],
+        } as ChartData
         const localOffset = -new Date().getTimezoneOffset() * 60
         setData(shiftChartDataTime(rawData, localOffset))
       } catch (e) {
@@ -645,13 +614,13 @@ function AlertJournalContent() {
                   {selectedTicker.float_shares != null && (
                     <div className="bg-[#0a0a0a] border border-[#262626] px-2 py-0.5 font-mono text-[10px] rounded-none">
                       <span className="text-gray-600">Float:</span>
-                      <span className="text-gray-300 font-bold ml-1">{formatFloat(selectedTicker.float_shares)}</span>
+                      <span className="text-gray-300 font-bold ml-1">{fmtFloat(selectedTicker.float_shares)}</span>
                     </div>
                   )}
                   {selectedTicker.market_cap != null && (
                     <div className="bg-[#0a0a0a] border border-[#262626] px-2 py-0.5 font-mono text-[10px] rounded-none">
                       <span className="text-gray-600">Cap:</span>
-                      <span className="text-gray-300 font-bold ml-1">${formatFloat(selectedTicker.market_cap)}</span>
+                      <span className="text-gray-300 font-bold ml-1">${fmtFloat(selectedTicker.market_cap)}</span>
                     </div>
                   )}
                   {selectedTicker.gap_pct != null && (

@@ -1,47 +1,14 @@
 'use client'
 import { useEffect, useState, useCallback, useMemo, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { getGainersSummary, getPipeScan, PipeScanResult, Gainer, getLiveGainers, LiveGainerRow } from '@/lib/api'
+import {
+  getGainersSummary, getPipeScan, getGainersByDate,
+  PipeScanResult, Gainer, getLiveGainers, LiveGainerRow,
+  GainerSummary,
+} from '@/lib/api'
 import MiniSessionChart from '@/components/MiniSessionChart'
 import { BarChart2, RefreshCw, ChevronLeft, ChevronRight, Search, Radio, Wifi } from 'lucide-react'
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function addDays(dateStr: string, n: number): string {
-  const d = new Date(dateStr + 'T12:00:00Z')
-  d.setUTCDate(d.getUTCDate() + n)
-  return d.toISOString().split('T')[0]
-}
-
-function todayET(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-}
-
-// Unified shape the chart renders off of. Both live screener rows and DB
-// rows are normalised to this. Kept local to this file since the chart's
-// minimal needs differ from the broader Gainer type in lib/api.
-export interface GainerRow {
-  ticker:              string
-  gap_pct:             number | null
-  extended_change_pct: number | null
-  float_shares:        number | null
-  rvol_15m:            number | null
-  sector:              string | null
-  news_headline:       string | null
-  news_fresh:          boolean | null
-  close_price:         number | null
-  open_price:          number | null
-  mom_2m:              number | null
-}
-
-// Local redefinition of the api.ts GainerSummary with a `source` discriminator
-// so renderers can branch on live vs DB without a separate flag.
-export interface GainerSummary {
-  date:    string | null
-  total:   number
-  source:  'live' | 'db' | null
-  gainers: GainerRow[]
-}
+import { addDays, todayET } from '@/lib/format'
 
 // Normalise raw `/api/gainers?date=...` rows into the unified summary shape.
 function mapDbRowsToSummary(rows: Gainer[], date: string): GainerSummary | null {
@@ -148,10 +115,7 @@ function DailyChartsContent() {
         // meant to fire on initial mount / manual refresh.
         const s = await getGainersSummary()
         const dbDate = s.date || today
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000'}/api/gainers?date=${dbDate}`
-        )
-        const rows: Gainer[] = await res.json()
+        const rows = await getGainersByDate(dbDate)
         const mapped = mapDbRowsToSummary(rows, dbDate)
         if (mapped) {
           setSummary(mapped)
@@ -165,10 +129,7 @@ function DailyChartsContent() {
       }
 
       // Past date: static DB ingest (no live data for closed sessions).
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000'}/api/gainers?date=${targetDate}`
-      )
-      const rows: Gainer[] = await res.json()
+      const rows = await getGainersByDate(targetDate)
       const mapped = mapDbRowsToSummary(rows, targetDate)
       if (mapped) {
         setSummary(mapped)

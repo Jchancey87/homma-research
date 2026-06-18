@@ -3,50 +3,18 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import {
   createChart, IChartApi, ISeriesApi,
   CandlestickSeries, LineSeries, HistogramSeries,
-  CrosshairMode, UTCTimestamp,
+  CrosshairMode,
 } from 'lightweight-charts'
 import { Loader2, AlertTriangle } from 'lucide-react'
-import { PipeScanResult, getLivePrices } from '@/lib/api'
+import { PipeScanResult, getLivePrices, getChartData } from '@/lib/api'
 import { getMomStyle, fmtMom } from '@/lib/momentum'
-
-const API_BASE   = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:5000'
-const CHART_BG   = '#000000'
-const GRID_COLOR = '#444444' // Stark dotted grids
-const TEXT_COLOR = '#8e8e8e'
-const UP_COLOR   = '#00ff00' // Neon bullish green
-const DOWN_COLOR = '#ff003c' // Neon bearish red
-const EMA21_COL  = '#00f0ff'
-
-interface OhlcBar { time: UTCTimestamp; open: number; high: number; low: number; close: number }
-interface LinePt  { time: UTCTimestamp; value: number }
-interface HistoPt { time: UTCTimestamp; value: number; color?: string }
-
-interface ChartData {
-  ohlcv:  OhlcBar[]
-  volume: HistoPt[]
-  ema_21: LinePt[]
-  ema_50?: LinePt[]
-  ema_100?: LinePt[]
-}
-
-/** Sort ascending by time and remove duplicate timestamps (keep last occurrence). */
-function dedupSort<T extends { time: UTCTimestamp }>(data: T[]): T[] {
-  const map = new Map<number, T>()
-  for (const bar of data) map.set(bar.time as number, bar)
-  return Array.from(map.values()).sort((a, b) => (a.time as number) - (b.time as number))
-}
-
-function shiftMiniChartDataTime(data: ChartData, offsetSec: number): ChartData {
-  if (offsetSec === 0) return data
-  const shiftTime = (t: UTCTimestamp) => (typeof t === 'number' ? (t + offsetSec) as UTCTimestamp : t)
-  return {
-    ohlcv: data.ohlcv ? data.ohlcv.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
-    volume: data.volume ? data.volume.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
-    ema_21: data.ema_21 ? data.ema_21.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
-    ema_50: data.ema_50 ? data.ema_50.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
-    ema_100: data.ema_100 ? data.ema_100.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
-  }
-}
+import {
+  CHART_BG, GRID_COLOR, TEXT_COLOR, UP_COLOR, DOWN_COLOR,
+  EMA21_COL, EMA50_COL, EMA100_COL,
+  ChartData, OhlcBar, LinePt, HistoPt,
+  dedupSort, shiftChartDataTime,
+} from '@/lib/chart'
+import { fmt1, fmtFloat } from '@/lib/format'
 
 interface Props {
   ticker:   string
@@ -60,16 +28,6 @@ interface Props {
   mom_2m?:  number | null
   autoRefreshMs?: number
   onExpand: (ticker: string) => void
-}
-
-function fmt1(n: number | null) {
-  if (n == null) return '—'
-  return n.toFixed(1)
-}
-function fmtFloat(n: number | null) {
-  if (n == null) return '—'
-  const m = n / 1_000_000
-  return m >= 1000 ? `${(m / 1000).toFixed(1)}B` : `${m.toFixed(1)}M`
 }
 
 export default function MiniSessionChart({ ticker, date, gapPct, float: floatShares, rvol, rank, pipe, height = 250, mom_2m = null, autoRefreshMs, onExpand }: Props) {
@@ -114,19 +72,20 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
     setLoading(true)
     setError(null)
     try {
-      const res  = await fetch(`${API_BASE}/api/research/chart-data?ticker=${ticker}&date=${date}&mini=true`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = await res.json()
-      // Only extract what we need to keep memory low
+      const json = await getChartData(ticker, date, true)
+      // Only extract what we need to keep memory low. The `as ChartData`
+      // cast is safe — `time: number` from the API is structurally
+      // identical to `time: UTCTimestamp` at runtime (lightweight-charts
+      // uses a brand on the type only).
       const rawData = {
-        ohlcv: json.ohlcv,
-        volume: json.volume,
-        ema_21: json.ema_21,
-        ema_50: json.ema_50,
-        ema_100: json.ema_100,
-      }
+        ohlcv:   json.ohlcv   as OhlcBar[],
+        volume:  json.volume  as HistoPt[],
+        ema_21:  json.ema_21  as LinePt[] ?? [],
+        ema_50:  json.ema_50  as LinePt[] ?? [],
+        ema_100: json.ema_100 as LinePt[] ?? [],
+      } as ChartData
       const localOffset = -new Date().getTimezoneOffset() * 60
-      setData(shiftMiniChartDataTime(rawData, localOffset))
+      setData(shiftChartDataTime(rawData, localOffset))
     } catch (e) {
       const err = e as Error
       setError(err.message ?? 'No data')
@@ -279,7 +238,7 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
     // EMA 50 (neon yellow)
     if (data.ema_50?.length) {
       const ema50 = chart.addSeries(LineSeries, {
-        color: '#ffff00', lineWidth: 1,
+        color: EMA50_COL, lineWidth: 1,
         priceLineVisible: false, lastValueVisible: false,
         crosshairMarkerVisible: false,
       })
@@ -289,7 +248,7 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
     // EMA 100 (neon pink)
     if (data.ema_100?.length) {
       const ema100 = chart.addSeries(LineSeries, {
-        color: '#ff00ff', lineWidth: 1,
+        color: EMA100_COL, lineWidth: 1,
         priceLineVisible: false, lastValueVisible: false,
         crosshairMarkerVisible: false,
       })

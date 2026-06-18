@@ -73,14 +73,47 @@ export const getGainers = (params?: {
   sector?: string
 }) => api.get<Gainer[]>('/api/gainers', { params }).then(r => r.data)
 
-export interface GainerSummary {
-  date: string | null
-  total: number
+export interface LatestGainersSummary {
+  date:    string | null
+  total:   number
   gainers: Array<Omit<Gainer, 'id' | 'date' | 'created_at' | 'market_cap'>>
 }
 
 export const getGainersSummary = () =>
-  api.get<GainerSummary>('/api/gainers/summary').then(r => r.data)
+  api.get<LatestGainersSummary>('/api/gainers/summary').then(r => r.data)
+
+/**
+ * Unified row shape used by the daily-charts page. Both live screener rows
+ * and DB rows are normalised to this. Kept here (not in a page file) so the
+ * `GainerSummary` type that wraps it can be exported from this module.
+ */
+export interface GainerRow {
+  ticker:              string
+  gap_pct:             number | null
+  extended_change_pct: number | null
+  float_shares:        number | null
+  rvol_15m:            number | null
+  sector:              string | null
+  news_headline:       string | null
+  news_fresh:          boolean | null
+  close_price:         number | null
+  open_price:          number | null
+  mom_2m:              number | null
+}
+
+/**
+ * Unified gainer summary used by the daily-charts page. `source` discriminates
+ * whether `gainers` came from the live screener or a historical DB ingest.
+ */
+export interface GainerSummary {
+  date:    string | null
+  total:   number
+  source:  'live' | 'db' | null
+  gainers: GainerRow[]
+}
+
+export const getGainersByDate = (date: string) =>
+  api.get<Gainer[]>('/api/gainers', { params: { date } }).then(r => r.data)
 
 // ── Live Screener ──────────────────────────────────────────────────────────
 
@@ -225,6 +258,20 @@ export const getCharts = (params?: {
 
 export const getChart = (id: number) =>
   api.get<ChartCapture>(`/api/charts/${id}`).then(r => r.data)
+
+/** Intraday OHLCV + volume + EMA payload for the chart grid and detail modal. */
+export interface ChartDataPayload {
+  ohlcv:    Array<{ time: number; open: number; high: number; low: number; close: number }>
+  volume:   Array<{ time: number; value: number }>
+  ema_21?:  Array<{ time: number; value: number }>
+  ema_50?:  Array<{ time: number; value: number }>
+  ema_100?: Array<{ time: number; value: number }>
+}
+
+export const getChartData = (ticker: string, date: string, mini = true) =>
+  api
+    .get<ChartDataPayload>('/api/research/chart-data', { params: { ticker, date, mini } })
+    .then(r => r.data)
 
 export const uploadChart = (formData: FormData) =>
   api.post<{ id: number; image_path: string }>('/api/charts', formData, {

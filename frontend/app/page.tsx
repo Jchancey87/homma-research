@@ -11,6 +11,7 @@ import FloatBucketSummary from '@/components/FloatBucketSummary'
 import SectorRotation from '@/components/SectorRotation'
 import EconomicCalendar from '@/components/EconomicCalendar'
 import HelpGuide from '@/components/HelpGuide'
+import { Panel, PanelLabel } from '@/components/Panel'
 import { getContinuationPicks, ContinuationPick } from '@/lib/api'
 import {
   TrendingUp, Bookmark, FileText, RotateCcw,
@@ -19,39 +20,6 @@ import {
 } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
-
-// ── Shared primitives ─────────────────────────────────────────────────────────
-
-function PanelLabel({
-  icon: Icon, label, href,
-}: { icon: React.ElementType; label: string; href?: string }) {
-  return (
-    <div className="flex items-center justify-between mb-3">
-      <span className="text-[11px] font-mono font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
-        <Icon size={12} className="text-gray-500" />
-        {label}
-      </span>
-      {href && (
-        <Link
-          href={href}
-          className="text-[11px] font-mono text-gray-500 hover:text-white transition-colors flex items-center gap-1"
-        >
-          View all <ArrowRight size={10} />
-        </Link>
-      )}
-    </div>
-  )
-}
-
-function Panel({
-  children, className = '',
-}: { children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`bg-[#050505] border border-[#262626] rounded-none p-3 ${className}`}>
-      {children}
-    </div>
-  )
-}
 
 // ── Morning date header ────────────────────────────────────────────────────────
 
