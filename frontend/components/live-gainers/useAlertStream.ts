@@ -19,7 +19,7 @@ const FLASH_TTL_MS       = 200
 const RECENT_ALERTS_CAP  = 50
 const TOAST_STACK_CAP    = 5
 
-export interface UseAlertStreamResult {
+interface UseAlertStreamResult {
   flashingTickers:       Record<string, boolean>
   toasts:                AlertItem[]
   dismissToast:          (id: string) => void

@@ -7,7 +7,8 @@
     "build": "NEXT_IGNORE_INCORRECT_LOCKFILE=1 next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "knip": "knip"
   },
   "dependencies": {
     "axios": "1.15.2",
@@ -23,7 +24,6 @@
   "devDependencies": {
     "@tailwindcss/typography": "0.5.19",
     "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.2",
     "@types/node": "20.19.39",
     "@types/react": "18.3.28",
     "@types/react-dom": "18.3.7",
@@ -31,6 +31,7 @@
     "eslint": "8.57.1",
     "eslint-config-next": "14.2.35",
     "jsdom": "22",
+    "knip": "5",
     "postcss": "8.5.13",
     "tailwindcss": "3.4.19",
     "typescript": "5.9.3",

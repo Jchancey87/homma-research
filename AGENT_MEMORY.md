@@ -50,12 +50,12 @@
 * **Deploy:** Run `sudo /opt/trading-journal/deploy.sh` (push from `/home/jackc/projects/homma-research` first).
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Apply strict TradeStation-style dark terminal UI to all pages.
-* **Status:** ✅ ALL COMPLETE. NavBar, layout, home, gainers, observations, alerts, research, charts, history, watchlist, continuation pages rewritten. TS compilation clean.
-* **This session:** Overhauled navbar, panels, badges, tables, search inputs, active-states, controls, details, lists, scorecards, headers across 11 pages to strict TradeStation aesthetic (monochrome borders, flat neon badges, UPPERCASE labels, high-density monospace font layout, zero border-radius).
-* **For future sessions:** RFC-006 (frontend type mirroring), RFC-007 (sync database.py async migration), RFC-008 (momentum_screener → backend dep break), RFC-009 (frontend API client consolidation). Pick one when needed.
+* **Goal:** Inspect git status, compare local, origin/master, and opt/ server state, verify deploy readiness.
+* **Status:** Complete. Verified local master branch is up to date with origin/master at commit 7b823d3. Opt/ server is also at commit 7b823d3. Uncommitted Knip refactoring changes exist locally; verified frontend/backend builds and tests pass cleanly.
+* **Assumptions:** Local repo is source of truth, remote is GitHub/gitlab, deploy target is /opt/trading-journal.
 
 ## 🗑️ Rot & Pruning Log
 * RFC-001/002/003/004/005 + RFC-010 architectural refactor roadmap: COMPLETE. All decisions merged into main branch.
-* Pruned QW-3/QW-4/RFC-005/RFC-010 active-intent entries (now done).
+* Pruned QW-3/QW-4/RFC-005/RFC-010 active-intent entries.
 * Applied Caveman Style rules.
+

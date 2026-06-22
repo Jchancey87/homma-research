@@ -73,7 +73,7 @@ export const getGainers = (params?: {
   sector?: string
 }) => api.get<Gainer[]>('/api/gainers', { params }).then(r => r.data)
 
-export interface LatestGainersSummary {
+interface LatestGainersSummary {
   date:    string | null
   total:   number
   gainers: Array<Omit<Gainer, 'id' | 'date' | 'created_at' | 'market_cap'>>
@@ -260,7 +260,7 @@ export const getChart = (id: number) =>
   api.get<ChartCapture>(`/api/charts/${id}`).then(r => r.data)
 
 /** Intraday OHLCV + volume + EMA payload for the chart grid and detail modal. */
-export interface ChartDataPayload {
+interface ChartDataPayload {
   ohlcv:    Array<{ time: number; open: number; high: number; low: number; close: number }>
   volume:   Array<{ time: number; value: number }>
   ema_21?:  Array<{ time: number; value: number }>
@@ -304,8 +304,8 @@ export const importGeminiAnalysis = (
 
 // ── Analysis ──────────────────────────────────────────────────────────────
 
-export interface JobResponse   { job_id: string; status: string; cached?: false }
-export interface CacheResponse { cached: true; report: string; version: number; created_at: string }
+interface JobResponse   { job_id: string; status: string; cached?: false }
+interface CacheResponse { cached: true; report: string; version: number; created_at: string }
 type ResearchResponse = JobResponse | CacheResponse
 
 export const startResearch = (ticker: string, date?: string, force = false) =>
@@ -741,7 +741,7 @@ export interface ScorecardRow {
   avg_mae_pct: number | null
 }
 
-export interface AlertsPerformance {
+interface AlertsPerformance {
   days: number
   scorecard: ScorecardRow[]
 }
