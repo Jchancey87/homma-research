@@ -377,15 +377,19 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
       </div>
 
       {/* Live auto-refresh indicator (bottom-right) */}
-      {autoRefreshMs && data && !loading && !error && (
-        <div className="absolute bottom-1 right-1.5 z-10 pointer-events-none flex items-center gap-1 bg-black/85 px-1.5 py-0.5 border border-[#00ff00]/30 rounded-none text-[8px] text-[#00ff00] font-mono select-none">
-          <span className="w-1.5 h-1.5 bg-[#00ff00] rounded-full animate-pulse" />
-          LIVE {Math.round(autoRefreshMs / 1000)}s
+      {autoRefreshMs && data && !error && (
+        <div className={`absolute bottom-1 right-1.5 z-10 pointer-events-none flex items-center gap-1 bg-black/85 px-1.5 py-0.5 border rounded-none text-[8px] font-mono select-none transition-colors duration-200 ${
+          loading
+            ? 'border-yellow-500/40 text-yellow-400'
+            : 'border-[#00ff00]/30 text-[#00ff00]'
+        }`}>
+          <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${loading ? 'bg-yellow-400' : 'bg-[#00ff00]'}`} />
+          {loading ? 'UPDATING' : `LIVE ${Math.round(autoRefreshMs / 1000)}s`}
         </div>
       )}
 
       {/* Loading & Error States */}
-      {loading && (
+      {loading && !data && (
         <div className="absolute inset-0 flex items-center justify-center bg-black z-20">
           <Loader2 size={16} className="animate-spin text-gray-700" />
         </div>

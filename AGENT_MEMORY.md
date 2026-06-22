@@ -50,9 +50,9 @@
 * **Deploy:** Run `sudo /opt/trading-journal/deploy.sh` (push from `/home/jackc/projects/homma-research` first).
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Inspect git status, compare local, origin/master, and opt/ server state, verify deploy readiness.
-* **Status:** Complete. Verified local master branch is up to date with origin/master at commit 7b823d3. Opt/ server is also at commit 7b823d3. Uncommitted Knip refactoring changes exist locally; verified frontend/backend builds and tests pass cleanly.
-* **Assumptions:** Local repo is source of truth, remote is GitHub/gitlab, deploy target is /opt/trading-journal.
+* **Goal:** Fix blinking charts on daily chart overview during background poll.
+* **Status:** Complete. Restricted loading overlay to initial mount. Implemented updating status indicator. Fixed GainerTable unescaped single quote.
+* **Assumptions:** Users prefer background updates to be seamless without full-component blanking.
 
 ## 🗑️ Rot & Pruning Log
 * RFC-001/002/003/004/005 + RFC-010 architectural refactor roadmap: COMPLETE. All decisions merged into main branch.

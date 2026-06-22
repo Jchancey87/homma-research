@@ -2,6 +2,19 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-21] Lockfile Sync: Fix pnpm frozen-lockfile error
+
+### Summary
+* Update frontend/pnpm-lock.yaml via npx pnpm@9 install. Align lockfile with package.json.
+
+### What Changed
+* frontend/pnpm-lock.yaml: Regenerated lockfile. Removed @testing-library/react v16.3.2 mismatch.
+
+### Acceptance
+* npx pnpm@9 run build successful.
+* Frontend tests (52/52) pass.
+* Backend pytest tests (257/257) pass.
+
 ## [2026-06-14] Architectural Refactor: RFC-010 (ScheduledTask class for morning scanners)
 
 ### Summary
@@ -1233,5 +1246,17 @@ Fixed daily charts not showing real-time intraday candle updates. Cached DB bars
 ### What Changed
 * **Backend Ingestion (`backend/services/chart_data_service.py`)**: Bypass DB cache check if date is today or future. Always query Schwab / fallback APIs for fresh intraday candles. Insert new ones via `ON CONFLICT DO NOTHING`. Fallback to DB bars only if API query fails.
 * **Testing**: Passed all 241 pytest assertions.
+
+---
+
+## [2026-06-22] Daily Charts Blinking & Background Polling Fix
+
+### Summary
+Fixed daily charts blinking to blank during background auto-refreshes. Resolved ESLint single quote syntax error in GainerTable tooltip.
+
+### What Changed
+* **Mini Session Chart (`frontend/components/MiniSessionChart.tsx`)**: Conditionalised loading overlay to only render when no chart data is present (`loading && !data`). Maintained visible chart during background updates.
+* **Auto-Refresh Indicator (`frontend/components/MiniSessionChart.tsx`)**: Added persistent transition status panel displaying "UPDATING" with amber styling when loading background updates.
+* **Gainer Table Tooltip (`frontend/components/live-gainers/GainerTable.tsx`)**: Escaped unescaped quote mark (`today's` to `today&apos;s`) to resolve ESLint compile-blocking error.
 
 

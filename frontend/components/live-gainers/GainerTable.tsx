@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, Fragment } from 'react'
+import { useState, Fragment, useEffect } from 'react'
 import { LiveGainerRow } from '@/lib/api'
 import { Sparkline } from '@/components/Sparkline'
 import { getMomStyle } from '@/lib/momentum'
 import { fmtVol } from '@/lib/format'
-import { ChevronDown, ChevronUp, Maximize2, ExternalLink, Pin } from 'lucide-react'
+import { ChevronDown, ChevronUp, Maximize2, ExternalLink, Pin, Info } from 'lucide-react'
 import {
   getRvolBadgeStyle, getRvolColor,
   getFloatBadgeStyle, getSpreadBadgeStyle,
@@ -50,6 +50,23 @@ export function GainerTable({
   const [lockedTicker, setLockedTicker] = useState<string | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>(defaultSortKey)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(defaultSortDir)
+  const [showSchwabTooltip, setShowSchwabTooltip] = useState(false)
+
+  useEffect(() => {
+    const checkTime = () => {
+      try {
+        const etStr = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+        const etDate = new Date(etStr);
+        const hour = etDate.getHours();
+        setShowSchwabTooltip(hour >= 4 && hour < 7);
+      } catch (e) {
+        console.error('Error checking ET time:', e);
+      }
+    };
+    checkTime();
+    const interval = setInterval(checkTime, 60_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleRowClick = (ticker: string) => {
     setLockedTicker(prev => (prev === ticker ? null : ticker))
@@ -91,6 +108,23 @@ export function GainerTable({
     col, label, align = 'left', width,
   }: { col: SortKey; label: string; align?: 'left' | 'right' | 'center'; width?: string }) => {
     const isSorted = sortKey === col
+
+    const renderHeaderContent = () => {
+      if (col === 'mom_2m' && showSchwabTooltip) {
+        return (
+          <div className="relative group/tooltip inline-flex items-center gap-1">
+            <span>{label}</span>
+            <Info size={11} className="text-amber-550 hover:text-amber-400 cursor-help shrink-0" />
+            <div className="pointer-events-none absolute top-full right-0 mt-2 hidden group-hover/tooltip:block bg-gray-950 border border-gray-800 text-white text-[10px] font-medium py-2 px-3 rounded-lg shadow-2xl w-64 leading-relaxed z-50 normal-case font-sans text-left">
+              Schwab API does not return today&apos;s pre-market minute bars between 4:00 AM and 7:00 AM ET. Momentum calculations will start updating after 7:00 AM ET.
+              <span className="absolute bottom-full right-3 border-4 border-transparent border-b-gray-950" />
+            </div>
+          </div>
+        )
+      }
+      return <span>{label}</span>
+    }
+
     return (
       <th
         className={`pb-2 pr-4 font-semibold cursor-pointer select-none hover:text-white transition-colors group/th ${width || ''} ${
@@ -99,7 +133,7 @@ export function GainerTable({
         onClick={() => handleSort(col)}
       >
         <div className={`inline-flex items-center gap-1 ${align === 'right' ? 'justify-end w-full' : align === 'center' ? 'justify-center w-full' : ''}`}>
-          <span>{label}</span>
+          {renderHeaderContent()}
           <span className={`text-[10px] transition-opacity ${isSorted ? 'opacity-100 text-emerald-400' : 'opacity-0 group-hover/th:opacity-50'}`}>
             {isSorted ? (sortDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />) : <ChevronDown size={12} />}
           </span>
