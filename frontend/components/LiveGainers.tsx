@@ -109,15 +109,15 @@ export default function LiveGainers() {
   useEffect(() => {
     fetchData()
     fetchWatchlist()
-    timerRef.current = setInterval(() => fetchData(), 60 * 1000)
+    timerRef.current = setInterval(() => fetchData(), 15 * 1000)
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [fetchData, fetchWatchlist])
 
-  // Live "X ago" counter (updates every 10s)
+  // Live "X ago" counter (updates every 5s)
   useEffect(() => {
     const tick = () => setAgeStr(snap?.fetched_at ? fmtAge(snap.fetched_at) : '')
     tick()
-    const id = setInterval(tick, 10_000)
+    const id = setInterval(tick, 5_000)
     return () => clearInterval(id)
   }, [snap?.fetched_at])
 

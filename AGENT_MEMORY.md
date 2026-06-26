@@ -21,6 +21,7 @@
 * **mom_2m:** Calculated relative to target 2m ago. If closest candle is >5m old, return `None`.
 * **Caching & Sparklines:** 30s cache updates metrics inline. Daily cache holds 5d metrics. Flush caches on market session transitions. `sparkline_1h` caches last 60m of minute closes.
 * **Filters:** MIN_GAP_PCT=5.0, MIN_PRICE=$0.50, MAX_PRICE=$100.
+* **Polling:** Interval reduced 60s to 15s. cache_ttl_s = 15. Frontend main loop = 15s. "X ago" age label = 5s. Daily charts live refresh = 15s.
 
 ### 4. Validation Helpers (RFC-004 QW-4)
 * **Ticker normalisation:** `from validation import normalize_ticker` — uppercase + strip. Replaces inline `ticker.upper().strip()`. Legacy `_upper_strip` alias kept in `validation/schemas.py` for in-module use only.

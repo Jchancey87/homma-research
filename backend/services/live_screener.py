@@ -30,7 +30,7 @@ log = logging.getLogger(__name__)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 EASTERN          = EASTERN_TZ
-CACHE_TTL_SECONDS = 60       # Background refresh interval
+CACHE_TTL_SECONDS = 15       # Background refresh interval
 PERSIST_HOUR_ET  = 20        # 8 PM ET — trigger EOD persist
 PERSIST_MINUTE_ET = 0
 

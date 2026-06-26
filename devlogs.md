@@ -2,6 +2,20 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-26] Live Screener Polling: Frequency increased to 15s
+
+### Summary
+* Increase live gainers polling frequency from 60s to 15s backend + frontend.
+
+### What Changed
+* backend/services/live_screener.py: Change CACHE_TTL_SECONDS 60 to 15. Keep sub-caches (30s minute, 1h daily).
+* frontend/components/LiveGainers.tsx: Change data fetch interval 60s to 15s, age indicator tick 10s to 5s.
+* frontend/app/daily-charts/page.tsx: Change live-mode polling interval 30s to 15s. Align comments.
+
+### Acceptance
+* Git diff verified.
+* Pytest backend tests run initiated.
+
 ## [2026-06-21] Lockfile Sync: Fix pnpm frozen-lockfile error
 
 ### Summary

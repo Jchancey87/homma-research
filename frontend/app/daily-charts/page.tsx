@@ -181,14 +181,13 @@ function DailyChartsContent() {
   useEffect(() => { loadSummary() }, [loadSummary])
 
   // Live polling — keep the screener list and mom_2m values fresh. The live
-  // screener's background refresh runs at 60s (live_screener.py CACHE_TTL_SECONDS)
-  // but mom_2m is updated inline between refreshes, so 30s is a reasonable
-  // cadence for ticker rotation.
+  // screener's background refresh runs at 15s (live_screener.py CACHE_TTL_SECONDS)
+  // so we poll at the same cadence.
   useEffect(() => {
     if (!isLiveMode) return
     const id = setInterval(() => {
       refreshLiveGainers()
-    }, 30_000)
+    }, 15_000)
     return () => clearInterval(id)
   }, [isLiveMode, refreshLiveGainers])
 
