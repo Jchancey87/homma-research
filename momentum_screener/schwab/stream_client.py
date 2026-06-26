@@ -726,7 +726,23 @@ class SchwabStreamer:
                 # Skip if core quote fields are missing
                 if last_price is None or total_volume is None:
                     continue
-                    
+
+                # Publish price tick for live_screener streaming fast-path
+                try:
+                    redis_client.publish('screener:quotes', json.dumps({
+                        's': symbol,
+                        'p': last_price,
+                        'v': total_volume,
+                        'h': high_price,
+                        'l': low_price,
+                        'o': open_price,
+                        'b': item.get('BID_PRICE'),
+                        'a': item.get('ASK_PRICE'),
+                        't': time.time(),
+                    }))
+                except Exception:
+                    pass  # Non-critical — fast-path degrades gracefully
+
                 asyncio.create_task(self.evaluate_and_fire_alert(
                     symbol, last_price, total_volume,
                     high_price or last_price,

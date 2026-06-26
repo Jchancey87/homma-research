@@ -30,7 +30,9 @@ log = logging.getLogger(__name__)
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 EASTERN          = EASTERN_TZ
-CACHE_TTL_SECONDS = 15       # Background refresh interval
+CACHE_TTL_SECONDS = 3        # Frontend poll hint (returned in API response)
+FAST_REFRESH_SECONDS = 2     # Streaming price overlay interval (WebSocket)
+SLOW_REFRESH_SECONDS = 60    # Full pipeline interval (REST API)
 PERSIST_HOUR_ET  = 20        # 8 PM ET — trigger EOD persist
 PERSIST_MINUTE_ET = 0
 
@@ -581,6 +583,123 @@ def _check_repeat_history(tickers: List[str]) -> Dict[str, dict]:
         return {}
 
 
+# ── Streaming fast-path ────────────────────────────────────────────────────────
+
+def _fast_refresh():
+    """
+    Overlay streamed WebSocket prices onto cached gainers. Zero API calls.
+
+    Reads from the StreamingPriceBridge (Redis subscriber) and updates
+    price-derived fields in-place on the cached gainer rows.
+    """
+    try:
+        from services.streaming_prices import get_streamed_prices
+        prices = get_streamed_prices()
+    except Exception:
+        return 0  # Streamer not available — no-op
+
+    if not prices:
+        return 0
+
+    # Snapshot minute-cache outside the main lock to avoid nested locking
+    with _minute_cache_lock:
+        minute_snap = dict(_minute_cache)
+
+    with _cache_lock:
+        gainers = _cache.get('gainers')
+        if not gainers:
+            return 0
+
+        updated = 0
+        for g in gainers:
+            snap = prices.get(g['ticker'])
+            if not snap:
+                continue
+
+            new_price = snap.last_price
+            if not new_price or new_price <= 0:
+                continue
+
+            prev_close = g.get('prev_close')
+            updated += 1
+
+            # ── Core price fields ──
+            g['last_price'] = round(new_price, 4)
+
+            if snap.high_price and snap.high_price > 0:
+                g['high_price'] = round(
+                    max(g.get('high_price') or 0, snap.high_price), 4,
+                )
+            if snap.low_price and snap.low_price > 0:
+                cur_low = g.get('low_price')
+                if cur_low and cur_low > 0:
+                    g['low_price'] = round(min(cur_low, snap.low_price), 4)
+                else:
+                    g['low_price'] = round(snap.low_price, 4)
+            if snap.volume and snap.volume > 0:
+                g['volume'] = snap.volume
+            if snap.bid is not None:
+                g['bid'] = snap.bid
+            if snap.ask is not None:
+                g['ask'] = snap.ask
+
+            # ── Derived fields ──
+            if prev_close and prev_close > 0:
+                g['gap_pct'] = round(
+                    ((new_price - prev_close) / prev_close) * 100, 2,
+                )
+
+            bid, ask = g.get('bid'), g.get('ask')
+            if bid and ask and bid > 0:
+                g['spread_pct'] = round(((ask - bid) / bid) * 100, 2)
+
+            high = g.get('high_price')
+            if high and high > 0:
+                g['is_hod'] = new_price >= high * 0.995
+
+            # ── ATR / momentum from minute-cache ──
+            mc_entry = minute_snap.get(g['ticker'])
+            if mc_entry:
+                _, cached = mc_entry
+                atr = cached.get('atr_14') or 0
+                if atr > 0:
+                    if high:
+                        g['atr_hod'] = round(
+                            max(0, (high - new_price) / atr), 2,
+                        )
+                    if bid is not None and ask is not None:
+                        g['atr_sprd'] = round((ask - bid) / atr, 2)
+                    vwap = cached.get('vwap')
+                    if vwap:
+                        g['atr_vwap'] = round(
+                            (new_price - vwap) / atr, 2,
+                        )
+
+                base = cached.get('price_2min_ago')
+                if base and base > 0:
+                    g['mom_2m'] = round(
+                        ((new_price - base) / base) * 100, 2,
+                    )
+
+                # Tail-update sparklines
+                if g.get('sparkline_intraday'):
+                    g['sparkline_intraday'][-1] = new_price
+                if g.get('sparkline_1h'):
+                    g['sparkline_1h'][-1] = new_price
+                if g.get('sparkline_5d'):
+                    g['sparkline_5d'][-1] = new_price
+
+        if updated:
+            _cache['fetched_at'] = datetime.utcnow()
+
+    if updated:
+        log.debug(
+            "[Screener] Fast refresh: %d/%d prices from stream",
+            updated, len(gainers),
+        )
+    return updated
+
+
 # ── Main refresh pipeline ──────────────────────────────────────────────────────
 
 def refresh_cache(force: bool = False) -> dict:
@@ -746,6 +865,20 @@ def _load_fallback_from_db() -> List[dict]:
 def get_live_gainers(force: bool = False) -> dict:
     snap = refresh_cache(force=force)
     fetched = snap['fetched_at']
+
+    redis_connected = False
+    fast_mode_active = False
+    streaming_symbols_count = 0
+    try:
+        from services.streaming_prices import get_bridge
+        bridge = get_bridge()
+        redis_connected = bridge.is_connected
+        active_prices = bridge.get_all_prices()
+        streaming_symbols_count = len(active_prices)
+        fast_mode_active = redis_connected and streaming_symbols_count > 0
+    except Exception as e:
+        log.warning(f"[Screener] Failed to read streaming bridge status: {e}")
+
     return {
         'session':       snap.get('session', 'closed'),
         'session_label': get_session_label(snap.get('session', 'closed')),
@@ -753,26 +886,42 @@ def get_live_gainers(force: bool = False) -> dict:
         'gainers':       snap['gainers'],
         'top_n':         TOP_N,
         'cache_ttl_s':   CACHE_TTL_SECONDS,
+        'redis_connected': redis_connected,
+        'fast_mode_active': fast_mode_active,
+        'streaming_symbols_count': streaming_symbols_count,
     }
 
 
 # ── Background threads ─────────────────────────────────────────────────────────
 
 def _background_refresh_loop():
-    log.info("[Screener] Background refresh loop started")
+    """
+    Two-tier background refresh loop.
+
+    Fast path (~2 s): overlay streaming WebSocket prices onto cached
+    gainers — zero REST API calls.  Runs every FAST_REFRESH_SECONDS.
+
+    Slow path (~60 s): full pipeline (Schwab Movers, bulk quotes,
+    per-ticker enrichment, TradingView metadata).  Runs every
+    SLOW_REFRESH_SECONDS.
+    """
+    log.info("[Screener] Background refresh loop started (fast=%ds, slow=%ds)",
+             FAST_REFRESH_SECONDS, SLOW_REFRESH_SECONDS)
     time.sleep(2)
     failures = 0
+    last_slow = 0.0
 
     try:
         log.info("[Screener] Initial cache load...")
         refresh_cache(force=True)
+        last_slow = time.time()
         failures = 0
     except Exception as e:
         log.exception("[Screener] Initial refresh failed")
 
     while True:
         try:
-            time.sleep(CACHE_TTL_SECONDS)
+            time.sleep(FAST_REFRESH_SECONDS)
             session = get_market_session()
 
             # ── Session transition: flush per-ticker caches ──
@@ -788,13 +937,24 @@ def _background_refresh_loop():
                     _minute_cache.clear()
                 with _daily_cache_lock:
                     _daily_cache.clear()
+                last_slow = 0.0  # Force immediate slow refresh on transition
 
-            if session != 'closed':
-                log.info(f"[Screener] Auto-refresh (session={session})")
+            if session == 'closed':
+                continue
+
+            # ── Slow path: full pipeline ──
+            now = time.time()
+            if now - last_slow >= SLOW_REFRESH_SECONDS:
+                log.info(f"[Screener] Slow refresh (session={session})")
                 refresh_cache(force=True)
+                last_slow = now
                 if failures > 0:
                     log.info(f"[Screener] Recovered after {failures} failures")
                 failures = 0
+            else:
+                # ── Fast path: overlay streamed prices ──
+                _fast_refresh()
+
         except Exception as e:
             failures += 1
             log.exception(f"[Screener] Refresh loop error (#{failures})")

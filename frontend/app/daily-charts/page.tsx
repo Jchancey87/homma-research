@@ -7,7 +7,7 @@ import {
   GainerSummary,
 } from '@/lib/api'
 import MiniSessionChart from '@/components/MiniSessionChart'
-import { BarChart2, RefreshCw, ChevronLeft, ChevronRight, Search, Radio, Wifi } from 'lucide-react'
+import { BarChart2, RefreshCw, ChevronLeft, ChevronRight, Search, Radio, Wifi, Database, Zap } from 'lucide-react'
 import { addDays, todayET } from '@/lib/format'
 
 // Normalise raw `/api/gainers?date=...` rows into the unified summary shape.
@@ -76,6 +76,10 @@ function DailyChartsContent() {
   // need to reach into the summary object.
   const [isLiveMode, setIsLiveMode] = useState(false)
 
+  const [redisConnected, setRedisConnected] = useState<boolean | undefined>(undefined)
+  const [fastModeActive, setFastModeActive] = useState<boolean | undefined>(undefined)
+  const [streamingCount, setStreamingCount] = useState<number | undefined>(undefined)
+
   // Sync price filter with localStorage / main screener
   useEffect(() => {
     const val = localStorage.getItem('price-filter-enabled')
@@ -106,6 +110,9 @@ function DailyChartsContent() {
         if (snapshot?.gainers?.length) {
           setSummary(mapLiveRowsToSummary(snapshot.gainers, today))
           setIsLiveMode(true)
+          setRedisConnected(snapshot.redis_connected)
+          setFastModeActive(snapshot.fast_mode_active)
+          setStreamingCount(snapshot.streaming_symbols_count)
           if (!activeDate) setActiveDate(today)
           return
         }
@@ -120,10 +127,16 @@ function DailyChartsContent() {
         if (mapped) {
           setSummary(mapped)
           setIsLiveMode(false)
+          setRedisConnected(undefined)
+          setFastModeActive(undefined)
+          setStreamingCount(undefined)
           if (!activeDate) setActiveDate(dbDate)
         } else {
           setSummary({ date: null, total: 0, source: null, gainers: [] })
           setIsLiveMode(false)
+          setRedisConnected(undefined)
+          setFastModeActive(undefined)
+          setStreamingCount(undefined)
         }
         return
       }
@@ -134,13 +147,22 @@ function DailyChartsContent() {
       if (mapped) {
         setSummary(mapped)
         setIsLiveMode(false)
+        setRedisConnected(undefined)
+        setFastModeActive(undefined)
+        setStreamingCount(undefined)
       } else {
         setSummary({ date: null, total: 0, source: null, gainers: [] })
         setIsLiveMode(false)
+        setRedisConnected(undefined)
+        setFastModeActive(undefined)
+        setStreamingCount(undefined)
       }
     } catch {
       setSummary(null)
       setIsLiveMode(false)
+      setRedisConnected(undefined)
+      setFastModeActive(undefined)
+      setStreamingCount(undefined)
     } finally {
       setLoading(false)
     }
@@ -155,6 +177,9 @@ function DailyChartsContent() {
       const snapshot = await getLiveGainers()
       if (snapshot?.gainers?.length) {
         setSummary(mapLiveRowsToSummary(snapshot.gainers, todayET()))
+        setRedisConnected(snapshot.redis_connected)
+        setFastModeActive(snapshot.fast_mode_active)
+        setStreamingCount(snapshot.streaming_symbols_count)
       }
     } catch {
       // Best-effort: keep the last good summary on transient errors.
@@ -180,14 +205,14 @@ function DailyChartsContent() {
 
   useEffect(() => { loadSummary() }, [loadSummary])
 
-  // Live polling — keep the screener list and mom_2m values fresh. The live
-  // screener's background refresh runs at 15s (live_screener.py CACHE_TTL_SECONDS)
-  // so we poll at the same cadence.
+  // Live polling — keep the screener list and price values fresh. The live
+  // screener's fast-path overlays WebSocket-streamed prices every ~2s
+  // (FAST_REFRESH_SECONDS). We poll at 3s to stay just behind the backend.
   useEffect(() => {
     if (!isLiveMode) return
     const id = setInterval(() => {
       refreshLiveGainers()
-    }, 15_000)
+    }, 3_000)
     return () => clearInterval(id)
   }, [isLiveMode, refreshLiveGainers])
 
@@ -240,10 +265,28 @@ function DailyChartsContent() {
                 live · top 9 by gap %
               </span>
             )}
+            {isLiveMode && fastModeActive && (
+              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-none text-[9px] font-bold bg-amber-950/30 border border-amber-500/40 text-amber-400 animate-pulse">
+                <Zap size={9} className="fill-amber-400" />
+                Fast Mode ({streamingCount} symbols)
+              </span>
+            )}
+            {isLiveMode && redisConnected && (
+              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-none text-[9px] font-bold bg-emerald-950/20 border border-emerald-500/30 text-emerald-400">
+                <Database size={9} />
+                Redis Connected
+              </span>
+            )}
+            {isLiveMode && redisConnected === false && (
+              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-none text-[9px] font-bold bg-red-950/20 border border-red-500/30 text-red-400 animate-pulse">
+                <Database size={9} />
+                Redis Disconnected
+              </span>
+            )}
           </h1>
           <p className="text-gray-500 text-[10px] mt-0.5 uppercase">
             {isLiveMode
-              ? 'bars 15s · tick 5s · list 30s · candlestick + volume + EMA 21, 50, 100'
+              ? 'bars 15s · websocket tick 2s (fast) / rest 60s (slow) · candlestick + volume + EMA 21, 50, 100'
               : 'Top 9 intraday sessions · candlestick + volume + EMA 21, 50, 100'}
           </p>
         </div>

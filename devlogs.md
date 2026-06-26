@@ -2,6 +2,24 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-06-26] WebSocket Streaming Status & Redis Connectivity Indicators
+
+### Summary
+* Added status flags for Redis connection and Fast Mode streaming activity. Integrated indicators in daily-charts page header and main LiveGainers table. Increased polling rate to 3s.
+
+### What Changed
+* backend/services/live_screener.py: `get_live_gainers` queries `StreamingPriceBridge` singleton. Appends `redis_connected`, `fast_mode_active`, `streaming_symbols_count` to snapshot.
+* frontend/lib/api.ts: Updated `LiveGainerSnapshot` interface with new status fields.
+* frontend/app/daily-charts/page.tsx: Added page state for status fields. Renders Zap (Fast Mode symbol count) and Database (Redis status) badges in header. Updated description.
+* frontend/components/LiveGainers.tsx: Added Database/Zap imports. Speed up poll rate from 15s to 3s. Renders inline Fast Mode and Redis status indicators.
+* AGENT_MEMORY.md: Documented streaming stats and 3s polling behavior.
+
+### Acceptance
+* Backend pytest tests passed (26/26).
+* Frontend production build (`npm run build`) succeeded without compiler errors.
+
+---
+
 ## [2026-06-26] Live Screener Polling: Frequency increased to 15s
 
 ### Summary

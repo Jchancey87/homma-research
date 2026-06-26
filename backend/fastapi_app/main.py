@@ -47,6 +47,12 @@ async def lifespan(app: FastAPI):
         start_auto_persist()
     except Exception as e:
         log.error(f"[startup] Failed to start live screener background services: {e}")
+    log.info("[startup] Starting streaming price bridge…")
+    try:
+        from services.streaming_prices import start_streaming_bridge
+        start_streaming_bridge()
+    except Exception as e:
+        log.error(f"[startup] Failed to start streaming price bridge: {e}")
     log.info("[startup] FastAPI app ready on port 5000")
     yield
     log.info("[shutdown] Stopping APScheduler…")

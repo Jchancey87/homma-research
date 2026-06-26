@@ -23,6 +23,8 @@ import {
   VolumeX,
   Bell,
   BellOff,
+  Database,
+  Zap,
 } from 'lucide-react'
 import { GainerTable } from './live-gainers/GainerTable'
 import { SessionBadge } from './live-gainers/badges'
@@ -109,7 +111,7 @@ export default function LiveGainers() {
   useEffect(() => {
     fetchData()
     fetchWatchlist()
-    timerRef.current = setInterval(() => fetchData(), 15 * 1000)
+    timerRef.current = setInterval(() => fetchData(), 3000)
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [fetchData, fetchWatchlist])
 
@@ -199,9 +201,27 @@ export default function LiveGainers() {
             </span>
           )}
           {isActive && !error && (
-            <span className="flex items-center gap-1 text-[11px] text-gray-700">
-              <Wifi size={10} className="text-emerald-600" />
-              auto-refresh 1m
+            <span className="flex items-center gap-1 text-[11px] text-gray-500">
+              <Wifi size={10} className="text-emerald-500" />
+              live 3s
+            </span>
+          )}
+          {snap?.fast_mode_active && (
+            <span className="flex items-center gap-1 text-[11px] font-bold text-amber-500">
+              <Zap size={10} className="animate-pulse fill-amber-500" />
+              Fast Mode ({snap.streaming_symbols_count} symbols)
+            </span>
+          )}
+          {snap?.redis_connected && (
+            <span className="flex items-center gap-1 text-[11px] text-emerald-600">
+              <Database size={10} />
+              Redis Connected
+            </span>
+          )}
+          {snap && !snap.redis_connected && (
+            <span className="flex items-center gap-1 text-[11px] text-red-500 animate-pulse">
+              <Database size={10} />
+              Redis Disconnected
             </span>
           )}
           {error && (

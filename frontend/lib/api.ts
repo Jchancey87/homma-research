@@ -165,6 +165,9 @@ export interface LiveGainerSnapshot {
   gainers:       LiveGainerRow[]
   top_n:         number
   cache_ttl_s:   number
+  redis_connected?: boolean
+  fast_mode_active?: boolean
+  streaming_symbols_count?: number
 }
 
 export const getLiveGainers = (force = false) =>

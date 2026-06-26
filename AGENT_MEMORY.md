@@ -17,11 +17,12 @@
 * **Telegram format (RFC-004 QW-3):** `fastapi_app/tasks/alerts.py` builds messages via `_format_alert_message(alert_data)`. Header/signal/RVOL driven by `ALERT_TYPE_META: dict[str, dict]` at module top. Each value: `emoji`, `header`, `signal` (`None` | str | `"auto"` for dynamic-escape), `show_rvol` (bool). 7 known types + `FALLBACK_META` for unknown.
 
 ### 3. Live Screener & Momentum
-* **Pipeline:** Flat 5-step flow in `live_screener.py`.
+* **Pipeline:** Two-tier refresh in `live_screener.py`. Fast path (2s): overlay WebSocket-streamed prices from `services/streaming_prices.py` (Redis `screener:quotes` channel) — zero REST calls. Slow path (60s): full 5-step pipeline (movers + quotes + enrichment).
+* **Streaming Bridge:** `StreamingPriceBridge` subscribes to Redis pub/sub in a daemon thread, maintains `_prices: dict[str, PriceSnapshot]` with 60s staleness expiry. `stream_client.py` publishes compact JSON ticks on every Level 1 quote.
 * **mom_2m:** Calculated relative to target 2m ago. If closest candle is >5m old, return `None`.
-* **Caching & Sparklines:** 30s cache updates metrics inline. Daily cache holds 5d metrics. Flush caches on market session transitions. `sparkline_1h` caches last 60m of minute closes.
+* **Caching & Sparklines:** 30s minute-cache updates metrics inline. Daily cache holds 5d metrics. Flush caches on market session transitions. `sparkline_1h` caches last 60m of minute closes.
 * **Filters:** MIN_GAP_PCT=5.0, MIN_PRICE=$0.50, MAX_PRICE=$100.
-* **Polling:** Interval reduced 60s to 15s. cache_ttl_s = 15. Frontend main loop = 15s. "X ago" age label = 5s. Daily charts live refresh = 15s.
+* **Polling:** FAST_REFRESH_SECONDS=2 (streaming), SLOW_REFRESH_SECONDS=60 (REST). CACHE_TTL_SECONDS=3 (frontend poll hint). /gainers/live returns redis_connected, fast_mode_active, and streaming_symbols_count. Both frontend daily-charts and LiveGainers poll at 3s and render status badges.
 
 ### 4. Validation Helpers (RFC-004 QW-4)
 * **Ticker normalisation:** `from validation import normalize_ticker` — uppercase + strip. Replaces inline `ticker.upper().strip()`. Legacy `_upper_strip` alias kept in `validation/schemas.py` for in-module use only.
