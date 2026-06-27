@@ -1292,3 +1292,17 @@ Fixed daily charts blinking to blank during background auto-refreshes. Resolved 
 * **Gainer Table Tooltip (`frontend/components/live-gainers/GainerTable.tsx`)**: Escaped unescaped quote mark (`today's` to `today&apos;s`) to resolve ESLint compile-blocking error.
 
 
+
+---
+
+## [2026-06-27] Health Check Optimization, Parallel Dashboard, TimescaleDB Compression Policy
+
+### Summary
+Optimized `/health` to use pool connection health check. Created `/api/market/dashboard-overview` executing parallel queries with automatic `NaN` protection. Verified TimescaleDB compression policy active.
+
+### What Changed
+* **Health Check (`backend/fastapi_app/main.py`)**: Imported `check_db_health` from `fastapi_app.db.core`. Replaced `asyncpg.connect()` fresh connection call with pool-based `check_db_health()` check.
+* **Dashboard Overview Route (`backend/fastapi_app/routers/market.py`)**: Created `/api/market/dashboard-overview` route. Gathered breadth, calendar, momentum, watchlist (items and prices), repeat runners, float buckets, follow-through, sector rotation, continuation picks, and recent observations in parallel using `asyncio.gather`. Created a recursive `_clean_nans` utility converting any float `NaN`/`Inf` values to `None` for secure JSON compliance. Used a pool connection-acquisition helper `call_with_conn` to prevent deadlocks and connection sharing errors.
+* **Continuation Picks Router (`backend/fastapi_app/routers/continuation.py`)**: Integrated `_clean_nans` cleanup into `list_picks` router endpoint, ensuring stability during test performance runs.
+* **TimescaleDB Compression Policy Verification**: Verified policy compression job `1006` active, scheduled, and configured on `price_history_1min` hypertable for 7-day INTERVAL.
+* **Testing**: Added unit tests in `backend/tests/test_market.py`. Passed all 259 backend tests.

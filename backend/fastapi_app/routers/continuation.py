@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -25,6 +26,19 @@ router = APIRouter(prefix="/continuation-picks", tags=["continuation"])
 
 class DeactivateBody(BaseModel):
     reason: str = "manually dismissed"
+
+
+def _clean_nans(obj):
+    """Recursively convert float NaN/Inf values to None for JSON compliance."""
+    if isinstance(obj, dict):
+        return {k: _clean_nans(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_clean_nans(x) for x in obj]
+    elif isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    return obj
 
 
 @router.get("")
@@ -49,7 +63,7 @@ async def list_picks(
         r["today_volume"] = nq.volume if nq else None
         r["today_change_pct"] = nq.change_pct if nq else None
 
-    return rows
+    return _clean_nans(rows)
 
 
 @router.post("", status_code=201)

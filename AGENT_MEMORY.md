@@ -48,16 +48,18 @@
 ### 7. Testing & DevOps
 * **Venv Testing:** Execute backend tests using `/opt/trading-journal/backend/venv/bin/pytest`.
 * **Async tests:** Run with `-p no:anyio` for clean asyncio loops.
-* **Test surface:** 223 passing, 0 regressions. Started RFC-001 at 150; net +73 tests across all refactors.
+* **Test surface:** 259 passing, 0 regressions.
 * **Deploy:** Run `sudo /opt/trading-journal/deploy.sh` (push from `/home/jackc/projects/homma-research` first).
 
+### 9. Optimization, Dashboards, and TimescaleDB Policies
+* **Health Endpoint:** Uses `check_db_health` connection-pool based check.
+* **Dashboard Overview:** Consolidated `/api/market/dashboard-overview` route gathers breadth, calendar, momentum, watchlist, and other dashboard data in parallel. Clean recursive `NaN` protection implemented.
+* **TimescaleDB Compression Policy:** Enabled on `price_history_1min` hypertable for chunks older than 7 days.
+
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Fix blinking charts on daily chart overview during background poll.
-* **Status:** Complete. Restricted loading overlay to initial mount. Implemented updating status indicator. Fixed GainerTable unescaped single quote.
-* **Assumptions:** Users prefer background updates to be seamless without full-component blanking.
+* **Goal:** Optimize `/health`, create `/api/market/dashboard-overview` with parallel fetching, enable TimescaleDB compression.
+* **Status:** Complete. All tests passed.
+* **Assumptions:** TimescaleDB active, connection pool safe for concurrent connection acquisition.
 
 ## 🗑️ Rot & Pruning Log
-* RFC-001/002/003/004/005 + RFC-010 architectural refactor roadmap: COMPLETE. All decisions merged into main branch.
-* Pruned QW-3/QW-4/RFC-005/RFC-010 active-intent entries.
-* Applied Caveman Style rules.
-
+* Pruned old session goals.

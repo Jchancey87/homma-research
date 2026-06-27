@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import time
 import asyncio
+import math
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -54,6 +55,19 @@ def _bias_label(spy_chg: Optional[float], vix: Optional[float]) -> str:
     if spy_chg <= -0.5 or (vix is not None and vix > 25):
         return "risk_off"
     return "neutral"
+
+
+def _clean_nans(obj):
+    """Recursively convert float NaN/Inf values to None for JSON compliance."""
+    if isinstance(obj, dict):
+        return {k: _clean_nans(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_clean_nans(x) for x in obj]
+    elif isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return None
+        return obj
+    return obj
 
 
 # ---------------------------------------------------------------------------
@@ -104,8 +118,6 @@ async def market_breadth():
     return data
 
 
-# ---------------------------------------------------------------------------
-# GET /market/calendar
 # ---------------------------------------------------------------------------
 # GET /market/calendar
 # ---------------------------------------------------------------------------
@@ -430,3 +442,88 @@ async def debug_candles(ticker: str):
         "checked_at": datetime.now(timezone.utc).isoformat(),
     }
 
+
+# ---------------------------------------------------------------------------
+# GET /market/dashboard-overview
+# ---------------------------------------------------------------------------
+
+@router.get("/dashboard-overview")
+async def dashboard_overview(
+    price_filter: bool = Query(True),
+):
+    """
+    Consolidated dashboard overview gathering breadth, calendar, momentum,
+    watchlist, and other dashboard data in parallel.
+    """
+    from ..db import get_pool
+    from .watchlist import list_watchlist, watchlist_prices
+    from .gainers import repeat_runners, float_buckets, follow_through, sector_rotation
+    from .continuation import list_picks
+    from .observations import list_observations
+
+    pool = get_pool()
+
+    async def call_with_conn(func, *args, **kwargs):
+        async with pool.acquire() as conn:
+            return await func(*args, conn, **kwargs)
+
+    # Gather everything in parallel
+    breadth_task = market_breadth()
+    calendar_task = economic_calendar()
+    momentum_task = call_with_conn(get_momentum_breadth, price_filter)
+    watchlist_items_task = call_with_conn(list_watchlist)
+    watchlist_prices_task = call_with_conn(watchlist_prices)
+    
+    # Other dashboard data
+    repeat_runners_task = call_with_conn(repeat_runners)
+    float_buckets_task = call_with_conn(float_buckets, None)
+    follow_through_task = call_with_conn(follow_through)
+    sector_rotation_task = call_with_conn(sector_rotation)
+    continuation_picks_task = call_with_conn(list_picks, False, 50)
+    recent_observations_task = call_with_conn(list_observations, None, None, None, None, None, 100)
+
+    (
+        breadth_res,
+        calendar_res,
+        momentum_res,
+        wl_items,
+        wl_prices,
+        rep_runners,
+        fl_buckets,
+        ft_data,
+        sr_data,
+        cp_data,
+        obs_data,
+    ) = await asyncio.gather(
+        breadth_task,
+        calendar_task,
+        momentum_task,
+        watchlist_items_task,
+        watchlist_prices_task,
+        repeat_runners_task,
+        float_buckets_task,
+        follow_through_task,
+        sector_rotation_task,
+        continuation_picks_task,
+        recent_observations_task,
+    )
+
+    response_data = {
+        "breadth": breadth_res,
+        "calendar": calendar_res,
+        "momentum": momentum_res,
+        "watchlist": {
+            "items": wl_items,
+            "prices": wl_prices,
+        },
+        "other": {
+            "repeat_runners": rep_runners,
+            "float_buckets": fl_buckets,
+            "follow_through": ft_data,
+            "sector_rotation": sr_data,
+            "continuation_picks": cp_data,
+            "recent_observations": obs_data,
+        }
+    }
+
+    return _clean_nans(response_data)

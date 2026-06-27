@@ -25,7 +25,7 @@ if _BACKEND_DIR not in sys.path:
     sys.path.insert(0, _BACKEND_DIR)
 
 from .config import settings
-from .db import create_pool, close_pool
+from .db import create_pool, close_pool, check_db_health
 from .scheduler import start_scheduler, stop_scheduler
 
 log = logging.getLogger(__name__)
@@ -94,18 +94,8 @@ app.add_middleware(
 
 @app.get("/health", tags=["meta"])
 async def health():
-    """Liveness + DB connectivity check — opens a fresh connection each call."""
-    try:
-        conn = await asyncpg.connect(
-            dsn=settings.asyncpg_dsn,
-            ssl=False,
-            timeout=5,
-        )
-        await conn.fetchval("SELECT 1")
-        await conn.close()
-        db_ok = True
-    except Exception:
-        db_ok = False
+    """Liveness + DB connectivity check — uses pool-based check_db_health."""
+    db_ok = await check_db_health()
     return {
         "status": "ok" if db_ok else "degraded",
         "db": "ok" if db_ok else "unreachable",
@@ -152,4 +142,3 @@ if os.path.exists(storage_dir):
     app.mount("/storage", StaticFiles(directory=storage_dir), name="storage")
 else:
     log.warning(f"Static storage directory '{storage_dir}' does not exist. Serving disabled.")
-

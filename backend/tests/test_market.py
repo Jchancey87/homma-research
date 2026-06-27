@@ -89,3 +89,41 @@ async def test_momentum_breadth_shape(client):
     assert "count" in halts
     assert "tickers" in halts
 
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_dashboard_overview_returns_200(client):
+    resp = await client.get("/api/market/dashboard-overview")
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_dashboard_overview_shape(client):
+    resp = await client.get("/api/market/dashboard-overview")
+    body = resp.json()
+    assert "breadth" in body
+    assert "calendar" in body
+    assert "momentum" in body
+    assert "watchlist" in body
+    assert "other" in body
+
+    # Check watchlist shape
+    wl = body["watchlist"]
+    assert "items" in wl
+    assert "prices" in wl
+    assert isinstance(wl["items"], list)
+    assert isinstance(wl["prices"], dict)
+
+    # Check other shape
+    other = body["other"]
+    assert "repeat_runners" in other
+    assert "float_buckets" in other
+    assert "follow_through" in other
+    assert "sector_rotation" in other
+    assert "continuation_picks" in other
+    assert "recent_observations" in other
+    assert isinstance(other["repeat_runners"], list)
+    assert isinstance(other["float_buckets"], dict)
+    assert isinstance(other["follow_through"], dict)
+    assert isinstance(other["sector_rotation"], list)
+    assert isinstance(other["continuation_picks"], list)
+    assert isinstance(other["recent_observations"], list)
