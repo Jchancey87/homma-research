@@ -18,21 +18,66 @@ function pctColor(v: number | null) {
   return v > 0 ? 'text-emerald-400' : v < 0 ? 'text-red-400' : 'text-gray-500'
 }
 
-export default function WatchlistQuickAccess() {
+interface WatchlistQuickAccessProps {
+  initialItems?: WatchlistItem[]
+  initialPrices?: Record<string, WatchlistPrice>
+}
+
+export default function WatchlistQuickAccess({ initialItems = [], initialPrices = {} }: WatchlistQuickAccessProps) {
   const router = useRouter()
-  const [items,  setItems]  = useState<WatchlistItem[]>([])
-  const [prices, setPrices] = useState<Record<string, WatchlistPrice>>({})
-  const [loading, setLoading] = useState(true)
+  const [items,  setItems]  = useState<WatchlistItem[]>(initialItems)
+  const [prices, setPrices] = useState<Record<string, WatchlistPrice>>(initialPrices)
+  const [loading, setLoading] = useState(initialItems.length === 0)
 
   useEffect(() => {
-    Promise.all([
-      getWatchlist().then(d => d.slice(0, 8)),
-      getWatchlistPrices().catch(() => ({} as Record<string, WatchlistPrice>)),
-    ]).then(([items, prices]) => {
-      setItems(items)
-      setPrices(prices)
-    }).finally(() => setLoading(false))
-  }, [])
+    if (initialItems.length === 0) {
+      Promise.all([
+        getWatchlist().then(d => d.slice(0, 8)),
+        getWatchlistPrices().catch(() => ({} as Record<string, WatchlistPrice>)),
+      ]).then(([newItems, newPrices]) => {
+        setItems(newItems)
+        setPrices(newPrices)
+      }).finally(() => setLoading(false))
+    }
+
+    let intervalId: ReturnType<typeof setInterval> | null = null
+
+    const startPolling = () => {
+      if (intervalId) clearInterval(intervalId)
+      intervalId = setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          getWatchlistPrices()
+            .then(p => setPrices(p))
+            .catch(() => {})
+        }
+      }, 3000)
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        getWatchlistPrices()
+          .then(p => setPrices(p))
+          .catch(() => {})
+        startPolling()
+      } else {
+        if (intervalId) {
+          clearInterval(intervalId)
+          intervalId = null
+        }
+      }
+    }
+
+    if (document.visibilityState === 'visible') {
+      startPolling()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      if (intervalId) clearInterval(intervalId)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [initialItems.length])
 
   const handleResearch = async (ticker: string) => {
     await markWatchlistViewed(ticker).catch(() => {})

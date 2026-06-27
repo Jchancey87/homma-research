@@ -73,7 +73,7 @@ export const getGainers = (params?: {
   sector?: string
 }) => api.get<Gainer[]>('/api/gainers', { params }).then(r => r.data)
 
-interface LatestGainersSummary {
+export interface LatestGainersSummary {
   date:    string | null
   total:   number
   gainers: Array<Omit<Gainer, 'id' | 'date' | 'created_at' | 'market_cap'>>
@@ -642,6 +642,16 @@ export interface WatchlistPrice {
 }
 export const getWatchlistPrices = () =>
   api.get<Record<string, WatchlistPrice>>('/api/watchlist/prices').then(r => r.data)
+
+export interface DashboardOverviewData {
+  live_gainers: LiveGainerSnapshot
+  watchlist: WatchlistItem[]
+  watchlist_prices: Record<string, WatchlistPrice>
+  gainers_summary: LatestGainersSummary
+}
+
+export const getDashboardOverview = () =>
+  api.get<DashboardOverviewData>('/api/market/dashboard-overview').then(r => r.data)
 
 
 

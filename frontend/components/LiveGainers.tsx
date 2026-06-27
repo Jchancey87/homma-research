@@ -47,10 +47,16 @@ const PRICE_FILTER_EVENT = 'price-filter-changed'
 const PRICE_MIN = 2.0
 const PRICE_MAX = 25.0
 
-export default function LiveGainers() {
+interface LiveGainersProps {
+  initialSnap?: LiveGainerSnapshot | null
+  initialWatchlist?: WatchlistItem[]
+  initialSummary?: { date: string | null; total: number } | null
+}
+
+export default function LiveGainers({ initialSnap = null, initialWatchlist = [], initialSummary = null }: LiveGainersProps) {
   const router = useRouter()
-  const [snap,        setSnap]        = useState<LiveGainerSnapshot | null>(null)
-  const [loading,     setLoading]     = useState(true)
+  const [snap,        setSnap]        = useState<LiveGainerSnapshot | null>(initialSnap)
+  const [loading,     setLoading]     = useState(!initialSnap)
   const [error,       setError]       = useState<string | null>(null)
   const [refreshing,  setRefreshing]  = useState(false)
   const [ageStr,      setAgeStr]      = useState('')
@@ -69,7 +75,7 @@ export default function LiveGainers() {
 
   // UX states
   const [modalGainer, setModalGainer] = useState<LiveGainerRow | null>(null)
-  const [watchlist, setWatchlist]     = useState<WatchlistItem[]>([])
+  const [watchlist, setWatchlist]     = useState<WatchlistItem[]>(initialWatchlist)
   const [watchlistLoading, setWatchlistLoading] = useState(false)
   const [priceFilterEnabled, setPriceFilterEnabled] = useState(true)
 
@@ -109,11 +115,45 @@ export default function LiveGainers() {
 
   // Initial load + polling
   useEffect(() => {
-    fetchData()
-    fetchWatchlist()
-    timerRef.current = setInterval(() => fetchData(), 3000)
-    return () => { if (timerRef.current) clearInterval(timerRef.current) }
-  }, [fetchData, fetchWatchlist])
+    if (!initialSnap) {
+      fetchData()
+    }
+    if (!initialWatchlist || initialWatchlist.length === 0) {
+      fetchWatchlist()
+    }
+
+    const startPolling = () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+      timerRef.current = setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          fetchData()
+        }
+      }, 3000)
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchData()
+        startPolling()
+      } else {
+        if (timerRef.current) {
+          clearInterval(timerRef.current)
+          timerRef.current = null
+        }
+      }
+    }
+
+    if (document.visibilityState === 'visible') {
+      startPolling()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [fetchData, fetchWatchlist, initialSnap, initialWatchlist])
 
   // Live "X ago" counter (updates every 5s)
   useEffect(() => {
@@ -336,7 +376,7 @@ export default function LiveGainers() {
 
       {/* Footer — last DB ingest */}
       <div className="pt-2 border-t border-gray-800/60">
-        <LastIngestRow />
+        <LastIngestRow initialSummary={initialSummary} />
       </div>
 
       {/* Details modal overlay */}
@@ -362,14 +402,16 @@ export default function LiveGainers() {
 
 // ── Last DB ingest sub-row ─────────────────────────────────────────────────────
 
-function LastIngestRow() {
-  const [summary, setSummary] = useState<{ date: string | null; total: number } | null>(null)
+function LastIngestRow({ initialSummary = null }: { initialSummary?: { date: string | null; total: number } | null }) {
+  const [summary, setSummary] = useState<{ date: string | null; total: number } | null>(initialSummary)
 
   useEffect(() => {
-    getGainersSummary()
-      .then(s => setSummary({ date: s.date, total: s.total }))
-      .catch(() => {})
-  }, [])
+    if (!initialSummary) {
+      getGainersSummary()
+        .then(s => setSummary({ date: s.date, total: s.total }))
+        .catch(() => {})
+    }
+  }, [initialSummary])
 
   if (!summary?.date) return null
 

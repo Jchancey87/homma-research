@@ -460,6 +460,8 @@ async def dashboard_overview(
     from .gainers import repeat_runners, float_buckets, follow_through, sector_rotation
     from .continuation import list_picks
     from .observations import list_observations
+    from services.live_screener import get_live_gainers
+    from ..db import daily_gainers as db_daily_gainers
 
     pool = get_pool()
 
@@ -482,6 +484,28 @@ async def dashboard_overview(
     continuation_picks_task = call_with_conn(list_picks, False, 50)
     recent_observations_task = call_with_conn(list_observations, None, None, None, None, None, 100)
 
+    # Live gainers and ingest summaries
+    live_gainers_task = asyncio.to_thread(get_live_gainers, force=False)
+
+    async def get_gainers_summary():
+        async with pool.acquire() as conn:
+            summary = await db_daily_gainers.latest_ingest_summary(conn)
+            if summary and summary.get("date"):
+                target_date = summary["date"]
+                top_gainers = await db_daily_gainers.top_gainers_on_date(conn, target_date, limit=9)
+                return {
+                    "date": str(target_date),
+                    "total": summary.get("total", 0),
+                    "gainers": top_gainers,
+                }
+            return {
+                "date": None,
+                "total": 0,
+                "gainers": [],
+            }
+
+    gainers_summary_task = get_gainers_summary()
+
     (
         breadth_res,
         calendar_res,
@@ -494,6 +518,8 @@ async def dashboard_overview(
         sr_data,
         cp_data,
         obs_data,
+        live_gainers_snap,
+        gainers_summary_data,
     ) = await asyncio.gather(
         breadth_task,
         calendar_task,
@@ -506,16 +532,18 @@ async def dashboard_overview(
         sector_rotation_task,
         continuation_picks_task,
         recent_observations_task,
+        live_gainers_task,
+        gainers_summary_task,
     )
 
     response_data = {
+        "live_gainers": live_gainers_snap,
+        "watchlist": wl_items,
+        "watchlist_prices": wl_prices,
+        "gainers_summary": gainers_summary_data,
         "breadth": breadth_res,
         "calendar": calendar_res,
         "momentum": momentum_res,
-        "watchlist": {
-            "items": wl_items,
-            "prices": wl_prices,
-        },
         "other": {
             "repeat_runners": rep_runners,
             "float_buckets": fl_buckets,

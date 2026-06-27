@@ -100,18 +100,18 @@ async def test_dashboard_overview_returns_200(client):
 async def test_dashboard_overview_shape(client):
     resp = await client.get("/api/market/dashboard-overview")
     body = resp.json()
+    assert "live_gainers" in body
+    assert "watchlist" in body
+    assert "watchlist_prices" in body
+    assert "gainers_summary" in body
     assert "breadth" in body
     assert "calendar" in body
     assert "momentum" in body
-    assert "watchlist" in body
     assert "other" in body
 
-    # Check watchlist shape
-    wl = body["watchlist"]
-    assert "items" in wl
-    assert "prices" in wl
-    assert isinstance(wl["items"], list)
-    assert isinstance(wl["prices"], dict)
+    # Check types
+    assert isinstance(body["watchlist"], list)
+    assert isinstance(body["watchlist_prices"], dict)
 
     # Check other shape
     other = body["other"]

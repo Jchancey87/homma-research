@@ -12,7 +12,7 @@ import SectorRotation from '@/components/SectorRotation'
 import EconomicCalendar from '@/components/EconomicCalendar'
 import HelpGuide from '@/components/HelpGuide'
 import { Panel, PanelLabel } from '@/components/Panel'
-import { getContinuationPicks, ContinuationPick } from '@/lib/api'
+import { getContinuationPicks, ContinuationPick, getDashboardOverview, DashboardOverviewData } from '@/lib/api'
 import {
   TrendingUp, Bookmark, FileText, RotateCcw,
   BarChart2, ArrowRight, CalendarDays,
@@ -116,6 +116,29 @@ async function ContinuationPicksPanel() {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default async function DashboardPage() {
+  let overviewData: DashboardOverviewData = {
+    live_gainers: {
+      session: 'closed',
+      session_label: 'Closed',
+      fetched_at: null,
+      gainers: [],
+      top_n: 0,
+      cache_ttl_s: 0
+    },
+    watchlist: [],
+    watchlist_prices: {},
+    gainers_summary: {
+      date: null,
+      total: 0,
+      gainers: []
+    }
+  }
+  try {
+    overviewData = await getDashboardOverview()
+  } catch (e) {
+    console.error('Failed to fetch dashboard overview data', e)
+  }
+
   return (
     <div className="space-y-2 max-w-[1920px] mx-auto">
 
@@ -149,7 +172,7 @@ export default async function DashboardPage() {
             </Link>
           </div>
         </div>
-        <LiveGainers />
+        <LiveGainers initialSnap={overviewData.live_gainers} initialWatchlist={overviewData.watchlist} initialSummary={overviewData.gainers_summary} />
       </Panel>
 
       {/* ── Row 2: Repeat runners + Follow-through (stacked on mobile, side-by-side on lg) ── */}
@@ -195,7 +218,7 @@ export default async function DashboardPage() {
         <Panel>
           <PanelLabel icon={Bookmark} label="Watchlist" href="/watchlist" />
           <Suspense fallback={<div className="space-y-1.5 animate-pulse">{[1,2,3].map(i=><div key={i} className="h-9 bg-[#111] rounded-none" />)}</div>}>
-            <WatchlistQuickAccess />
+            <WatchlistQuickAccess initialItems={overviewData.watchlist} initialPrices={overviewData.watchlist_prices} />
           </Suspense>
         </Panel>
 
