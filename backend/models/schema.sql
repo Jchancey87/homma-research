@@ -283,4 +283,53 @@ ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS dilution_risk TEXT;
 ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS news_headline TEXT;
 ALTER TABLE continuation_picks ADD COLUMN IF NOT EXISTS news_fresh BOOLEAN;
 
+-- ── RSS CURATION TABLES (Added 2026-06) ──────────────────────────────────────
+CREATE TABLE IF NOT EXISTS rss_sources (
+    id            SERIAL PRIMARY KEY,
+    name          TEXT NOT NULL,
+    feed_url      TEXT NOT NULL UNIQUE,
+    category      TEXT NOT NULL CHECK(category IN ('biotech', 'tech', 'general')),
+    is_active     BOOLEAN DEFAULT TRUE,
+    last_polled_at TIMESTAMPTZ,
+    created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_rss_sources_active ON rss_sources(is_active);
+
+CREATE TABLE IF NOT EXISTS rss_feed_pool (
+    id                SERIAL PRIMARY KEY,
+    source_id         INTEGER REFERENCES rss_sources(id) ON DELETE CASCADE,
+    guid              TEXT UNIQUE NOT NULL,
+    title             TEXT NOT NULL,
+    description       TEXT,
+    link              TEXT NOT NULL,
+    published_at      TIMESTAMPTZ NOT NULL,
+    detected_tickers  TEXT[] DEFAULT '{}',
+    sector            TEXT,
+    status            TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
+    created_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_feed_pool_status ON rss_feed_pool(status);
+CREATE INDEX IF NOT EXISTS idx_feed_pool_tickers ON rss_feed_pool USING GIN(detected_tickers);
+
+CREATE TABLE IF NOT EXISTS curated_rss_items (
+    id                SERIAL PRIMARY KEY,
+    pool_item_id      INTEGER REFERENCES rss_feed_pool(id) ON DELETE SET NULL,
+    guid              TEXT NOT NULL UNIQUE,
+    title             TEXT NOT NULL,
+    description       TEXT NOT NULL,
+    link              TEXT NOT NULL,
+    published_at      TIMESTAMPTZ NOT NULL,
+    curated_at        TIMESTAMPTZ DEFAULT NOW(),
+    curated_by        TEXT,
+    associated_tickers TEXT[] DEFAULT '{}',
+    curated_notes     TEXT,
+    telegram_sent     BOOLEAN DEFAULT FALSE
+);
+
+CREATE INDEX IF NOT EXISTS idx_curated_rss_pub ON curated_rss_items(published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_curated_rss_tickers ON curated_rss_items USING GIN(associated_tickers);
+CREATE INDEX IF NOT EXISTS idx_curated_rss_tele ON curated_rss_items(telegram_sent);
+
 

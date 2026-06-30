@@ -84,6 +84,15 @@ def _build_scheduler():
         misfire_grace_time=1800,  # 30 min
     )
 
+    # ── Job 7: Ingest RSS Feeds ──────────────────────────────────────────────
+    scheduler.add_job(
+        _ingest_rss_feeds,
+        CronTrigger(minute="*/15", timezone="UTC"),  # Every 15 minutes
+        id="ingest_rss_feeds",
+        name="Ingest RSS Feeds",
+        replace_existing=True,
+    )
+
     return scheduler
 
 
@@ -282,6 +291,26 @@ async def _update_continuation_performance() -> None:
         log.info("[scheduler] update_continuation_performance done — updated %d rows", count)
     except Exception as exc:
         log.exception("[scheduler] update_continuation_performance failed: %s", exc)
+
+
+async def _ingest_rss_feeds() -> None:
+    """Ingest configured RSS feeds, perform auto-curation, and send Telegram alerts."""
+    log.info("[scheduler] Ingesting RSS feeds starting")
+    try:
+        from .db import get_pool
+        from services import rss_service
+
+        pool = get_pool()
+        async with pool.acquire() as conn:
+            stats = await rss_service.fetch_and_ingest_feeds(conn)
+            sent = await rss_service.send_pending_telegram_alerts(conn)
+            
+        log.info(
+            "[scheduler] Ingesting RSS feeds done — parsed=%d, auto_approved=%d, alerts_sent=%d",
+            stats.get("processed", 0), stats.get("auto_approved", 0), sent
+        )
+    except Exception as exc:
+        log.exception("[scheduler] Ingesting RSS feeds failed: %s", exc)
 
 
 # ---------------------------------------------------------------------------

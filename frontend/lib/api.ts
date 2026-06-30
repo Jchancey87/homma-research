@@ -763,3 +763,53 @@ export const getAlertsPerformance = (days = 30) =>
   api.get<AlertsPerformance>('/api/alerts/performance', {
     params: { days }
   }).then(r => r.data)
+
+// ── RSS Curation ──────────────────────────────────────────────────────────
+
+export interface RSSSource {
+  id: number
+  name: string
+  feed_url: string
+  category: 'biotech' | 'tech' | 'general'
+  is_active: boolean
+  last_polled_at: string | null
+  created_at: string
+}
+
+export interface RSSFeedPoolItem {
+  id: number
+  source_id: number
+  guid: string
+  title: string
+  description: string | null
+  link: string
+  published_at: string
+  detected_tickers: string[]
+  sector: string | null
+  status: 'pending' | 'approved' | 'rejected'
+  created_at: string
+}
+
+export const getRSSSources = () =>
+  api.get<RSSSource[]>('/api/rss/sources').then(r => r.data)
+
+export const createRSSSource = (data: { name: string; feed_url: string; category: string; is_active?: boolean }) =>
+  api.post<{ id: number; message: string }>('/api/rss/sources', data).then(r => r.data)
+
+export const updateRSSSource = (id: number, data: { name?: string; feed_url?: string; category?: string; is_active?: boolean }) =>
+  api.put<{ message: string }>(`/api/rss/sources/${id}`, data).then(r => r.data)
+
+export const deleteRSSSource = (id: number) =>
+  api.delete<{ message: string }>(`/api/rss/sources/${id}`).then(r => r.data)
+
+export const getRSSPool = (status = 'pending') =>
+  api.get<RSSFeedPoolItem[]>('/api/rss/pool', { params: { status } }).then(r => r.data)
+
+export const triggerRSSIngest = () =>
+  api.post<{ message: string; stats: any }>('/api/rss/pool/trigger-ingest').then(r => r.data)
+
+export const curateRSSItem = (id: number, data: { title: string; description: string; associated_tickers: string[]; curated_notes?: string }) =>
+  api.post<{ message: string }>(`/api/rss/pool/${id}/curate`, data).then(r => r.data)
+
+export const rejectRSSItem = (id: number) =>
+  api.post<{ message: string }>(`/api/rss/pool/${id}/reject`).then(r => r.data)

@@ -1306,3 +1306,33 @@ Optimized `/health` to use pool connection health check. Created `/api/market/da
 * **Continuation Picks Router (`backend/fastapi_app/routers/continuation.py`)**: Integrated `_clean_nans` cleanup into `list_picks` router endpoint, ensuring stability during test performance runs.
 * **TimescaleDB Compression Policy Verification**: Verified policy compression job `1006` active, scheduled, and configured on `price_history_1min` hypertable for 7-day INTERVAL.
 * **Testing**: Added unit tests in `backend/tests/test_market.py`. Passed all 259 backend tests.
+
+---
+
+## [2026-06-28] Security: Add CSP and HSTS Headers
+
+### Summary
+* Added security headers (CSP, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy) frontend next.config.mjs, backend fastapi_app/main.py.
+
+### What Changed
+* `frontend/next.config.mjs`: Added `securityHeaders`. Configured `headers()` returning CSP (unsafe-inline/unsafe-eval scripts, unsafe-inline styles, connect-src self/domain/localhost), HSTS max-age=63072000.
+* `backend/fastapi_app/main.py`: Imported `Request`. Added `add_security_headers` middleware adding STS, CSP, X-Content-Type-Options, X-Frame-Options, Referrer-Policy.
+* `tests`: Passed 259 backend tests. Built frontend next.
+
+
+---
+
+## [2026-06-30] Curated RSS Feed Service and Curation Manager UI
+
+### Summary
+* Added self-hosted curated RSS feed service. Auto-curates tech/biotech catalysts. Serves enriched feed, notifies Telegram. Added Next.js curation dashboard.
+
+### What Changed
+* **Database (`backend/models/schema.sql`)**: Appended tables `rss_sources`, `rss_feed_pool`, `curated_rss_items`. Added indices. Seeded feeds (Fierce Biotech, BioPharma Dive, Endpoints News, TechCrunch, VentureBeat).
+* **DB Module (`backend/fastapi_app/db/rss.py`)**: Created DB async operations conforming to RFC-005.
+* **Services Layer (`backend/services/rss_service.py`)**: Ingest daemon task parsing feeds via ElementTree. Scans keywords, matches watchlist/gainer tickers. Option B auto-approves. Dynamic RSS 2.0 XML generator with live quote enrichment. Telegram notification worker, truncates description to 500 characters.
+* **FastAPI Router (`backend/fastapi_app/routers/rss.py`)**: Added thin REST endpoints for feed sources, staging pool curation, and public feed. Registered in `main.py`.
+* **Task Scheduler (`backend/fastapi_app/scheduler.py`)**: Added Job 7 running feed ingest/notify task every 15 minutes.
+* **Curation UI (`frontend/app/rss/page.tsx`)**: Created manager UI in TradeStation matte black theme. Handles source editing, pool manual approval modal, and ingestion manual triggers.
+* **NavBar (`frontend/components/NavBar.tsx`)**: Added RSS Curation entry with Rss icon.
+* **Testing**: Created integration tests `backend/tests/test_rss.py`. All 264 pytest runs pass. Frontend typechecks OK.

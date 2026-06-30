@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   BarChart2, Camera, LayoutDashboard, LayoutGrid,
-  Search, Bookmark, FileText, AreaChart, Sun, Moon, Menu, X, Bell, Zap
+  Search, Bookmark, FileText, AreaChart, Sun, Moon, Menu, X, Bell, Zap, Rss
 } from 'lucide-react'
 
 const links = [
@@ -18,6 +18,7 @@ const links = [
   { href: '/research',     label: 'Research',       icon: Search },
   { href: '/watchlist',    label: 'Watchlist',      icon: Bookmark },
   { href: '/observations', label: 'Observations',   icon: FileText },
+  { href: '/rss',          label: 'RSS Curation',   icon: Rss },
 ]
 
 export default function NavBar() {

@@ -12,7 +12,7 @@ import sys
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 import asyncpg
 
@@ -88,6 +88,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
+    response.headers["Content-Security-Policy"] = "default-src 'self';"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "origin-when-cross-origin"
+    return response
+
 # ---------------------------------------------------------------------------
 # Built-in routes
 # ---------------------------------------------------------------------------
@@ -129,11 +139,12 @@ from .routers import chart as chart_router
 app.include_router(chart_router.router, prefix="/api")
 
 # Phase 4 routers
-from .routers import analysis, alerts, market_data, strategies
+from .routers import analysis, alerts, market_data, strategies, rss
 app.include_router(analysis.router, prefix="/api")
 app.include_router(alerts.router, prefix="/api")
 app.include_router(market_data.router, prefix="/api")
 app.include_router(strategies.router, prefix="/api")
+app.include_router(rss.router, prefix="/api")
 
 # Serve static storage files (charts, screenshots)
 from fastapi.staticfiles import StaticFiles

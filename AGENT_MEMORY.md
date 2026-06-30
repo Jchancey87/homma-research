@@ -29,10 +29,10 @@
 * **US/Eastern tz:** `from validation import EASTERN_TZ` — `pytz.timezone("America/New_York")` singleton. Replaces `pytz.timezone("US/Eastern")` and `pytz.timezone("America/New_York")` everywhere. APScheduler `CronTrigger(..., timezone=EASTERN_TZ)` and Celery `timezone=EASTERN_TZ` (object, not string). Test guard in `tests/test_validation_helpers.py` walks `backend/` and fails on rogue `pytz.timezone(...)` constructors.
 
 ### 5. db/ Module Convention (RFC-005)
-* 7 new `db/` modules: `observations`, `charts`, `watchlist`, `market`, `screener_alerts`, `continuation_picks`, `daily_gainers`. Mirror `db/ohlcv.py` pattern.
+* 8 `db/` modules: `observations`, `charts`, `watchlist`, `market`, `screener_alerts`, `continuation_picks`, `daily_gainers`, `rss`. Mirror `db/ohlcv.py` pattern.
 * **Rule:** Every public function takes `conn: asyncpg.Connection` as the first positional arg. Returns plain dicts/lists/booleans (no `Record` leak).
 * **Conventions:** `*_exists` returns `bool`. `update_*` accepts `dict` of column→value pairs and builds the SET clause internally. `delete_*`/`update_*` return `bool` from asyncpg's `"<n>"` status. `list_*` returns `list[dict]`. `get_*` returns `dict | None`.
-* **7 audit routers** (observations, charts, watchlist, market, alerts, continuation, gainers) contain zero raw SQL. `routers/analysis.py` still has some on `llm_jobs`/`research_cache` — out of audit scope (already covered by RFC-001 chart_data_service).
+* **8 audit routers** (observations, charts, watchlist, market, alerts, continuation, gainers, rss) contain zero raw SQL. `routers/analysis.py` still has some on `llm_jobs`/`research_cache` — out of audit scope (already covered by RFC-001 chart_data_service).
 
 ### 8. Morning Scanner Scheduling (RFC-010)
 * `momentum_screener/morning/scheduler.py::ScheduledTask(hour, minute, fn, *, name, tz=US/Central, weekdays_only=True, poll_seconds=30, now_fn=None)` — daily one-shot scheduler. Pure `should_run(now)` decision method (testable without threads); `_loop()` calls it in a daemon thread.
@@ -48,7 +48,7 @@
 ### 7. Testing & DevOps
 * **Venv Testing:** Execute backend tests using `/opt/trading-journal/backend/venv/bin/pytest`.
 * **Async tests:** Run with `-p no:anyio` for clean asyncio loops.
-* **Test surface:** 259 passing, 0 regressions.
+* **Test surface:** 264 passing, 0 regressions.
 * **Deploy:** Run `sudo /opt/trading-journal/deploy.sh` (push from `/home/jackc/projects/homma-research` first).
 
 ### 9. Optimization, Dashboards, and TimescaleDB Policies
@@ -56,10 +56,16 @@
 * **Dashboard Overview:** Consolidated `/api/market/dashboard-overview` route gathers breadth, calendar, momentum, watchlist, and other dashboard data in parallel. Clean recursive `NaN` protection implemented.
 * **TimescaleDB Compression Policy:** Enabled on `price_history_1min` hypertable for chunks older than 7 days.
 
+### 10. RSS Curation System
+* **RSS Ingestion & Curation:** Ingests active feeds every 15 mins (Job 7). Matches against target tickers (watchlist + daily gainers). Option B auto-approves if regulatory/catalyst keywords match. Remaining items staged in `rss_feed_pool` as `pending`.
+* **Feed Generation:** Served at `/api/rss/feed` XML, dynamically enriched with live quotes (price, change, volume) via `live_quotes_service`.
+* **Syndication:** Approved items sent to Telegram, truncated to 500 characters to fit API payload limits.
+* **UI Manager:** Next.js `/rss` curation manager page styled in TradeStation matte black.
+
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Optimize `/health`, create `/api/market/dashboard-overview` with parallel fetching, enable TimescaleDB compression.
-* **Status:** Complete. All tests passed.
-* **Assumptions:** TimescaleDB active, connection pool safe for concurrent connection acquisition.
+* **Goal:** Research and implement curated RSS feed.
+* **Status:** Complete. DB schema migration, backend routes, services, unit tests, and Next.js curation UI fully implemented and verified.
+* **Assumptions:** Curation and staging tables populated, background worker registered, XML syndication output verified.
 
 ## 🗑️ Rot & Pruning Log
 * Pruned old session goals.
