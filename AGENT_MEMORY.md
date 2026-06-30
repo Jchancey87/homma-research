@@ -64,9 +64,9 @@
 * **UI Manager:** Next.js `/rss` curation manager page styled in TradeStation matte black.
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Verify 3s websocket streamer status, diagnose/fix faults.
-* **Status:** Complete. Fixed subscription reset bug in `update_subscriptions` (`level_one_equity_subs` replaced all subscriptions; replaced with `level_one_equity_add`). Deployed, verified active stream count.
-* **Assumptions:** Daemon `schwab-streamer` active. Uses Schwab OAuth token. Publishes Redis channel `screener:quotes`.
+* **Goal:** Implement rank change indicators next to ticker in live screener.
+* **Status:** Adding previous rank tracking state in `GainerTable.tsx`. Replacing speculative/FT badges with green/red rank change spot arrows.
+* **Assumptions:** Ranks computed relative to previous fetch. Styled in TradeStation matte black, sharp 90deg borders.
 
 ## 🗑️ Rot & Pruning Log
 * Pruned old session goals.

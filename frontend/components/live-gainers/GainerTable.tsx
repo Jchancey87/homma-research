@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, Fragment, useEffect } from 'react'
+import { useState, Fragment, useEffect, useRef } from 'react'
 import { LiveGainerRow } from '@/lib/api'
 import { Sparkline } from '@/components/Sparkline'
 import { getMomStyle } from '@/lib/momentum'
@@ -51,6 +51,22 @@ export function GainerTable({
   const [sortKey, setSortKey] = useState<SortKey>(defaultSortKey)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>(defaultSortDir)
   const [showSchwabTooltip, setShowSchwabTooltip] = useState(false)
+  const [prevRanks, setPrevRanks] = useState<Record<string, number>>({})
+  const prevListRef = useRef<LiveGainerRow[]>([])
+
+  useEffect(() => {
+    if (fullList && fullList.length > 0) {
+      const prevList = prevListRef.current
+      if (prevList.length > 0) {
+        const oldRanks: Record<string, number> = {}
+        prevList.forEach((item, idx) => {
+          oldRanks[item.ticker] = idx + 1
+        })
+        setPrevRanks(oldRanks)
+      }
+      prevListRef.current = fullList
+    }
+  }, [fullList])
 
   useEffect(() => {
     const checkTime = () => {
@@ -197,6 +213,9 @@ export function GainerTable({
                 const consolStatus = computeConsolStatus(g.zen_v, g.mom_2m)
 
                 const isFlashing = !!flashingTickers[g.ticker]
+                const prevRank = prevRanks[g.ticker]
+                const rankChange = prevRank !== undefined ? prevRank - originalRank : 0
+
                 return (
                   <Fragment key={g.ticker}>
                     <tr
@@ -223,32 +242,26 @@ export function GainerTable({
                           <span className="font-bold text-white group-hover:text-emerald-400 transition-colors font-mono flex items-center gap-1.5">
                             {g.ticker}
                           </span>
-                          <div className="flex items-center gap-0.5 shrink-0 select-none">
+                          <div className="flex items-center gap-1 shrink-0 select-none font-mono">
                             {lockedTicker === g.ticker && (
-                              <span className="relative group/tooltip inline-flex items-center p-0.5 rounded text-[8px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                              <span className="relative group/tooltip inline-flex items-center p-0.5 rounded-none text-[8px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                                 <Pin size={8} className="fill-current" />
-                                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/tooltip:block bg-gray-950 border border-gray-800 text-white text-[10px] font-medium py-1 px-2 rounded shadow-2xl whitespace-nowrap z-50">
+                                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/tooltip:block bg-gray-950 border border-gray-800 text-white text-[10px] font-medium py-1 px-2 rounded-none shadow-2xl whitespace-nowrap z-50">
                                   Pinned open (Click to toggle)
                                   <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-950" />
                                 </span>
                               </span>
                             )}
-                            {g.is_follow_through && (
-                              <span className="relative group/tooltip inline-flex items-center px-1 py-0.25 rounded text-[8px] font-black bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                                FT
-                                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/tooltip:block bg-gray-950 border border-gray-800 text-white text-[10px] font-medium py-1 px-2 rounded shadow-2xl whitespace-nowrap z-50">
-                                  FT = Fast Trade (24h)
-                                  <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-950" />
-                                </span>
+                            {rankChange > 0 && (
+                              <span className="inline-flex items-center gap-0.5 px-1 py-0.25 rounded-none text-[9px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                <ChevronUp size={10} className="stroke-[3]" />
+                                {rankChange}
                               </span>
                             )}
-                            {g.catalyst === 'Speculative' && (
-                              <span className="relative group/tooltip inline-flex items-center px-1 py-0.25 rounded text-[8px] font-black bg-gray-500/20 text-gray-400 border border-gray-500/30">
-                                ? SPEC
-                                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/tooltip:block bg-gray-950 border border-gray-800 text-white text-[10px] font-medium py-1 px-2 rounded shadow-2xl whitespace-nowrap z-50">
-                                  Speculative — low/unknown RVOL, no confirmed catalyst
-                                  <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-950" />
-                                </span>
+                            {rankChange < 0 && (
+                              <span className="inline-flex items-center gap-0.5 px-1 py-0.25 rounded-none text-[9px] font-bold bg-red-500/20 text-red-400 border border-red-500/30">
+                                <ChevronDown size={10} className="stroke-[3]" />
+                                {Math.abs(rankChange)}
                               </span>
                             )}
                           </div>
