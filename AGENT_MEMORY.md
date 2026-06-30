@@ -23,6 +23,7 @@
 * **Caching & Sparklines:** 30s minute-cache updates metrics inline. Daily cache holds 5d metrics. Flush caches on market session transitions. `sparkline_1h` caches last 60m of minute closes.
 * **Filters:** MIN_GAP_PCT=5.0, MIN_PRICE=$0.50, MAX_PRICE=$100.
 * **Polling:** FAST_REFRESH_SECONDS=2 (streaming), SLOW_REFRESH_SECONDS=60 (REST). CACHE_TTL_SECONDS=3 (frontend poll hint). /gainers/live returns redis_connected, fast_mode_active, and streaming_symbols_count. Both frontend daily-charts and LiveGainers poll at 3s and render status badges.
+* **Subscription Loop:** `stream_client.py` uses `level_one_equity_add` for new symbols in `update_subscriptions`. Outdated `level_one_equity_subs` replaced all active subscriptions at Schwab.
 
 ### 4. Validation Helpers (RFC-004 QW-4)
 * **Ticker normalisation:** `from validation import normalize_ticker` — uppercase + strip. Replaces inline `ticker.upper().strip()`. Legacy `_upper_strip` alias kept in `validation/schemas.py` for in-module use only.
@@ -63,9 +64,9 @@
 * **UI Manager:** Next.js `/rss` curation manager page styled in TradeStation matte black.
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Research and implement curated RSS feed.
-* **Status:** Complete. DB schema migration, backend routes, services, unit tests, and Next.js curation UI fully implemented and verified.
-* **Assumptions:** Curation and staging tables populated, background worker registered, XML syndication output verified.
+* **Goal:** Verify 3s websocket streamer status, diagnose/fix faults.
+* **Status:** Complete. Fixed subscription reset bug in `update_subscriptions` (`level_one_equity_subs` replaced all subscriptions; replaced with `level_one_equity_add`). Deployed, verified active stream count.
+* **Assumptions:** Daemon `schwab-streamer` active. Uses Schwab OAuth token. Publishes Redis channel `screener:quotes`.
 
 ## 🗑️ Rot & Pruning Log
 * Pruned old session goals.

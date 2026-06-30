@@ -287,7 +287,7 @@ class SchwabStreamer:
                     logger.info(f"Subscribing to new symbols: {to_sub}")
                     # Subscribe Level 1 Quotes
                     # Fields: 0: LAST_PRICE, 1: BID_PRICE, 2: ASK_PRICE, 3: TOTAL_VOLUME, 4: HIGH_PRICE, 5: LOW_PRICE, 6: OPEN_PRICE
-                    await self.stream_client.level_one_equity_subs(list(to_sub))
+                    await self.stream_client.level_one_equity_add(list(to_sub))
                     self.subscribed_symbols.update(to_sub)
                     
                 if to_unsub:

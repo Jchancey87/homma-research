@@ -1336,3 +1336,14 @@ Optimized `/health` to use pool connection health check. Created `/api/market/da
 * **Curation UI (`frontend/app/rss/page.tsx`)**: Created manager UI in TradeStation matte black theme. Handles source editing, pool manual approval modal, and ingestion manual triggers.
 * **NavBar (`frontend/components/NavBar.tsx`)**: Added RSS Curation entry with Rss icon.
 * **Testing**: Created integration tests `backend/tests/test_rss.py`. All 264 pytest runs pass. Frontend typechecks OK.
+
+---
+
+## [2026-06-30] Fix Schwab Streaming Price WebSocket Subscription Loop
+
+### Summary
+* Fixed websocket streamer resetting subscriptions to new additions only. Replaced `level_one_equity_subs` with `level_one_equity_add`.
+
+### What Changed
+* **Streaming Client (`momentum_screener/schwab/stream_client.py`)**: Replaced `level_one_equity_subs` (overrides Schwab's subscription list) with `level_one_equity_add` (appends new symbols) in `update_subscriptions` loop. Deployed to production.
+* **Testing**: Passed all 264 backend test cases. Verified live API stats (`streaming_symbols_count` remains correct).
