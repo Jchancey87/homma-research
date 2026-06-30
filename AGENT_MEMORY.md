@@ -24,6 +24,7 @@
 * **Filters:** MIN_GAP_PCT=5.0, MIN_PRICE=$0.50, MAX_PRICE=$100.
 * **Polling:** FAST_REFRESH_SECONDS=2 (streaming), SLOW_REFRESH_SECONDS=60 (REST). CACHE_TTL_SECONDS=3 (frontend poll hint). /gainers/live returns redis_connected, fast_mode_active, and streaming_symbols_count. Both frontend daily-charts and LiveGainers poll at 3s and render status badges.
 * **Subscription Loop:** `stream_client.py` uses `level_one_equity_add` for new symbols in `update_subscriptions`. Outdated `level_one_equity_subs` replaced all active subscriptions at Schwab.
+* **Rank Change Indicators:** `GainerTable.tsx` tracks previous ranks via React state/ref. Computes rank shifts between polls, rendering green ChevronUp or red ChevronDown next to ticker. Removed FT and Speculative badges.
 
 ### 4. Validation Helpers (RFC-004 QW-4)
 * **Ticker normalisation:** `from validation import normalize_ticker` — uppercase + strip. Replaces inline `ticker.upper().strip()`. Legacy `_upper_strip` alias kept in `validation/schemas.py` for in-module use only.
@@ -64,9 +65,9 @@
 * **UI Manager:** Next.js `/rss` curation manager page styled in TradeStation matte black.
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Implement rank change indicators next to ticker in live screener.
-* **Status:** Adding previous rank tracking state in `GainerTable.tsx`. Replacing speculative/FT badges with green/red rank change spot arrows.
-* **Assumptions:** Ranks computed relative to previous fetch. Styled in TradeStation matte black, sharp 90deg borders.
+* **Goal:** Session completed.
+* **Status:** Wrapped. Verified websocket streaming fix and live screener rank change indicators active.
+* **Assumptions:** None.
 
 ## 🗑️ Rot & Pruning Log
 * Pruned old session goals.
