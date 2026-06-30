@@ -1347,3 +1347,13 @@ Optimized `/health` to use pool connection health check. Created `/api/market/da
 ### What Changed
 * **Streaming Client (`momentum_screener/schwab/stream_client.py`)**: Replaced `level_one_equity_subs` (overrides Schwab's subscription list) with `level_one_equity_add` (appends new symbols) in `update_subscriptions` loop. Deployed to production.
 * **Testing**: Passed all 264 backend test cases. Verified live API stats (`streaming_symbols_count` remains correct).
+
+---
+
+## [2026-06-30] Live Screener Rank Change Indicators
+
+### Summary
+* Added green/red rank change spot arrows next to ticker symbols in live gainers table. Replaced unneeded speculative/FT badges.
+
+### What Changed
+* **Gainer Table (`frontend/components/live-gainers/GainerTable.tsx`)**: Added `prevRanks` state and list reference tracking. Calculates rank spot difference relative to previous data fetch. Renders ChevronUp/Down styled in TradeStation green/red sharp border box with shift count. Removed Speculative and FT badges next to ticker symbol. Deployed to production.
