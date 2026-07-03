@@ -2,7 +2,16 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
-## [2026-06-26] WebSocket Streaming Status & Redis Connectivity Indicators
+## [2026-07-01] NavBar clean up: Grouped journals and research under dropdowns
+
+### Summary
+* Grouped Alert Journal, Continuation Journal, Observations links under Journal dropdown. Grouped Research, Watchlist under Research dropdown.
+
+### What Changed
+* frontend/components/NavBar.tsx: Removed flat array. Split links into mainLinks, journalLinks, researchLinks. Integrated state variables `journalOpen` and `researchOpen` with outside-click listener. Renders Lucide BookOpen and ChevronDown icons. Sub-grouped links under headers with indents on mobile layout.
+* AGENT_MEMORY.md: Documented updated menu goals in session branch.
+
+---
 
 ### Summary
 * Added status flags for Redis connection and Fast Mode streaming activity. Integrated indicators in daily-charts page header and main LiveGainers table. Increased polling rate to 3s.

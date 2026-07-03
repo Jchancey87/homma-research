@@ -102,3 +102,21 @@ async def test_rss_feed_xml_endpoint(client):
     assert resp.headers["content-type"] == "application/rss+xml"
     assert "<?xml" in resp.text
     assert "<rss" in resp.text
+
+
+def test_company_name_cleaning():
+    from services.rss_service import clean_company_name
+    assert clean_company_name("AstraZeneca PLC") == "ASTRAZENECA"
+    assert clean_company_name("Sadot Group Inc") == "SADOT"
+    assert clean_company_name("Bright Minds Biosciences") == "BRIGHT MINDS"
+    assert clean_company_name("Sandoz Group AG") == "SANDOZ"
+
+
+def test_get_company_search_phrases():
+    from services.rss_service import get_company_search_phrases
+    phrases = get_company_search_phrases("AZN", "AstraZeneca PLC")
+    assert "ASTRAZENECA" in phrases
+
+    phrases_common = get_company_search_phrases("DRUG", "Bright Minds Biosciences")
+    assert "BRIGHT MINDS" in phrases_common
+

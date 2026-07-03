@@ -46,6 +46,7 @@
 * **Interaction:** Toggle row expansion on click. No hover handlers.
 * **Audio/Charts:** Dynamic chimes via Web Audio API. Split chart hooks (init vs decorators) in `page.tsx`.
 * **TradeStation Style:** High density look. Matte black (#000000). Sharp 90deg edges (rounded-none). 1px charcoal grid gaps. Stark dotted canvas grid (#444444, style: 1). Neon series colors (bull #00ff00, bear #ff003c). Overlay HUD info (symbol, change %, EMA coordinates, volume color mapping) inside canvas to minimize vertical padding. Applied universally across all pages, NavBar, tables, details, badges, inputs.
+* **Continuation Journal:** Card-based UI grouped by date. Left colored border reflects tracking outcomes (Runner, Win, Flat, Fade, Active). Custom SVG inline sparklines show 3-day closes. Details pane opens inline. Scorecard metrics rendered as visual stacked percentage edge bars instead of static tables.
 
 ### 7. Testing & DevOps
 * **Venv Testing:** Execute backend tests using `/opt/trading-journal/backend/venv/bin/pytest`.
@@ -59,15 +60,17 @@
 * **TimescaleDB Compression Policy:** Enabled on `price_history_1min` hypertable for chunks older than 7 days.
 
 ### 10. RSS Curation System
-* **RSS Ingestion & Curation:** Ingests active feeds every 15 mins (Job 7). Matches against target tickers (watchlist + daily gainers). Option B auto-approves if regulatory/catalyst keywords match. Remaining items staged in `rss_feed_pool` as `pending`.
+* **RSS Ingestion & Curation:** Ingests active feeds every 15 mins (Job 7). Matches against target tickers (watchlist + daily gainers) using `stock_fundamentals` mapping to search for both cleaned company names and tickers. Restricts common/short words to strict regex patterns (requiring `$` or brackets/parentheses). Catalyst matches use regex word boundaries. Option B auto-approves if regulatory/catalyst keywords match. Remaining items staged in `rss_feed_pool` as `pending`.
 * **Feed Generation:** Served at `/api/rss/feed` XML, dynamically enriched with live quotes (price, change, volume) via `live_quotes_service`.
 * **Syndication:** Approved items sent to Telegram, truncated to 500 characters to fit API payload limits.
 * **UI Manager:** Next.js `/rss` curation manager page styled in TradeStation matte black.
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Session completed.
-* **Status:** Wrapped. Verified websocket streaming fix and live screener rank change indicators active.
+* **Goal:** Reduce RSS ticker hallucinations and improve trade actionability. Fix catalyst keyword substring matches. Map tickers to company names using `stock_fundamentals` and restrict common word/short tickers to strict regex prefixes (e.g. `$TICKER` or parenthesized).
+* **Status:** Wrapped.
 * **Assumptions:** None.
 
 ## 🗑️ Rot & Pruning Log
 * Pruned old session goals.
+
+

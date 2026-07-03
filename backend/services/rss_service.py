@@ -30,6 +30,61 @@ CATALYST_KEYWORDS = {
     "biopharma", "therapeutic", "vaccine", "oncology"
 }
 
+COMMON_WORDS_OR_ABBREVIATIONS = {
+    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+    "AM", "AN", "AS", "AT", "BE", "BY", "DO", "GO", "HE", "IF", "IN", "IS", "IT", "ME", "MY", "NO", "OF", "ON", "OR", "SO", "TO", "UP", "US", "WE",
+    "ALL", "AND", "ANY", "ARE", "BAD", "BIG", "BOY", "BUS", "BUT", "BUY", "CAN", "CAR", "CAT", "DAY", "DID", "DOG", "DRY", "END", "EST", "FAR", 
+    "FAT", "FIT", "FLY", "FOR", "FUN", "GAS", "GET", "HAD", "HAS", "HER", "HIM", "HIS", "HOT", "HOW", "ICE", "ITS", "JOB", "KEY", "LAW", "LOW", 
+    "MAN", "MAP", "MAY", "MET", "MIN", "MAX", "NET", "NEW", "NOT", "NOW", "OFF", "OIL", "ONE", "OUT", "PAY", "RED", "RUN", "SAD", "SEA", "SEE", 
+    "SIX", "SON", "TAX", "TEN", "THE", "TOP", "TRY", "TWO", "WAS", "WAY", "WEB", "WET", "WHO", "WHY", "HOW",
+    "ALSO", "BACK", "BEEN", "BEST", "BLUE", "CAME", "COME", "COOK", "DEAR", "DONE", "DOES", "DRUG", "EACH", "EVER", "FEED", "FIND", "FINE", 
+    "FISH", "FIVE", "FOUR", "FROM", "GAVE", "GLUE", "GOLD", "GOOD", "HAVE", "HEAR", "HERE", "HIGH", "HILL", "HIT", "HOME", "HOOD", "INTO", 
+    "JUST", "KNEW", "KNOW", "LAND", "LAST", "LESS", "LIFE", "LIVE", "LONG", "LOOK", "LOOP", "LUNG", "MADE", "MAKE", "MANY", "MARK", "MASS", 
+    "MATH", "MEET", "MIND", "MORE", "MOVE", "MUST", "NAME", "NEXT", "ONCE", "ONLY", "OPEN", "OVER", "PACK", "PART", "PLAY", "PLUG", "REAL", 
+    "RIDE", "SAID", "SAME", "SEEM", "SEND", "SHOW", "SIDE", "SOME", "SOON", "SPEC", "SUCH", "SURE", "TAKE", "TALK", "THAT", "THEM", "THEN", 
+    "THEY", "THIS", "TIME", "TOLD", "TOOK", "TOWN", "UPON", "VERY", "WANT", "WARM", "WAVE", "WENT", "WERE", "WHAT", "WHEN", "WHOM", "WILD", 
+    "WILL", "WIND", "WITH", "WORK", "YOUR",
+    "AI", "CEO", "CFO", "FDA", "IPO", "SEC", "PR", "PE", "EPS", "ETF", "USA", "UK", "CISO", "DOCS", "GPUS", "CSPC"
+}
+
+def clean_company_name(name: str) -> str:
+    """Extract core company name by removing suffixes and descriptors."""
+    name = re.sub(r'[\(\[\{].*?[\)\]\}]', '', name)
+    name = re.sub(r'[.,\/#!$%\^&\*;:{}=\-_`~()]', ' ', name)
+    words = name.upper().split()
+    
+    suffixes = {
+        "INC", "INCORPORATED", "CORP", "CORPORATION", "LTD", "LIMITED",
+        "CO", "COMPANY", "HOLDING", "HOLDINGS", "HLDG", "HLDGS", "GROUP",
+        "PLC", "AG", "SA", "S.A.", "S.A", "NV", "N.V.", "SE", "KGAA", "PARTNERS",
+        "CORPORATE", "INTERNATIONAL", "INTL", "AMERICA", "USA", "UK",
+        "CLASS", "SERIES", "COMMON", "STOCK", "EQUITY", "SHS", "ADS", "GDR",
+        "PHARMACEUTICALS", "PHARMACEUTICAL", "PHARMA", "THERAPEUTICS", "THERAPEUTIC",
+        "MEDICINES", "MEDICINE", "BIOSCIENCES", "BIOSCIENCE", "BIOPHARMACEUTICALS",
+        "BIOPHARMA", "BIOTECHNOLOGY", "BIOTECH", "LABORATORIES", "LABS", "LAB",
+        "SYSTEMS", "SYSTEM", "DEVICES", "DEVICE", "GLOBAL", "INDUSTRIES", "INDUSTRY",
+        "SERVICES", "SERVICE", "SOLUTIONS", "SOLUTION", "HEALTHCARE", "HEALTH",
+        "MED", "TECH", "TECHNOLOGY", "TECHNORIES", "SCIENCES", "SCIENCE"
+    }
+    
+    cleaned_words = [w for w in words if w not in suffixes]
+    if not cleaned_words:
+        cleaned_words = [w for w in words if w]
+        
+    return " ".join(cleaned_words[:2])
+
+def get_company_search_phrases(ticker: str, full_name: str) -> list[str]:
+    """Get candidate matching phrases for a company name."""
+    phrases = []
+    if full_name and full_name.upper() != "UNKNOWN":
+        cleaned = clean_company_name(full_name)
+        if cleaned:
+            phrases.append(cleaned)
+        words = full_name.upper().split()
+        first_word = words[0] if words else ""
+        if len(first_word) > 3 and first_word not in COMMON_WORDS_OR_ABBREVIATIONS:
+            phrases.append(first_word)
+    return list(set(phrases))
 
 # ---------------------------------------------------------------------------
 # Feed Parsing (Built-in XML parsing to avoid external dependencies)
@@ -133,6 +188,13 @@ async def fetch_and_ingest_feeds(conn: asyncpg.Connection) -> dict[str, int]:
     gainers_rows = await conn.fetch("SELECT DISTINCT ticker FROM daily_gainers")
     target_tickers = {r["ticker"].upper() for r in watchlist_rows} | {r["ticker"].upper() for r in gainers_rows}
     
+    # Map tickers to company names using stock_fundamentals table
+    fundamentals_rows = await conn.fetch(
+        "SELECT symbol, company_name FROM stock_fundamentals WHERE symbol = ANY($1)",
+        list(target_tickers)
+    )
+    ticker_to_company = {r["symbol"].upper(): r["company_name"] for r in fundamentals_rows}
+    
     # 2. Get active sources
     sources = await db_rss.list_rss_sources(conn)
     active_sources = [s for s in sources if s["is_active"]]
@@ -156,13 +218,33 @@ async def fetch_and_ingest_feeds(conn: asyncpg.Connection) -> dict[str, int]:
                     
                     # Ticker extraction
                     text_to_search = f"{art['title']} {art['description']}".upper()
-                    detected = [
-                        ticker for ticker in target_tickers 
-                        if re.search(r'\b' + re.escape(ticker) + r'\b', text_to_search)
-                    ]
+                    detected = []
+                    for ticker in target_tickers:
+                        is_common = ticker in COMMON_WORDS_OR_ABBREVIATIONS or len(ticker) <= 2
+                        if is_common:
+                            ticker_regex = r'(?:\$' + re.escape(ticker) + r'\b|\b' + re.escape(ticker) + r'\b(?:\s*[\)\]:]|\s+COMMON))'
+                        else:
+                            ticker_regex = r'\b' + re.escape(ticker) + r'\b'
+                        
+                        has_ticker_match = re.search(ticker_regex, text_to_search)
+                        
+                        has_company_match = False
+                        company_name = ticker_to_company.get(ticker)
+                        if company_name and company_name.upper() != "UNKNOWN":
+                            search_phrases = get_company_search_phrases(ticker, company_name)
+                            for phrase in search_phrases:
+                                if phrase and re.search(r'\b' + re.escape(phrase) + r'\b', text_to_search):
+                                    has_company_match = True
+                                    break
+                                    
+                        if has_ticker_match or has_company_match:
+                            detected.append(ticker)
                     
                     # Auto-curation logic (Option B)
-                    is_catalyst = any(kw in text_to_search.lower() for kw in CATALYST_KEYWORDS)
+                    is_catalyst = any(
+                        re.search(r'\b' + re.escape(kw) + r'\b', text_to_search.lower())
+                        for kw in CATALYST_KEYWORDS
+                    )
                     should_approve = len(detected) > 0 and is_catalyst
                     status = "approved" if should_approve else "pending"
                     
