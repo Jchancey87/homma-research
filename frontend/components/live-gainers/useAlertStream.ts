@@ -3,15 +3,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 export interface AlertItem {
-  id:          string
-  ticker:      string
-  price:       number
-  alertType:   string
-  time:        string
-  volume?:     number
-  rvol?:       number
-  gapPct?:     number
-  floatShares?: number
+  id:            string
+  ticker:        string
+  price:         number
+  alertType:     string
+  time:          string
+  priorityTier?: string
+  strategyLabel?: string
+  catalyst?:     string
+  confluenceScore?: number
+  volume?:       number
+  rvol?:         number
+  gapPct?:       number
+  floatShares?:  number
 }
 
 const TOAST_TTL_MS       = 6_000
@@ -117,6 +121,9 @@ export function useAlertStream(): UseAlertStreamResult {
           gap_pct?: number
           float_shares?: number
           priority_tier?: string
+          priority_score?: number
+          strategy_label?: string
+          catalyst?: string
         }
         const ticker    = payload.symbol
         const price     = payload.price
@@ -131,6 +138,10 @@ export function useAlertStream(): UseAlertStreamResult {
           const newToast: AlertItem = {
             id, ticker, price, alertType,
             time: new Date().toLocaleTimeString(),
+            priorityTier: payload.priority_tier,
+            strategyLabel: payload.strategy_label,
+            catalyst: payload.catalyst,
+            confluenceScore: payload.priority_score,
           }
           setToasts(prev => [newToast, ...prev].slice(0, TOAST_STACK_CAP))
           setTimeout(() => {
@@ -142,6 +153,10 @@ export function useAlertStream(): UseAlertStreamResult {
           id: Math.random().toString(36).substring(2, 9),
           ticker, price, alertType,
           time: new Date().toLocaleTimeString(),
+          priorityTier: payload.priority_tier,
+          strategyLabel: payload.strategy_label,
+          catalyst: payload.catalyst,
+          confluenceScore: payload.priority_score,
           volume:     payload.volume,
           rvol:       payload.rvol,
           gapPct:     payload.gap_pct,

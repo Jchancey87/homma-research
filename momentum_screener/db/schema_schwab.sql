@@ -122,6 +122,11 @@ CREATE TABLE IF NOT EXISTS screener_alerts (
     feedback_notes  TEXT         DEFAULT NULL,
     priority_score  INTEGER      DEFAULT 0,
     priority_tier   VARCHAR(20)  DEFAULT 'Tier 3',
+    vwap_dist_pct   FLOAT        DEFAULT 0.0,
+    hod_dist_pct    FLOAT        DEFAULT 0.0,
+    catalyst        VARCHAR(50)  DEFAULT 'Technical / No News',
+    stop_price      FLOAT        DEFAULT 0.0,
+    stop_risk_pct   FLOAT        DEFAULT 0.0,
     PRIMARY KEY (id, alert_time)
 );
 
@@ -152,7 +157,12 @@ CREATE TABLE IF NOT EXISTS screener_alerts_archive (
     feedback_score  VARCHAR(10)  DEFAULT NULL,
     feedback_notes  TEXT         DEFAULT NULL,
     priority_score  INTEGER      DEFAULT 0,
-    priority_tier   VARCHAR(20)  DEFAULT 'Tier 3'
+    priority_tier   VARCHAR(20)  DEFAULT 'Tier 3',
+    vwap_dist_pct   FLOAT        DEFAULT 0.0,
+    hod_dist_pct    FLOAT        DEFAULT 0.0,
+    catalyst        VARCHAR(50)  DEFAULT 'Technical / No News',
+    stop_price      FLOAT        DEFAULT 0.0,
+    stop_risk_pct   FLOAT        DEFAULT 0.0
 );
 
 -- Continuous Aggregates for price_history_1min
@@ -201,3 +211,13 @@ ALTER TABLE public.screener_alerts ADD COLUMN IF NOT EXISTS priority_score INTEG
 ALTER TABLE public.screener_alerts ADD COLUMN IF NOT EXISTS priority_tier VARCHAR(20) DEFAULT 'Tier 3';
 ALTER TABLE public.screener_alerts_archive ADD COLUMN IF NOT EXISTS priority_score INTEGER DEFAULT 0;
 ALTER TABLE public.screener_alerts_archive ADD COLUMN IF NOT EXISTS priority_tier VARCHAR(20) DEFAULT 'Tier 3';
+ALTER TABLE public.screener_alerts ADD COLUMN IF NOT EXISTS vwap_dist_pct DOUBLE PRECISION DEFAULT 0.0;
+ALTER TABLE public.screener_alerts ADD COLUMN IF NOT EXISTS hod_dist_pct DOUBLE PRECISION DEFAULT 0.0;
+ALTER TABLE public.screener_alerts ADD COLUMN IF NOT EXISTS catalyst VARCHAR(50) DEFAULT 'Technical / No News';
+ALTER TABLE public.screener_alerts ADD COLUMN IF NOT EXISTS stop_price DOUBLE PRECISION DEFAULT 0.0;
+ALTER TABLE public.screener_alerts ADD COLUMN IF NOT EXISTS stop_risk_pct DOUBLE PRECISION DEFAULT 0.0;
+ALTER TABLE public.screener_alerts_archive ADD COLUMN IF NOT EXISTS vwap_dist_pct DOUBLE PRECISION DEFAULT 0.0;
+ALTER TABLE public.screener_alerts_archive ADD COLUMN IF NOT EXISTS hod_dist_pct DOUBLE PRECISION DEFAULT 0.0;
+ALTER TABLE public.screener_alerts_archive ADD COLUMN IF NOT EXISTS catalyst VARCHAR(50) DEFAULT 'Technical / No News';
+ALTER TABLE public.screener_alerts_archive ADD COLUMN IF NOT EXISTS stop_price DOUBLE PRECISION DEFAULT 0.0;
+ALTER TABLE public.screener_alerts_archive ADD COLUMN IF NOT EXISTS stop_risk_pct DOUBLE PRECISION DEFAULT 0.0;

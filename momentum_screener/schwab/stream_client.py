@@ -498,48 +498,6 @@ class SchwabStreamer:
             
             if alert_type == "HOD_BREAKOUT":
                 self.last_hod_breakout_time[symbol] = time.time()
-                
-            if priority_tier == 'Tier 3':
-                await self.save_alert_to_db(
-                    symbol=symbol,
-                    price=last_price,
-                    volume=total_volume,
-                    rvol=rvol,
-                    gap_pct=gap_pct,
-                    float_shares=fund['shares_outstanding'],
-                    alert_type=alert_type,
-                    priority_score=priority_score,
-                    priority_tier=priority_tier,
-                    short_int_float=fund.get('short_int_float', 0.0)
-                )
-                logger.info(f"💾 Alert {alert_type} for {symbol} saved to DB only (Tier 3)")
-                return True
-                
-            now = datetime.utcnow()
-            alert_db_row = await self.save_alert_to_db(
-                symbol=symbol,
-                price=last_price,
-                volume=total_volume,
-                rvol=rvol,
-                gap_pct=gap_pct,
-                float_shares=fund['shares_outstanding'],
-                alert_type=alert_type,
-                priority_score=priority_score,
-                priority_tier=priority_tier,
-                short_int_float=fund.get('short_int_float', 0.0)
-            )
-
-            bar_state = self.bars_1m.get(symbol)
-            open_price_ref = bar_state['open'] if bar_state and bar_state.get('open') else 0.0
-            daily_pct = ((last_price - open_price_ref) / open_price_ref * 100.0) if open_price_ref > 0 else 0.0
-
-            history = self.completed_bars_1m.get(symbol, [])
-            if history:
-                avg_candle_vol = int(sum(c['volume'] for c in history) / len(history))
-                last_candle_vol = history[-1]['volume'] if history else 0
-            else:
-                avg_candle_vol = 0
-                last_candle_vol = bar_state['last_volume'] - bar_state.get('start_volume', 0) if bar_state else 0
 
             v_state = self.vwap_state.get(symbol, {})
             vwap_ref = v_state['cum_vp'] / v_state['cum_vol'] if v_state.get('cum_vol', 0) > 0 else 0.0
@@ -556,6 +514,58 @@ class SchwabStreamer:
             elif low_price > 0 and low_price >= last_price * 0.90:
                 stop_price = low_price
             stop_risk_pct = ((last_price - stop_price) / last_price * 100.0) if last_price > 0 else 0.0
+                
+            if priority_tier == 'Tier 3':
+                await self.save_alert_to_db(
+                    symbol=symbol,
+                    price=last_price,
+                    volume=total_volume,
+                    rvol=rvol,
+                    gap_pct=gap_pct,
+                    float_shares=fund['shares_outstanding'],
+                    alert_type=alert_type,
+                    priority_score=priority_score,
+                    priority_tier=priority_tier,
+                    short_int_float=fund.get('short_int_float', 0.0),
+                    vwap_dist_pct=vwap_dist_pct,
+                    hod_dist_pct=hod_dist_pct,
+                    catalyst=catalyst_val,
+                    stop_price=stop_price,
+                    stop_risk_pct=stop_risk_pct
+                )
+                logger.info(f"💾 Alert {alert_type} for {symbol} saved to DB only (Tier 3)")
+                return True
+                
+            now = datetime.utcnow()
+            alert_db_row = await self.save_alert_to_db(
+                symbol=symbol,
+                price=last_price,
+                volume=total_volume,
+                rvol=rvol,
+                gap_pct=gap_pct,
+                float_shares=fund['shares_outstanding'],
+                alert_type=alert_type,
+                priority_score=priority_score,
+                priority_tier=priority_tier,
+                short_int_float=fund.get('short_int_float', 0.0),
+                vwap_dist_pct=vwap_dist_pct,
+                hod_dist_pct=hod_dist_pct,
+                catalyst=catalyst_val,
+                stop_price=stop_price,
+                stop_risk_pct=stop_risk_pct
+            )
+
+            bar_state = self.bars_1m.get(symbol)
+            open_price_ref = bar_state['open'] if bar_state and bar_state.get('open') else 0.0
+            daily_pct = ((last_price - open_price_ref) / open_price_ref * 100.0) if open_price_ref > 0 else 0.0
+
+            history = self.completed_bars_1m.get(symbol, [])
+            if history:
+                avg_candle_vol = int(sum(c['volume'] for c in history) / len(history))
+                last_candle_vol = history[-1]['volume'] if history else 0
+            else:
+                avg_candle_vol = 0
+                last_candle_vol = bar_state['last_volume'] - bar_state.get('start_volume', 0) if bar_state else 0
 
             alert_payload = {
                 'symbol': symbol,
@@ -907,16 +917,17 @@ class SchwabStreamer:
         #                     v_state['vwap_test'] = False
         #                     v_state['vwap_low'] = None
 
-    async def save_alert_to_db(self, symbol, price, volume, rvol, gap_pct, float_shares, alert_type, priority_score=0, priority_tier='Tier 3', short_int_float=None):
+    async def save_alert_to_db(self, symbol, price, volume, rvol, gap_pct, float_shares, alert_type, priority_score=0, priority_tier='Tier 3', short_int_float=None, vwap_dist_pct=0.0, hod_dist_pct=0.0, catalyst='Technical / No News', stop_price=0.0, stop_risk_pct=0.0):
         try:
             async with self.db_pool.acquire() as conn:
                 row = await conn.fetchrow("""
                     INSERT INTO screener_alerts (
                         symbol, trigger_price, total_volume, rvol, gap_pct,
-                        short_int_float, float_shares, alert_type, priority_score, priority_tier
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                        short_int_float, float_shares, alert_type, priority_score, priority_tier,
+                        vwap_dist_pct, hod_dist_pct, catalyst, stop_price, stop_risk_pct
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
                     RETURNING id, alert_time
-                """, symbol, price, volume, rvol, gap_pct, short_int_float, float_shares, alert_type, priority_score, priority_tier)
+                """, symbol, price, volume, rvol, gap_pct, short_int_float, float_shares, alert_type, priority_score, priority_tier, vwap_dist_pct, hod_dist_pct, catalyst, stop_price, stop_risk_pct)
                 return row
         except Exception as e:
             logger.error(f"Failed to save alert for {symbol} to database: {e}")

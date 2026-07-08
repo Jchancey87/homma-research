@@ -686,11 +686,18 @@ function AlertJournalContent() {
                       >
                         <div className="flex items-center justify-between">
                           <div className="space-y-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className="font-mono text-xs font-bold text-white">{alt.alert_type.replace('_', ' ')}</span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-mono text-xs font-bold text-white">{alt.alert_type.replace(/_/g, ' ')}</span>
+                              {/* Priority tier badge */}
+                              <span className={`px-1 py-0.5 text-[9px] font-mono font-bold border rounded-none ${
+                                alt.priority_tier === 'Tier 1' ? 'text-[#ff003c] border-[#ff003c]/40 bg-red-950/20'
+                                : alt.priority_tier === 'Tier 2' ? 'text-amber-400 border-amber-500/40 bg-amber-950/20'
+                                : 'text-gray-600 border-[#262626]'
+                              }`}>{alt.priority_tier ?? 'T3'}</span>
                             </div>
                             <div className="font-mono text-[10px] text-gray-500">
                               {localTime} · ${alt.trigger_price.toFixed(2)}
+                              {alt.priority_score ? <span className="ml-1 text-gray-700">· Score: {alt.priority_score}</span> : null}
                             </div>
                           </div>
 
@@ -744,9 +751,21 @@ function AlertJournalContent() {
 
                       {/* Info details */}
                       <div className="bg-black border border-[#262626] p-3 space-y-1">
+                        {/* Priority / Tier row */}
+                        <div className="flex justify-between items-center pb-1 mb-1 border-b border-[#1a1a1a]">
+                          <span className="font-mono text-[10px] text-gray-500">Priority:</span>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 text-[10px] font-mono font-bold border rounded-none ${
+                              selectedAlert.priority_tier === 'Tier 1' ? 'text-[#ff003c] border-[#ff003c]/40 bg-red-950/20'
+                              : selectedAlert.priority_tier === 'Tier 2' ? 'text-amber-400 border-amber-500/40 bg-amber-950/20'
+                              : 'text-gray-600 border-[#262626]'
+                            }`}>{selectedAlert.priority_tier ?? 'Tier 3'}</span>
+                            <span className="font-mono text-[10px] text-gray-500">Score: <span className="text-gray-300">{selectedAlert.priority_score ?? 0}</span></span>
+                          </div>
+                        </div>
                         <div className="flex justify-between">
                           <span className="font-mono text-[10px] text-gray-500">Trigger Type:</span>
-                          <span className="font-mono text-xs text-gray-300">{selectedAlert.alert_type}</span>
+                          <span className="font-mono text-xs text-gray-300">{selectedAlert.alert_type.replace(/_/g, ' ')}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="font-mono text-[10px] text-gray-500">Price:</span>
@@ -760,6 +779,40 @@ function AlertJournalContent() {
                           <span className="font-mono text-[10px] text-gray-500">RVOL:</span>
                           <span className="font-mono text-xs text-amber-400">{selectedAlert.rel_vol.toFixed(1)}x</span>
                         </div>
+                        {/* Context fields from confluence engine */}
+                        {selectedAlert.catalyst && (
+                          <div className="flex justify-between">
+                            <span className="font-mono text-[10px] text-gray-500">Catalyst:</span>
+                            <span className="font-mono text-xs text-[#00f0ff]">{selectedAlert.catalyst}</span>
+                          </div>
+                        )}
+                        {selectedAlert.vwap_dist_pct != null && (
+                          <div className="flex justify-between">
+                            <span className="font-mono text-[10px] text-gray-500">VWAP Dist:</span>
+                            <span className={`font-mono text-xs ${selectedAlert.vwap_dist_pct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                              {selectedAlert.vwap_dist_pct > 0 ? '+' : ''}{selectedAlert.vwap_dist_pct.toFixed(1)}%
+                            </span>
+                          </div>
+                        )}
+                        {selectedAlert.hod_dist_pct != null && (
+                          <div className="flex justify-between">
+                            <span className="font-mono text-[10px] text-gray-500">HOD Dist:</span>
+                            <span className={`font-mono text-xs ${selectedAlert.hod_dist_pct >= 0 ? 'text-emerald-400' : 'text-gray-400'}`}>
+                              {selectedAlert.hod_dist_pct > 0 ? '+' : ''}{selectedAlert.hod_dist_pct.toFixed(1)}%
+                            </span>
+                          </div>
+                        )}
+                        {selectedAlert.stop_price != null && selectedAlert.stop_price > 0 && (
+                          <div className="flex justify-between">
+                            <span className="font-mono text-[10px] text-gray-500">Stop Level:</span>
+                            <span className="font-mono text-xs text-rose-400">
+                              ${selectedAlert.stop_price.toFixed(2)}
+                              {selectedAlert.stop_risk_pct != null && selectedAlert.stop_risk_pct > 0 && (
+                                <span className="text-gray-600 ml-1">({selectedAlert.stop_risk_pct.toFixed(1)}% risk)</span>
+                              )}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Helpful / Noise Rating */}

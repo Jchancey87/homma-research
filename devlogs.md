@@ -3,6 +3,27 @@
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
 
+## [2026-07-08] Alert Journal + Live Gainers: Tier/Context fields surfaced
+
+### Summary
+* Alert Journal now shows priority tier badges, confluence score, and context fields (catalyst, VWAP dist%, HOD dist%, stop level/risk%) for each alert trigger.
+* Live Gainers toast notifications now show tier badge (T1 red, T2 amber, T3 gray), strategy label, and catalyst from the confluence engine.
+* Backend: `save_alert_to_db` now writes `vwap_dist_pct`, `hod_dist_pct`, `catalyst`, `stop_price`, `stop_risk_pct` to DB; `compute_daily_summary` SELECTs and returns these columns.
+* DB: Added the 5 context columns to `screener_alerts` and `screener_alerts_archive` (live migration applied + schema updated).
+* Tests: Fixed pre-existing bugs in `test_confluence.py` — `now_et` was passed positionally as `rvol`, and `fetchrow` mock lacked real return values causing JSON serialization failures. All 291 tests pass.
+
+### What Changed
+* `momentum_screener/schwab/stream_client.py`: `save_alert_to_db` signature/INSERT extended with 5 new context columns. Context field calculation moved before the Tier 3 early-exit branch so all tiers get context persisted.
+* `momentum_screener/db/schema_schwab.sql`: Added 5 new columns to both tables + idempotent ALTER TABLE migrations.
+* `backend/services/alerts_analytics.py`: `compute_daily_summary` SELECT extended; `_group_alerts_by_ticker` maps new fields to alert dict.
+* `frontend/lib/api.ts`: `AlertInstance` interface extended with `priority_score`, `priority_tier`, and 5 context fields.
+* `frontend/components/live-gainers/useAlertStream.ts`: `AlertItem` extended; SSE payload captures `strategy_label`, `catalyst`, `priority_score`.
+* `frontend/components/ToastStack.tsx`: Tier-aware border/dot color, strategy label, catalyst row on toast.
+* `frontend/app/alerts/page.tsx`: Alert list rows show tier badge + score; detail panel shows Priority section + Catalyst / VWAP dist / HOD dist / Stop level.
+* `backend/tests/test_confluence.py`: Fixed mock setup (`fetchrow` returns real dict), `calculate_confluence_score` calls use keyword `now_et=`.
+
+---
+
 ## [2026-07-08] Architectural Refactor: RFC-008 (Decouple Schwab streamer)
 
 ### Summary

@@ -24,7 +24,7 @@ async def test_calculate_confluence_score():
         # Mock regular session time (10:00 AM NY time)
         now_et = datetime.now(EASTERN_TZ).replace(hour=10, minute=0, second=0, microsecond=0)
         
-        score, tier = client.calculate_confluence_score("AAPL", "HOD_BREAKOUT", now_et)
+        score, tier = client.calculate_confluence_score("AAPL", "HOD_BREAKOUT", now_et=now_et)
         assert score == 115
         assert tier == "Tier 1"
 
@@ -36,7 +36,7 @@ async def test_calculate_confluence_score():
         client.fundamentals_cache = {"MSFT": {"float_category": "Low-Float"}}
         now_et_pre = datetime.now(EASTERN_TZ).replace(hour=8, minute=0, second=0, microsecond=0)
         
-        score, tier = client.calculate_confluence_score("MSFT", "VOLUME_SPIKE", now_et_pre)
+        score, tier = client.calculate_confluence_score("MSFT", "VOLUME_SPIKE", now_et=now_et_pre)
         assert score == 50
         assert tier == "Tier 2"
 
@@ -48,7 +48,7 @@ async def test_calculate_confluence_score():
         client.fundamentals_cache = {"TSLA": {"float_category": "High-Float"}}
         now_et_post = datetime.now(EASTERN_TZ).replace(hour=17, minute=0, second=0, microsecond=0)
         
-        score, tier = client.calculate_confluence_score("TSLA", "VOLATILITY_HALT", now_et_post)
+        score, tier = client.calculate_confluence_score("TSLA", "VOLATILITY_HALT", now_et=now_et_post)
         assert score == 20
         assert tier == "Tier 3"
 
@@ -83,6 +83,8 @@ async def test_gate_bypass_and_db_save():
         mock_conn = AsyncMock()
         mock_conn.fetchval = AsyncMock(return_value='OK')
         mock_conn.execute = AsyncMock()
+        # fetchrow used by save_alert_to_db — return a real dict so json.dumps doesn't fail
+        mock_conn.fetchrow = AsyncMock(return_value={'id': 1, 'alert_time': datetime.now()})
         
         mock_ctx = MagicMock()
         mock_ctx.__aenter__ = AsyncMock(return_value=mock_conn)
@@ -104,21 +106,22 @@ async def test_gate_bypass_and_db_save():
         # Watchlist gate is bypassed! Should process alert
         assert fired is True
         
-        # Verify save_alert_to_db was called with priority_score and priority_tier
-        mock_conn.execute.assert_called()
+        # Verify save_alert_to_db was called (uses fetchrow for the INSERT ... RETURNING)
+        assert mock_conn.fetchrow.called
         
-        # Inspect execution args to verify priority_score and priority_tier
-        args, kwargs = mock_conn.execute.call_args
+        # Inspect fetchrow args to verify priority_score and priority_tier
+        args, kwargs = mock_conn.fetchrow.call_args
         insert_query = args[0]
         assert "priority_score" in insert_query
         assert "priority_tier" in insert_query
         
-        # Check the values passed
-        execute_params = args[1:]
-        assert execute_params[0] == symbol
-        assert execute_params[1] == 12.50
-        assert execute_params[7] >= 60  # minimum score: catalyst (25) + float (20) + breakout (15) = 60
-        assert execute_params[8] in ("Tier 1", "Tier 2")
+        # Check the values passed (positional params: symbol, price, volume, rvol, gap_pct,
+        # short_int_float, float_shares, alert_type, priority_score, priority_tier, ...)
+        insert_params = args[1:]
+        assert insert_params[0] == symbol
+        assert insert_params[1] == 12.50
+        assert insert_params[8] >= 60  # minimum score: catalyst (25) + float (20) + breakout (15) = 60
+        assert insert_params[9] in ("Tier 1", "Tier 2")
 
 
 @pytest.mark.asyncio(loop_scope="session")

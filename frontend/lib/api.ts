@@ -697,6 +697,13 @@ export interface AlertInstance {
   alert_type: string
   feedback_score: 'helpful' | 'noise' | 'neutral' | null
   feedback_notes: string | null
+  priority_score: number
+  priority_tier: string
+  vwap_dist_pct: number | null
+  hod_dist_pct: number | null
+  catalyst: string | null
+  stop_price: number | null
+  stop_risk_pct: number | null
   // Forward returns (null when 1-min candle data is not available for the symbol)
   fwd_1m: number | null
   fwd_3m: number | null

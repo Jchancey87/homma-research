@@ -53,7 +53,8 @@ async def compute_daily_summary(
         """
         SELECT a.id, a.symbol, a.alert_time, a.trigger_price, a.trigger_volume,
                a.rel_vol, a.gap_pct, a.float_shares, a.alert_type, a.sent,
-               a.feedback_score, a.feedback_notes,
+               a.feedback_score, a.feedback_notes, a.priority_score, a.priority_tier,
+               a.vwap_dist_pct, a.hod_dist_pct, a.catalyst, a.stop_price, a.stop_risk_pct,
                f.company_name, f.float_category, f.market_cap
         FROM public.screener_alerts a
         LEFT JOIN public.stock_fundamentals f ON a.symbol = f.symbol
@@ -315,6 +316,13 @@ def _group_alerts_by_ticker(rows: list, fwd_by_id: dict) -> list[dict]:
             "alert_type": r["alert_type"],
             "feedback_score": r.get("feedback_score"),
             "feedback_notes": r.get("feedback_notes"),
+            "priority_score": r.get("priority_score", 0),
+            "priority_tier": r.get("priority_tier", "Tier 3"),
+            "vwap_dist_pct": r.get("vwap_dist_pct", 0.0),
+            "hod_dist_pct": r.get("hod_dist_pct", 0.0),
+            "catalyst": r.get("catalyst", "Technical / No News"),
+            "stop_price": r.get("stop_price", 0.0),
+            "stop_risk_pct": r.get("stop_risk_pct", 0.0),
             "fwd_1m": fwd.get("fwd_1m"),
             "fwd_3m": fwd.get("fwd_3m"),
             "fwd_5m": fwd.get("fwd_5m"),
