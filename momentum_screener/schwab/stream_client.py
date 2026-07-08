@@ -10,25 +10,55 @@ import redis
 import asyncpg
 import httpx
 
-# Add paths
-_backend = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', '..', 'backend'))
-_repo = os.path.dirname(_backend)
-if _repo not in sys.path:
-    sys.path.insert(0, _repo)
-if _backend not in sys.path:
-    sys.path.insert(0, _backend)
+# Try loading environment variables from .env file for standalone execution
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
-from config import Config
 from momentum_screener.schwab.auth import get_client
 from schwab.streaming import StreamClient
-from fastapi_app.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
+
+# Decoupled database and configuration defaults from backend
+ALERT_MIN_PCT_INCREASE = float(os.getenv("ALERT_MIN_PCT_INCREASE", "0.03"))
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://journal:journal1@192.168.0.201:5432/trading_journal"
+)
+ALERT_MIN_TIME_COOLDOWN_MINS = int(os.getenv("ALERT_MIN_TIME_COOLDOWN_MINUTES", "2"))
 
 # Parse Redis URL
 redis_url = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 # Create redis connection pool
 redis_client = redis.Redis.from_url(redis_url)
+
+STRATEGY_LABELS = {
+    "HOD_BREAKOUT": "HOD Breakout",
+    "VOLUME_SPIKE": "Volume Spike",
+    "PREV_DAY_BREAKOUT": "Prev Day High Breakout",
+    "VWAP_CROSSOVER": "VWAP Crossover",
+    "VWAP_BOUNCE": "VWAP Bounce",
+    "RUNNING_UP": "Running Up",
+    "BULL_FLAG": "Bull Flag",
+    "VWAP_RECLAIM": "VWAP Reclaim",
+    "MULTI_TF_CONFLUENCE": "Multi-TF Confluence",
+    "HALT_RESUME_MOMENTUM": "Halt Resume Momentum",
+    "VOLATILITY_HALT": "Volatility Halt",
+    "VOLATILITY_RESUME": "Volatility Resume"
+}
+
+# Decoupled Celery app for task dispatch without backend dependencies
+try:
+    from celery import Celery
+    celery_app = Celery("homma_screener_tasks", broker=redis_url)
+except ImportError:
+    class DummyCelery:
+        def send_task(self, name, args=None, kwargs=None, **other_kwargs):
+            logger.warning(f"Celery not installed. Task {name} dispatch skipped. Args: {args}")
+    celery_app = DummyCelery()
 
 class SchwabStreamer:
     """
@@ -55,10 +85,16 @@ class SchwabStreamer:
         self.halted_tickers = {}      # symbol -> timestamp of last halt alert
         self.halt_resume_times = {}   # symbol -> timestamp of last volatility resume (for post-halt suppression)
         self.watchlist_symbols = set()
+        self.watchlist_tags = {}
+        self.catalyst_tags = {}
+        self.last_hod_breakout_time = {}
+        self.global_config = None
+        self.configs = None
+        self.config_service = "placeholder"
 
         
     async def init_db(self):
-        dsn = os.getenv('DATABASE_URL', Config.DATABASE_URL)
+        dsn = os.getenv('DATABASE_URL', DATABASE_URL)
         # Convert postgresql:// to postgres:// for asyncpg if necessary
         if dsn.startswith("postgresql://"):
             dsn = dsn.replace("postgresql://", "postgres://", 1)
@@ -73,6 +109,8 @@ class SchwabStreamer:
             min_size=1,
             max_size=5
         )
+        from services.alert_config_service import AlertConfigService
+        self.config_service = AlertConfigService(self.db_pool)
         logger.info("Database pool established.")
 
     async def load_fundamentals(self, symbols):
@@ -85,9 +123,9 @@ class SchwabStreamer:
         async with self.db_pool.acquire() as conn:
             today_et = datetime.now(pytz.timezone('US/Eastern')).date()
             daily_rows = await conn.fetch("""
-                SELECT symbol, high
+                SELECT symbol, high, close
                 FROM (
-                    SELECT symbol, date, high,
+                    SELECT symbol, date, high, close,
                            ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY date DESC) as rn
                     FROM price_history_daily
                     WHERE symbol = ANY($1) AND date < $2
@@ -95,10 +133,11 @@ class SchwabStreamer:
                 WHERE rn = 1
             """, list(symbols), today_et)
             yesterday_highs = {r['symbol']: r['high'] for r in daily_rows}
+            yesterday_closes = {r['symbol']: r['close'] for r in daily_rows}
 
             rows = await conn.fetch("""
                 SELECT symbol, shares_outstanding, market_cap, pe_ratio, dividend_yield,
-                       vol_10d_avg, high_52wk, low_52wk, float_category
+                       vol_10d_avg, high_52wk, low_52wk, float_category, short_int_float
                 FROM stock_fundamentals
                 WHERE symbol = ANY($1)
             """, list(symbols))
@@ -114,7 +153,9 @@ class SchwabStreamer:
                     'high_52wk': r['high_52wk'] or 0.0,
                     'low_52wk': r['low_52wk'] or 0.0,
                     'float_category': r['float_category'] or 'Unknown',
-                    'yesterday_high': yesterday_highs.get(sym, 0.0)
+                    'short_int_float': r['short_int_float'] or 0.0,
+                    'yesterday_high': yesterday_highs.get(sym, 0.0),
+                    'yesterday_close': yesterday_closes.get(sym, 0.0)
                 }
 
         # Identify missing symbols and fetch them from Schwab API on-the-fly
@@ -224,14 +265,38 @@ class SchwabStreamer:
         """Fetch watchlist tickers and pre-market/active movers from database."""
         candidates = set()
         watchlist_tickers = set()
+        self.watchlist_tags = {}
+        self.catalyst_tags = {}
+        self.last_hod_breakout_time = {}
         
         # 1. Active Watchlist Tickers
         async with self.db_pool.acquire() as conn:
-            rows = await conn.fetch("SELECT ticker FROM watchlist")
+            rows = await conn.fetch("SELECT ticker, tags FROM watchlist")
             for r in rows:
                 candidates.add(r['ticker'])
                 watchlist_tickers.add(r['ticker'])
+                tags_raw = r.get('tags')
+                if isinstance(tags_raw, str):
+                    try:
+                        tags = json.loads(tags_raw)
+                    except Exception:
+                        tags = []
+                elif isinstance(tags_raw, list):
+                    tags = tags_raw
+                else:
+                    tags = []
+                self.watchlist_tags[r['ticker']] = tags
         self.watchlist_symbols = watchlist_tickers
+
+        # Fetch today's pump classifications
+        today_date = datetime.now(pytz.timezone('US/Eastern')).date()
+        try:
+            async with self.db_pool.acquire() as conn:
+                rows_pump = await conn.fetch("SELECT ticker, catalyst_tag FROM pump_classifications WHERE date = $1", today_date)
+                for r in rows_pump:
+                    self.catalyst_tags[r['ticker']] = r['catalyst_tag']
+        except Exception as e:
+            logger.error(f"Failed to fetch pump classifications: {e}")
                 
         # 2. Daily runners (top daily gainers from today)
         today_str = datetime.now(pytz.timezone('US/Eastern')).strftime('%Y-%m-%d')
@@ -305,15 +370,97 @@ class SchwabStreamer:
                 
             await asyncio.sleep(300) # run every 5 minutes
 
-    async def check_and_fire_alert(self, symbol, last_price, total_volume, rvol, gap_pct, alert_type):
+    def calculate_confluence_score(self, symbol: str, alert_type: str, rvol: float = 0.0, now_et=None) -> tuple[int, str]:
+        """Compute confluence score (0-100). Returns (score, tier)."""
+        config = self.global_config or {}
+        if now_et is None:
+            now_et = datetime.now(pytz.timezone('America/New_York'))
+        score = 0
+
+        # 1. Watchlist presence bonus (NOT a gate — just a score boost)
+        in_watchlist = symbol in self.watchlist_symbols
+        if in_watchlist:
+            score += config.get("watchlist_presence_weight", 20)
+
+        # 2. Priority Tag (+20 points if watchlist item has a 'priority' tag)
+        tags = self.watchlist_tags.get(symbol, [])
+        has_priority_tag = False
+        for t in tags:
+            if 'priority' in str(t).lower():
+                has_priority_tag = True
+                break
+        if has_priority_tag:
+            score += config.get("watchlist_priority_tag_weight", 20)
+
+        # 3. Catalyst tag quality
+        cat_tag = self.catalyst_tags.get(symbol)
+        if cat_tag == 'Confirmed Catalyst':
+            score += config.get("catalyst_confirmed_weight", 25)
+        elif cat_tag == 'Speculative':
+            score += config.get("catalyst_speculative_weight", 15)
+        elif cat_tag == 'Technical / No News':
+            score += config.get("catalyst_technical_weight", 10)
+
+        # 4. Float category
+        fund = self.fundamentals_cache.get(symbol, {})
+        float_cat = fund.get('float_category')
+        if float_cat == 'Micro-Float':
+            score += config.get("float_micro_weight", 20)
+        elif float_cat == 'Low-Float':
+            score += config.get("float_low_weight", 15)
+        elif float_cat == 'Mid-Float':
+            score += config.get("float_mid_weight", 10)
+
+        # 5. Market session
+        mkt_start = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+        mkt_end   = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
+        if mkt_start <= now_et <= mkt_end:
+            score += config.get("session_regular_weight", 15)   # Regular session
+        elif now_et < mkt_start:
+            score += config.get("session_pre_weight", 10)   # Pre-market
+        else:
+            score += config.get("session_post_weight", 5)    # Post-market
+
+        # 6. Alert type weight
+        if alert_type in ('HOD_BREAKOUT', 'VWAP_CROSSOVER', 'PREV_DAY_BREAKOUT',
+                          'RUNNING_UP', 'BULL_FLAG', 'VWAP_RECLAIM'):
+            score += config.get("alert_high_weight", 15)
+        elif alert_type in ('VOLUME_SPIKE', 'MULTI_TF_CONFLUENCE'):
+            score += config.get("alert_mid_weight", 10)
+        elif alert_type in ('VOLATILITY_HALT', 'VOLATILITY_RESUME', 'HALT_RESUME_MOMENTUM'):
+            score += config.get("alert_low_weight", 5)
+
+        # 7. RVOL strength
+        if rvol >= 5.0:
+            score += config.get("rvol_high_weight", 15)
+        elif rvol >= 3.0:
+            score += config.get("rvol_mid_weight", 10)
+        elif rvol >= 1.5:
+            score += config.get("rvol_low_weight", 5)
+
+        # Tier assignment
+        t1_thresh = config.get("tier_1_threshold", 75)
+        t2_thresh = config.get("tier_2_threshold", 45)
+        if score >= t1_thresh:
+            tier = 'Tier 1'
+        elif score >= t2_thresh:
+            tier = 'Tier 2'
+        else:
+            tier = 'Tier 3'
+
+        return score, tier
+
+    async def check_and_fire_alert(self, symbol, last_price, total_volume, rvol, gap_pct, alert_type, high_price=0.0, low_price=0.0):
         """Helper to run standard filters, cooldown DB checks, DB persistence, Redis broadcast, and Telegram alert."""
-        fund = self.fundamentals_cache.get(symbol)
-        if not fund:
+        config = self.global_config or {}
+        # 0. Check if alert is enabled in config
+        enabled_alerts = config.get("enabled_alerts", {})
+        if not enabled_alerts.get(alert_type, True):
+            logger.info(f"Refusing to fire alert: {alert_type} is disabled in global config.")
             return False
 
-        # Only trigger alerts if stock is in the user's watchlist
-        if symbol not in self.watchlist_symbols:
-            logger.debug(f"Skipping {alert_type} for {symbol} because it is not in watchlist")
+        fund = self.fundamentals_cache.get(symbol)
+        if not fund:
             return False
 
         # Apply momentum filters (price $1.00 - $30.00, float < 100M shares to match dashboard scanner)
@@ -324,42 +471,68 @@ class SchwabStreamer:
             return False
 
         # Determine adaptive price increase threshold based on price buckets
+        min_pct_increase_config = config.get("alert_min_pct_increase", 0.03)
         if last_price < 2.0:
             min_pct = 0.08  # 8%
         elif last_price < 5.0:
             min_pct = 0.05  # 5%
         elif last_price < 15.0:
-            min_pct = 0.03  # 3%
+            min_pct = min_pct_increase_config  # wired from config
         else:
             min_pct = 0.02  # 2%
 
+        cooldown_mins = config.get("alert_min_time_cooldown_mins", 2)
         try:
             async with self.db_pool.acquire() as conn:
-                # Signature: should_fire_alert(p_ticker, p_alert_type, p_price, p_cooldown_interval, p_macro_window, p_macro_threshold, p_min_price_increase, p_min_time_cooldown, p_threshold_mode)
                 result = await conn.fetchval(
                     "SELECT alerts.should_fire_alert($1, $2, $3, $4, $5, $6, $7, $8, $9)",
                     symbol, alert_type, last_price, timedelta(minutes=10), timedelta(seconds=10), 5,
-                    min_pct, timedelta(minutes=Config.ALERT_MIN_TIME_COOLDOWN_MINS), 'percent'
+                    min_pct, timedelta(minutes=cooldown_mins), 'percent'
                 )
         except Exception as e:
             logger.error(f"Error querying should_fire_alert for {symbol}: {e}")
             result = 'ERROR'
 
         if result == 'OK':
+            priority_score, priority_tier = self.calculate_confluence_score(symbol, alert_type, rvol=rvol)
+            
+            if alert_type == "HOD_BREAKOUT":
+                self.last_hod_breakout_time[symbol] = time.time()
+                
+            if priority_tier == 'Tier 3':
+                await self.save_alert_to_db(
+                    symbol=symbol,
+                    price=last_price,
+                    volume=total_volume,
+                    rvol=rvol,
+                    gap_pct=gap_pct,
+                    float_shares=fund['shares_outstanding'],
+                    alert_type=alert_type,
+                    priority_score=priority_score,
+                    priority_tier=priority_tier,
+                    short_int_float=fund.get('short_int_float', 0.0)
+                )
+                logger.info(f"💾 Alert {alert_type} for {symbol} saved to DB only (Tier 3)")
+                return True
+                
             now = datetime.utcnow()
-            # 1. Save alert in DB
-            await self.save_alert_to_db(
-                symbol, last_price, total_volume, rvol, gap_pct,
-                fund['shares_outstanding'], alert_type
+            alert_db_row = await self.save_alert_to_db(
+                symbol=symbol,
+                price=last_price,
+                volume=total_volume,
+                rvol=rvol,
+                gap_pct=gap_pct,
+                float_shares=fund['shares_outstanding'],
+                alert_type=alert_type,
+                priority_score=priority_score,
+                priority_tier=priority_tier,
+                short_int_float=fund.get('short_int_float', 0.0)
             )
 
-            # 2. Build enriched payload for Redis and Telegram
-            # Compute daily % change (using open_price from bars_1m if available)
             bar_state = self.bars_1m.get(symbol)
             open_price_ref = bar_state['open'] if bar_state and bar_state.get('open') else 0.0
             daily_pct = ((last_price - open_price_ref) / open_price_ref * 100.0) if open_price_ref > 0 else 0.0
 
-            # Recent candle volume vs average for context
             history = self.completed_bars_1m.get(symbol, [])
             if history:
                 avg_candle_vol = int(sum(c['volume'] for c in history) / len(history))
@@ -368,9 +541,21 @@ class SchwabStreamer:
                 avg_candle_vol = 0
                 last_candle_vol = bar_state['last_volume'] - bar_state.get('start_volume', 0) if bar_state else 0
 
-            # VWAP reference from state
             v_state = self.vwap_state.get(symbol, {})
             vwap_ref = v_state['cum_vp'] / v_state['cum_vol'] if v_state.get('cum_vol', 0) > 0 else 0.0
+
+            # Calculate context fields
+            vwap_dist_pct = ((last_price - vwap_ref) / vwap_ref * 100.0) if vwap_ref > 0 else 0.0
+            hod_val = high_price if high_price > 0 else last_price
+            hod_dist_pct = ((last_price - hod_val) / hod_val * 100.0) if hod_val > 0 else 0.0
+            catalyst_val = self.catalyst_tags.get(symbol, "Technical / No News")
+            
+            stop_price = last_price * 0.97
+            if last_price > vwap_ref > 0 and vwap_ref >= last_price * 0.90:
+                stop_price = vwap_ref
+            elif low_price > 0 and low_price >= last_price * 0.90:
+                stop_price = low_price
+            stop_risk_pct = ((last_price - stop_price) / last_price * 100.0) if last_price > 0 else 0.0
 
             alert_payload = {
                 'symbol': symbol,
@@ -387,30 +572,103 @@ class SchwabStreamer:
                 'vwap': round(vwap_ref, 4),
                 'yesterday_high': fund.get('yesterday_high', 0.0),
                 'alert_type': alert_type,
-                'time': now.isoformat()
+                'time': now.isoformat(),
+                'priority_score': priority_score,
+                'priority_tier': priority_tier,
+                'alert_db_id': alert_db_row['id'] if alert_db_row else None,
+                'alert_db_time': alert_db_row['alert_time'].isoformat() if alert_db_row else None,
+                'strategy_label': STRATEGY_LABELS.get(alert_type, "Unknown"),
+                'vwap_dist_pct': round(vwap_dist_pct, 2),
+                'hod_dist_pct': round(hod_dist_pct, 2),
+                'catalyst': catalyst_val,
+                'stop_price': round(stop_price, 2),
+                'stop_risk_pct': round(stop_risk_pct, 2)
             }
             redis_client.publish('screener:alerts', json.dumps(alert_payload))
-            logger.info(f"🚨 ALERT FIRED: {symbol} @ ${last_price} ({alert_type}) | RVOL: {rvol:.2f}x")
+            logger.info(f"🚨 ALERT FIRED: {symbol} @ ${last_price} ({alert_type}) | RVOL: {rvol:.2f}x | Tier: {priority_tier} (Score: {priority_score})")
 
-            # 3. Trigger Celery task asynchronously using celery_app.send_task
-            try:
-                celery_app.send_task(
-                    "fastapi_app.tasks.alerts.send_telegram_alert_task",
-                    args=[alert_payload]
-                )
-            except Exception as e:
-                logger.error(f"Failed to dispatch Telegram Celery task for {symbol}: {e}")
+            if priority_tier == 'Tier 1':
+                try:
+                    celery_app.send_task(
+                        "fastapi_app.tasks.alerts.send_telegram_alert_task",
+                        args=[alert_payload]
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to dispatch Telegram Celery task for {symbol}: {e}")
             return True
         else:
             if result != 'ERROR':
                 logger.info(f"🔇 Alert {alert_type} for {symbol} suppressed: {result}")
             return False
 
+    async def load_initial_config(self):
+        try:
+            async with self.db_pool.acquire() as conn:
+                from fastapi_app.db.alert_config import fetch_alert_configs, fetch_alert_scoring_configs
+                configs = await fetch_alert_configs(conn)
+                scoring = await fetch_alert_scoring_configs(conn)
+                
+                self.configs = {cfg["alert_type"]: cfg for cfg in configs}
+                
+                new_config = {}
+                enabled = {}
+                for cfg in configs:
+                    at = cfg["alert_type"]
+                    enabled[at] = cfg.get("enabled", True)
+                    if "rvol_min" in cfg:
+                        new_config[f"rvol_min_{at}"] = cfg["rvol_min"]
+                    if "cooldown_mins" in cfg:
+                        new_config[f"cooldown_mins_{at}"] = cfg["cooldown_mins"]
+                new_config["enabled_alerts"] = enabled
+                for k, v in scoring.items():
+                    new_config[k] = v
+                self.global_config = new_config
+                logger.info("Initial global config loaded successfully.")
+        except Exception as e:
+            logger.error(f"Failed to load initial config: {e}")
+
+    async def refresh_config(self):
+        if self.config_service is not None:
+            try:
+                configs = await self.config_service.get_alert_configs()
+                scoring = await self.config_service.get_scoring_configs()
+                
+                self.configs = {cfg["alert_type"]: cfg for cfg in configs}
+                
+                new_config = {}
+                enabled = {}
+                for cfg in configs:
+                    at = cfg["alert_type"]
+                    enabled[at] = cfg.get("enabled", True)
+                    if "rvol_min" in cfg:
+                        new_config[f"rvol_min_{at}"] = cfg["rvol_min"]
+                    if "cooldown_mins" in cfg:
+                        new_config[f"cooldown_mins_{at}"] = cfg["cooldown_mins"]
+                new_config["enabled_alerts"] = enabled
+                for k, v in scoring.items():
+                    new_config[k] = v
+                self.global_config = new_config
+            except Exception as e:
+                logger.error(f"Failed to refresh config from service: {e}")
+        else:
+            await self.load_initial_config()
+
+    async def poll_alert_config(self):
+        while True:
+            try:
+                if self.db_pool is not None or self.config_service is not None:
+                    await self.refresh_config()
+            except Exception as e:
+                logger.error(f"Error polling alert config: {e}")
+            await asyncio.sleep(30)
+
     async def evaluate_and_fire_alert(self, symbol, last_price, total_volume, high_price, low_price, open_price):
         """Evaluate hybrid momentum filters and fire alerts via Postgres and Redis Pub/Sub."""
         fund = self.fundamentals_cache.get(symbol)
         if not fund:
             return
+
+        candle_history = self.completed_bars_1m.get(symbol, [])
 
         # Reset previous day breakout set if date changed (Eastern Time)
         today_et = datetime.now(pytz.timezone('US/Eastern')).date()
@@ -450,7 +708,7 @@ class SchwabStreamer:
 
         # Gap calculation
         gap_pct = 0.0
-        prev_close = fund.get('low_52wk') # default placeholder
+        prev_close = fund.get('yesterday_close')
         if open_price and prev_close:
             gap_pct = ((open_price - prev_close) / prev_close) * 100.0
 
@@ -528,20 +786,18 @@ class SchwabStreamer:
         # Trigger 1: High of Day Breakout (requires completed candle BODY close above session HOD)
         # A wick touching the HOD is not sufficient — we need a closed candle where close > high_price.
         if not post_halt_suppressed:
-            candle_history = self.completed_bars_1m.get(symbol, [])
             if candle_history and rvol >= 1.5:
                 last_candle = candle_history[-1]
                 # Confirm close > open (bullish body) AND close broke above session high_price
                 if (last_candle['close'] > last_candle['open'] and
                         last_candle['close'] >= high_price and
                         last_candle['close'] > open_price):
-                    await self.check_and_fire_alert(symbol, last_candle['close'], total_volume, rvol, gap_pct, "HOD_BREAKOUT")
+                    await self.check_and_fire_alert(symbol, last_candle['close'], total_volume, rvol, gap_pct, "HOD_BREAKOUT", high_price=high_price, low_price=low_price)
 
         # Trigger 2: VWAP Crossing (ATR-based dynamic hysteresis to prevent chatter)
         # Estimate ATR from last 10 completed candles (candle range = high - low, approximated here
         # via open/close since we only store open/close in the bar history).
         if vwap > 0 and not post_halt_suppressed:
-            candle_history = self.completed_bars_1m.get(symbol, [])
             if len(candle_history) >= 5:
                 recent = candle_history[-10:] if len(candle_history) >= 10 else candle_history
                 avg_range = sum(abs(c['close'] - c['open']) for c in recent) / len(recent)
@@ -552,13 +808,13 @@ class SchwabStreamer:
 
             if v_state.get('status') is None:
                 if last_price <= vwap * (1.0 - atr_buffer):
-                    v_state['status'] = 'below'
+                     v_state['status'] = 'below'
                 elif last_price >= vwap * (1.0 + atr_buffer):
-                    v_state['status'] = 'above'
+                     v_state['status'] = 'above'
             else:
                 if v_state['status'] == 'below' and last_price >= vwap * (1.0 + atr_buffer):
                     if rvol >= 2.0:
-                        await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "VWAP_CROSSOVER")
+                        await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "VWAP_CROSSOVER", high_price=high_price, low_price=low_price)
                     v_state['status'] = 'above'
                 elif v_state['status'] == 'above' and last_price <= vwap * (1.0 - atr_buffer):
                     v_state['status'] = 'below'
@@ -566,9 +822,57 @@ class SchwabStreamer:
         # Trigger 3: Previous Day High Breakout
         yesterday_high = fund.get('yesterday_high', 0.0)
         if yesterday_high > 0.0 and last_price > yesterday_high and symbol not in self.prev_day_breakout_fired:
-            fired = await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "PREV_DAY_BREAKOUT")
+            fired = await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "PREV_DAY_BREAKOUT", high_price=high_price, low_price=low_price)
             if fired:
                 self.prev_day_breakout_fired.add(symbol)
+
+        # Trigger: RUNNING_UP
+        if len(candle_history) >= 5:
+            lowest_close = min(c['close'] for c in candle_history[-5:])
+            if last_price >= lowest_close * 1.03:
+                avg_vol = sum(c['volume'] for c in candle_history[-20:]) / len(candle_history[-20:])
+                curr_bar = self.bars_1m.get(symbol, {})
+                curr_vol = curr_bar.get('last_volume', total_volume) - curr_bar.get('start_volume', total_volume)
+                if curr_vol >= 1.5 * avg_vol and avg_vol > 0:
+                    if last_price < high_price:
+                        await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "RUNNING_UP", high_price=high_price, low_price=low_price)
+
+        # Trigger: BULL_FLAG
+        if len(candle_history) >= 9:
+            move_start = candle_history[-9]['close']
+            move_end = candle_history[-5]['close']
+            strong_move = move_start > 0 and (move_end - move_start) / move_start >= 0.05
+            if strong_move:
+                consolidation = candle_history[-4:-1]
+                declining_vol = consolidation[2]['volume'] <= consolidation[1]['volume'] <= consolidation[0]['volume']
+                max_p = max(max(c['open'], c['close']) for c in consolidation)
+                min_p = min(min(c['open'], c['close']) for c in consolidation)
+                price_range_ok = min_p > 0 and (max_p - min_p) / min_p <= 0.02
+                if declining_vol and price_range_ok:
+                    consolidation_high = max_p
+                    curr_bar = self.bars_1m.get(symbol, {})
+                    curr_vol = curr_bar.get('last_volume', total_volume) - curr_bar.get('start_volume', total_volume)
+                    avg_vol = sum(c['volume'] for c in candle_history[-20:]) / len(candle_history[-20:])
+                    if last_price > consolidation_high and curr_vol >= 1.5 * avg_vol and avg_vol > 0:
+                        await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "BULL_FLAG", high_price=high_price, low_price=low_price)
+
+        # Trigger: VWAP_RECLAIM
+        if vwap > 0 and not post_halt_suppressed:
+            prev_vwap = v_state.get('prev_vwap')
+            if prev_vwap is not None and vwap > prev_vwap:
+                if v_state.get('status') == 'below' and last_price >= vwap:
+                    if rvol >= 1.5:
+                        await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "VWAP_RECLAIM", high_price=high_price, low_price=low_price)
+            v_state['prev_vwap'] = vwap
+
+        # Trigger: MULTI_TF_CONFLUENCE
+        if len(candle_history) >= 5:
+            open_5m = candle_history[-5]['open']
+            close_5m = candle_history[-1]['close']
+            if open_5m > 0 and (close_5m - open_5m) / open_5m >= 0.01:
+                last_hod = self.last_hod_breakout_time.get(symbol, 0)
+                if time.time() - last_hod <= 60:
+                    await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "MULTI_TF_CONFLUENCE", high_price=high_price, low_price=low_price)
 
         # Trigger 4: VWAP Support Hold & Bounce (Disabled: vwap bounces are noise)
         # if vwap > 0:
@@ -603,15 +907,17 @@ class SchwabStreamer:
         #                     v_state['vwap_test'] = False
         #                     v_state['vwap_low'] = None
 
-    async def save_alert_to_db(self, symbol, price, volume, rvol, gap_pct, float_shares, alert_type):
+    async def save_alert_to_db(self, symbol, price, volume, rvol, gap_pct, float_shares, alert_type, priority_score=0, priority_tier='Tier 3', short_int_float=None):
         try:
             async with self.db_pool.acquire() as conn:
-                await conn.execute("""
+                row = await conn.fetchrow("""
                     INSERT INTO screener_alerts (
-                        symbol, alert_time, trigger_price, trigger_volume,
-                        rel_vol, gap_pct, float_shares, alert_type, sent
-                    ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, FALSE)
-                """, symbol, price, volume, rvol, gap_pct, float_shares, alert_type)
+                        symbol, trigger_price, total_volume, rvol, gap_pct,
+                        short_int_float, float_shares, alert_type, priority_score, priority_tier
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                    RETURNING id, alert_time
+                """, symbol, price, volume, rvol, gap_pct, short_int_float, float_shares, alert_type, priority_score, priority_tier)
+                return row
         except Exception as e:
             logger.error(f"Failed to save alert for {symbol} to database: {e}")
 
@@ -699,6 +1005,10 @@ class SchwabStreamer:
                             asyncio.create_task(self.save_resume_to_db(symbol))
                             logger.info(f"▶️ VOLATILITY RESUME DETECTED: {symbol} (2-min HOD/VWAP suppression activated)")
                             
+                            # Schedule 30s check for HALT_RESUME_MOMENTUM
+                            resume_price = lp
+                            asyncio.create_task(self.schedule_halt_resume_momentum_check(symbol, resume_price))
+                            
                             now_dt = datetime.utcnow()
                             lp = last_price if last_price is not None else self.last_known_price.get(symbol, 0.0)
                             vol = total_volume if total_volume is not None else 0
@@ -757,6 +1067,9 @@ class SchwabStreamer:
         # 1. Establish DB pool
         await self.init_db()
         
+        # Load initial config
+        await self.load_initial_config()
+        
         # 2. Get initial subscription symbols
         candidates = await self.get_candidate_symbols()
         logger.info(f"Initial subscription candidates: {candidates}")
@@ -774,13 +1087,60 @@ class SchwabStreamer:
         await self.stream_client.level_one_equity_subs(list(candidates))
         self.subscribed_symbols.update(candidates)
         
-        # 6. Launch background dynamic subscription loop
+        # 6. Launch background tasks
         asyncio.create_task(self.update_subscriptions())
+        asyncio.create_task(self.poll_alert_config())
         
         # 7. Start the stream loop (runs indefinitely)
         logger.info("Starting Level 1 streaming client...")
         while True:
             await self.stream_client.handle_message()
+
+    async def schedule_halt_resume_momentum_check(self, symbol, resume_price):
+        # Record resume time for post-halt suppression window
+        self.halt_resume_times[symbol] = time.time()
+        await self.save_resume_to_db(symbol)
+        logger.info(f"▶️ VOLATILITY RESUME DETECTED: {symbol} (2-min HOD/VWAP suppression activated)")
+        
+        await asyncio.sleep(30)
+        fund = self.fundamentals_cache.get(symbol)
+        if not fund or resume_price <= 0:
+            return
+        
+        last_price = self.last_known_price.get(symbol, 0.0)
+        if last_price <= 0:
+            return
+            
+        history = self.completed_bars_1m.get(symbol, [])
+        avg_20_vol = sum(c['volume'] for c in history[-20:]) / len(history[-20:]) if history else 0.0
+        
+        state = self.bars_1m.get(symbol)
+        current_candle_vol = 0
+        total_volume = self.vwap_state.get(symbol, {}).get('last_total_vol', 0)
+        if state:
+            current_candle_vol = total_volume - state['start_volume']
+            
+        rvol = 0.0
+        if total_volume > 0:
+            now_et = datetime.now(pytz.timezone('America/New_York'))
+            mkt_start = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+            mkt_end = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
+            if now_et < mkt_start:
+                elapsed_pct = 0.05
+            elif now_et > mkt_end:
+                elapsed_pct = 1.0
+            else:
+                elapsed_pct = (now_et - mkt_start).total_seconds() / (6.5 * 3600)
+            rvol = total_volume / max(fund['vol_10d_avg'] * elapsed_pct, 1)
+
+        gap_pct = 0.0
+        prev_close = fund.get('yesterday_close')
+        if prev_close:
+            open_price = state['open'] if state else last_price
+            gap_pct = ((open_price - prev_close) / prev_close) * 100.0
+
+        if last_price >= resume_price * 1.01 and current_candle_vol >= 1.5 * max(avg_20_vol, 1):
+            await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "HALT_RESUME_MOMENTUM", high_price=last_price, low_price=resume_price)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')

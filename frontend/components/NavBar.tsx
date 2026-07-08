@@ -6,11 +6,12 @@ import { usePathname } from 'next/navigation'
 import {
   BarChart2, Camera, LayoutDashboard, LayoutGrid,
   Search, Bookmark, FileText, AreaChart, Sun, Moon, Menu, X, Bell, Zap, Rss,
-  BookOpen, ChevronDown
+  BookOpen, ChevronDown, Settings
 } from 'lucide-react'
 
 const journalLinks = [
   { href: '/alerts',       label: 'Alert Journal',  icon: Bell },
+  { href: '/alert-config', label: 'Alert Config',   icon: Settings },
   { href: '/continuation', label: 'Continuation Journal', icon: Zap },
   { href: '/observations', label: 'Observations',   icon: FileText },
 ]

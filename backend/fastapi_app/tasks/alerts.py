@@ -65,6 +65,11 @@ ALERT_TYPE_META: dict[str, dict] = {
     "PREV_DAY_BREAKOUT":   {"emoji": "🚀",  "header": "PREV DAY HIGH BREAKOUT",   "signal": None,                               "show_rvol": True},
     "VWAP_CROSSOVER":      {"emoji": "🌊",  "header": "VWAP CROSSOVER",           "signal": None,                               "show_rvol": True},
     "VWAP_BOUNCE":         {"emoji": "📈",  "header": "VWAP SUPPORT BOUNCE",      "signal": None,                               "show_rvol": True},
+    "RUNNING_UP":          {"emoji": "📈",  "header": "RUNNING UP",               "signal": None,                               "show_rvol": True},
+    "BULL_FLAG":           {"emoji": "🚩",  "header": "BULL FLAG",                "signal": None,                               "show_rvol": True},
+    "VWAP_RECLAIM":        {"emoji": "🌊",  "header": "VWAP RECLAIM",             "signal": None,                               "show_rvol": True},
+    "MULTI_TF_CONFLUENCE": {"emoji": "🎯",  "header": "MULTI-TF CONFLUENCE",      "signal": None,                               "show_rvol": True},
+    "HALT_RESUME_MOMENTUM": {"emoji": "⚡",  "header": "HALT RESUME MOMENTUM",     "signal": None,                               "show_rvol": True},
 }
 
 FALLBACK_META: dict = {"emoji": "🚨", "header": "BREAKOUT DETECTED", "signal": "auto", "show_rvol": True}
@@ -120,6 +125,13 @@ def _format_alert_message(alert_data: dict) -> str:
     alert_type    = alert_data.get("alert_type", "Breakout")
     rvol          = alert_data.get("rvol", 0.0)
     timestamp_str = alert_data.get("time", "")
+    priority_score = alert_data.get("priority_score", 0)
+    priority_tier  = alert_data.get("priority_tier", "Tier 3")
+    strategy_label = alert_data.get("strategy_label", "")
+    hod_dist       = alert_data.get("hod_dist_pct")
+    catalyst       = alert_data.get("catalyst", "")
+    stop_price     = alert_data.get("stop_price", 0.0)
+    stop_risk_pct  = alert_data.get("stop_risk_pct", 0.0)
 
     daily_pct      = alert_data.get("daily_pct", 0.0)
     candle_vol     = alert_data.get("candle_vol", 0)
@@ -175,15 +187,31 @@ def _format_alert_message(alert_data: dict) -> str:
         cap_str   = f" | Cap: {_fmt_cap(market_cap)}" if market_cap else ""
         float_line = f"- *Float:* {float_str}{cat_str}{cap_str}\n"
 
+    priority_line = f"- *Priority:* {priority_tier} (Score: {priority_score})\n"
+    strategy_line = f"- *Strategy:* {strategy_label}\n" if strategy_label else ""
+    
+    hod_line = ""
+    if hod_dist is not None:
+        hod_sign = "+" if hod_dist >= 0 else ""
+        hod_line = f"- *HOD dist:* {hod_sign}{hod_dist:.1f}%\n"
+        
+    catalyst_line = f"- *Catalyst:* {catalyst}\n" if catalyst else ""
+    stop_line = f"- *Suggested Stop:* ${stop_price:,.2f} ({stop_risk_pct:.1f}% risk)\n" if stop_price > 0 else ""
+
     return (
         f"{meta['emoji']} *{meta['header']}* {meta['emoji']}\n\n"
         f"- *Ticker:* [${escaped_symbol}]({tv_link})\n"
         f"- *Price:* ${price:,.2f} ({daily_sign}{daily_pct:.1f}% day)\n"
+        f"{priority_line}"
+        f"{strategy_line}"
         f"{signal_line}"
         f"{rvol_line}"
         f"{candle_vol_line}"
         f"{vwap_line}"
         f"{pdh_line}"
+        f"{hod_line}"
+        f"{catalyst_line}"
+        f"{stop_line}"
         f"{float_line}"
         f"- *Time:* {timestamp}"
     )
@@ -220,6 +248,24 @@ def send_telegram_alert_task(alert_data: dict) -> dict:
         response = httpx.post(url, json=payload, timeout=10.0)
         response.raise_for_status()
         logger.info("Successfully sent Telegram alert for %s.", symbol)
+
+        # Update screener_alerts.sent = TRUE in database
+        alert_db_id = alert_data.get("alert_db_id")
+        alert_db_time_str = alert_data.get("alert_db_time")
+        if alert_db_id and alert_db_time_str:
+            try:
+                from database import get_connection
+                alert_db_time = datetime.fromisoformat(alert_db_time_str)
+                with get_connection() as conn:
+                    conn.execute("""
+                        UPDATE screener_alerts
+                        SET sent = TRUE
+                        WHERE id = %s AND alert_time = %s
+                    """, (alert_db_id, alert_db_time))
+                logger.info("Successfully updated sent status to TRUE for alert id %s.", alert_db_id)
+            except Exception as db_err:
+                logger.error("Failed to update alert sent status in DB: %s", db_err)
+
         return {"status": "success", "response": response.json()}
     except httpx.HTTPStatusError as e:
         logger.error(

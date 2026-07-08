@@ -44,8 +44,8 @@ function fmtAge(isoUtc: string | null): string {
 
 const PRICE_FILTER_KEY = 'price-filter-enabled'
 const PRICE_FILTER_EVENT = 'price-filter-changed'
-const PRICE_MIN = 2.0
-const PRICE_MAX = 25.0
+const PRICE_MIN = 1.0
+const PRICE_MAX = 30.0
 
 interface LiveGainersProps {
   initialSnap?: LiveGainerSnapshot | null
@@ -314,7 +314,7 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = [],
                 : 'bg-gray-900/40 border-gray-800/60 text-gray-450 hover:text-gray-300 hover:bg-gray-900/60'
             }`}
           >
-            <span>$2-$25 Filter</span>
+            <span>$1-$30 Filter</span>
             {priceFilterEnabled ? (
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
             ) : (

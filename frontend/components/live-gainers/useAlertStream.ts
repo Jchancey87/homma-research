@@ -53,28 +53,50 @@ export function useAlertStream(): UseAlertStreamResult {
   useEffect(() => { audioChimesEnabledRef.current = audioChimesEnabled }, [audioChimesEnabled])
   useEffect(() => { toastStackEnabledRef.current  = toastStackEnabled  }, [toastStackEnabled])
 
-  const playPlinkChime = useCallback(() => {
+  const playTierAudio = useCallback((tier: string) => {
     try {
       if (typeof window === 'undefined') return
+      if (tier === 'Tier 3') return // Tier 3 is silent
+
       if (!audioCtxRef.current) {
-        const AudioContextClass = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
         if (!AudioContextClass) return
         audioCtxRef.current = new AudioContextClass()
       }
       const ctx = audioCtxRef.current
       if (ctx.state === 'suspended') ctx.resume()
-      const osc  = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.connect(gain)
-      gain.connect(ctx.destination)
-      osc.type = 'sine'
+
       const now = ctx.currentTime
-      osc.frequency.setValueAtTime(800, now)
-      osc.frequency.exponentialRampToValueAtTime(1200, now + 0.08)
-      gain.gain.setValueAtTime(0.12, now)
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3)
-      osc.start(now)
-      osc.stop(now + 0.32)
+
+      if (tier === 'Tier 1') {
+        // Double-beep: beep 1 -> brief silence -> beep 2
+        const playBeep = (startTime: number) => {
+          const osc = ctx.createOscillator()
+          const gain = ctx.createGain()
+          osc.connect(gain)
+          gain.connect(ctx.destination)
+          osc.type = 'sine'
+          osc.frequency.setValueAtTime(880, startTime) // A5 note
+          gain.gain.setValueAtTime(0.15, startTime)
+          gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.1)
+          osc.start(startTime)
+          osc.stop(startTime + 0.12)
+        }
+        playBeep(now)
+        playBeep(now + 0.15)
+      } else if (tier === 'Tier 2') {
+        // Single warm tone: 554.37Hz sine wave decaying smoothly
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        osc.type = 'sine'
+        osc.frequency.setValueAtTime(554.37, now) // C#5 warm tone
+        gain.gain.setValueAtTime(0.12, now)
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4)
+        osc.start(now)
+        osc.stop(now + 0.42)
+      }
     } catch (e) {
       console.error('Web Audio error:', e)
     }
@@ -94,12 +116,15 @@ export function useAlertStream(): UseAlertStreamResult {
           rvol?:   number
           gap_pct?: number
           float_shares?: number
+          priority_tier?: string
         }
         const ticker    = payload.symbol
         const price     = payload.price
         const alertType = payload.alert_type
 
-        if (audioChimesEnabledRef.current) playPlinkChime()
+        if (audioChimesEnabledRef.current) {
+          playTierAudio(payload.priority_tier || 'Tier 3')
+        }
 
         if (toastStackEnabledRef.current) {
           const id = Math.random().toString(36).substring(2, 9)
@@ -143,7 +168,7 @@ export function useAlertStream(): UseAlertStreamResult {
       // connections leak across route changes.
       eventSource.close()
     }
-  }, [playPlinkChime])
+  }, [playTierAudio])
 
   return {
     flashingTickers,

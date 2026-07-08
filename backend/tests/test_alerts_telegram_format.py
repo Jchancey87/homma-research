@@ -229,6 +229,8 @@ def test_meta_dict_covers_all_documented_types():
         "VOLATILITY_HALT", "VOLATILITY_RESUME",
         "HOD_BREAKOUT", "VOLUME_SPIKE", "PREV_DAY_BREAKOUT",
         "VWAP_CROSSOVER", "VWAP_BOUNCE",
+        "RUNNING_UP", "BULL_FLAG", "VWAP_RECLAIM",
+        "MULTI_TF_CONFLUENCE", "HALT_RESUME_MOMENTUM",
     }
     assert set(ALERT_TYPE_META.keys()) == expected
     for name, meta in ALERT_TYPE_META.items():

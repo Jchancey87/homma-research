@@ -25,6 +25,7 @@
 * **Polling:** FAST_REFRESH_SECONDS=2 (streaming), SLOW_REFRESH_SECONDS=60 (REST). CACHE_TTL_SECONDS=3 (frontend poll hint). /gainers/live returns redis_connected, fast_mode_active, and streaming_symbols_count. Both frontend daily-charts and LiveGainers poll at 3s and render status badges.
 * **Subscription Loop:** `stream_client.py` uses `level_one_equity_add` for new symbols in `update_subscriptions`. Outdated `level_one_equity_subs` replaced all active subscriptions at Schwab.
 * **Rank Change Indicators:** `GainerTable.tsx` tracks previous ranks via React state/ref. Computes rank shifts between polls, rendering green ChevronUp or red ChevronDown next to ticker. Removed FT and Speculative badges.
+* **Decoupled Package (RFC-008):** `momentum_screener` has zero upward dependencies to `backend/config.py` or `backend/fastapi_app/celery_app.py`. Default `DATABASE_URL`, `ALERT_MIN_TIME_COOLDOWN_MINS` loaded from environment. Standalone Celery instance on local Redis broker replaces direct celery_app import.
 
 ### 4. Validation Helpers (RFC-004 QW-4)
 * **Ticker normalisation:** `from validation import normalize_ticker` — uppercase + strip. Replaces inline `ticker.upper().strip()`. Legacy `_upper_strip` alias kept in `validation/schemas.py` for in-module use only.
@@ -66,8 +67,8 @@
 * **UI Manager:** Next.js `/rss` curation manager page styled in TradeStation matte black.
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Reduce RSS ticker hallucinations and improve trade actionability. Fix catalyst keyword substring matches. Map tickers to company names using `stock_fundamentals` and restrict common word/short tickers to strict regex prefixes (e.g. `$TICKER` or parenthesized).
-* **Status:** Wrapped.
+* **Goal:** Refactor Schwab streamer dependencies (RFC-008) and verify frontend hardcoded API URLs (RFC-009).
+* **Status:** Wrapped. RFC-009 verified already completed. RFC-008 streamer decoupled and PM2 restarted. All 266 tests pass.
 * **Assumptions:** None.
 
 ## 🗑️ Rot & Pruning Log

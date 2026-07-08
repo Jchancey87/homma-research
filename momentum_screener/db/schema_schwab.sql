@@ -120,6 +120,8 @@ CREATE TABLE IF NOT EXISTS screener_alerts (
     sent            BOOLEAN      DEFAULT FALSE,
     feedback_score  VARCHAR(10)  DEFAULT NULL,
     feedback_notes  TEXT         DEFAULT NULL,
+    priority_score  INTEGER      DEFAULT 0,
+    priority_tier   VARCHAR(20)  DEFAULT 'Tier 3',
     PRIMARY KEY (id, alert_time)
 );
 
@@ -148,7 +150,9 @@ CREATE TABLE IF NOT EXISTS screener_alerts_archive (
     alert_type      VARCHAR(30),
     archived_at     TIMESTAMPTZ  DEFAULT NOW(),
     feedback_score  VARCHAR(10)  DEFAULT NULL,
-    feedback_notes  TEXT         DEFAULT NULL
+    feedback_notes  TEXT         DEFAULT NULL,
+    priority_score  INTEGER      DEFAULT 0,
+    priority_tier   VARCHAR(20)  DEFAULT 'Tier 3'
 );
 
 -- Continuous Aggregates for price_history_1min
@@ -191,3 +195,9 @@ SELECT add_continuous_aggregate_policy('price_history_15min',
     end_offset => INTERVAL '1 hour',
     schedule_interval => INTERVAL '15 minutes',
     if_not_exists => TRUE);
+
+-- Idempotent migrations for existing databases to add confluence priority columns
+ALTER TABLE public.screener_alerts ADD COLUMN IF NOT EXISTS priority_score INTEGER DEFAULT 0;
+ALTER TABLE public.screener_alerts ADD COLUMN IF NOT EXISTS priority_tier VARCHAR(20) DEFAULT 'Tier 3';
+ALTER TABLE public.screener_alerts_archive ADD COLUMN IF NOT EXISTS priority_score INTEGER DEFAULT 0;
+ALTER TABLE public.screener_alerts_archive ADD COLUMN IF NOT EXISTS priority_tier VARCHAR(20) DEFAULT 'Tier 3';

@@ -86,6 +86,12 @@ def init_db() -> None:
         with open(schwab_schema_path, 'r') as f:
             schema += "\n" + f.read()
 
+    # Apply Alert Config migration (modular approach)
+    config_migration_path = os.path.join(os.path.dirname(__file__), 'sql', 'migrate_alert_config.sql')
+    if os.path.exists(config_migration_path):
+        with open(config_migration_path, 'r') as f:
+            schema += "\n" + f.read()
+
     # Split on semicolons so each statement runs individually
     # (psycopg2 does not support executescript)
     statements = [s.strip() for s in schema.split(';') if s.strip()]

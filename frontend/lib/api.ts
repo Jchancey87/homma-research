@@ -813,3 +813,9 @@ export const curateRSSItem = (id: number, data: { title: string; description: st
 
 export const rejectRSSItem = (id: number) =>
   api.post<{ message: string }>(`/api/rss/pool/${id}/reject`).then(r => r.data)
+
+export const getAlertConfig = () =>
+  api.get<any>('/api/alert-config').then(r => r.data)
+
+export const updateAlertConfig = (data: any) =>
+  api.put<any>('/api/alert-config', data).then(r => r.data)

@@ -37,6 +37,16 @@ function getMarkerConfig(type: string): { shape: 'arrowUp' | 'arrowDown' | 'circ
       return { shape: 'arrowUp', color: '#8b5cf6' } // purple
     case 'VWAP_CROSSOVER':
       return { shape: 'arrowUp', color: '#f59e0b' } // amber
+    case 'RUNNING_UP':
+      return { shape: 'arrowUp', color: '#10b981' } // green
+    case 'BULL_FLAG':
+      return { shape: 'arrowUp', color: '#ec4899' } // pink
+    case 'VWAP_RECLAIM':
+      return { shape: 'arrowUp', color: '#14b8a6' } // teal
+    case 'MULTI_TF_CONFLUENCE':
+      return { shape: 'arrowUp', color: '#a855f7' } // purple
+    case 'HALT_RESUME_MOMENTUM':
+      return { shape: 'arrowUp', color: '#eab308' } // amber
     default:
       return { shape: 'circle', color: '#f59e0b' }
   }

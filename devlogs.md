@@ -2,6 +2,21 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+
+## [2026-07-08] Architectural Refactor: RFC-008 (Decouple Schwab streamer)
+
+### Summary
+* Decoupled `momentum_screener` package. Removed upward dependencies `backend/config.py` and `backend/fastapi_app/celery_app.py`.
+
+### What Changed
+* momentum_screener/schwab/stream_client.py: Removed `sys.path` backend additions. Set local defaults `DATABASE_URL`, `ALERT_MIN_TIME_COOLDOWN_MINS` from environment. Decoupled `celery_app` via standalone Celery client on Redis broker.
+* AGENT_MEMORY.md: Updated active session details.
+
+### Acceptance
+* Pytest backend tests run.
+
+---
+
 ## [2026-07-01] NavBar clean up: Grouped journals and research under dropdowns
 
 ### Summary
