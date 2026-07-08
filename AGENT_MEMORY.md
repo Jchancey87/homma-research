@@ -67,11 +67,9 @@
 * **UI Manager:** Next.js `/rss` curation manager page styled in TradeStation matte black.
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Refactor Schwab streamer dependencies (RFC-008) and verify frontend hardcoded API URLs (RFC-009).
-* **Status:** Wrapped. RFC-009 verified already completed. RFC-008 streamer decoupled and PM2 restarted. All 266 tests pass.
+* **Goal:** Wrapped. Alert Journal + Live Gainers frontend gap closed.
+* **Status:** Committed d59ed6c. Deploy pending (sudo needed — run manually).
 * **Assumptions:** None.
 
 ## 🗑️ Rot & Pruning Log
 * Pruned old session goals.
-
-
