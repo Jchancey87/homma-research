@@ -83,6 +83,12 @@ class SchwabStreamer:
         self.completed_bars_1m = {}   # symbol -> list of dict of completed 1m candles
         self.bars_1m = {}             # symbol -> current 1m candle dict
         self.last_known_price = {}    # symbol -> last known price
+        self.last_known_volume = {}   # symbol -> last known volume
+        self.last_known_high = {}     # symbol -> last known high price
+        self.last_known_low = {}      # symbol -> last known low price
+        self.last_known_open = {}     # symbol -> last known open price
+        self.last_known_bid = {}      # symbol -> last known bid price
+        self.last_known_ask = {}      # symbol -> last known ask price
         self.prev_day_breakout_fired = set()  # set of symbols that fired breakout today
         self.current_date = None      # tracking current ET date
         self.cooldowns = {}           # symbol -> datetime of last alert
@@ -971,10 +977,24 @@ class SchwabStreamer:
                 high_price = item.get('HIGH_PRICE')
                 low_price = item.get('LOW_PRICE')
                 open_price = item.get('OPEN_PRICE')
+                bid_price = item.get('BID_PRICE')
+                ask_price = item.get('ASK_PRICE')
                 
                 if last_price is not None:
                     self.last_known_price[symbol] = last_price
-                
+                if total_volume is not None:
+                    self.last_known_volume[symbol] = total_volume
+                if high_price is not None:
+                    self.last_known_high[symbol] = high_price
+                if low_price is not None:
+                    self.last_known_low[symbol] = low_price
+                if open_price is not None:
+                    self.last_known_open[symbol] = open_price
+                if bid_price is not None:
+                    self.last_known_bid[symbol] = bid_price
+                if ask_price is not None:
+                    self.last_known_ask[symbol] = ask_price
+
                 # Check for trading status / halts
                 trading_status = item.get('TRADING_STATUS')
                 if trading_status is not None:
@@ -989,8 +1009,8 @@ class SchwabStreamer:
                             logger.info(f"⏸️ VOLATILITY HALT DETECTED: {symbol}")
                             
                             now_dt = datetime.utcnow()
-                            lp = last_price if last_price is not None else self.last_known_price.get(symbol, 0.0)
-                            vol = total_volume if total_volume is not None else 0
+                            lp = self.last_known_price.get(symbol, 0.0)
+                            vol = self.last_known_volume.get(symbol, 0)
                             fund = self.fundamentals_cache.get(symbol, {})
                             float_shares = fund.get('shares_outstanding', 0)
                             halt_payload = {
@@ -1021,12 +1041,12 @@ class SchwabStreamer:
                             logger.info(f"▶️ VOLATILITY RESUME DETECTED: {symbol} (2-min HOD/VWAP suppression activated)")
                             
                             # Schedule 30s check for HALT_RESUME_MOMENTUM
-                            resume_price = lp
+                            resume_price = self.last_known_price.get(symbol, 0.0)
                             asyncio.create_task(self.schedule_halt_resume_momentum_check(symbol, resume_price))
                             
                             now_dt = datetime.utcnow()
-                            lp = last_price if last_price is not None else self.last_known_price.get(symbol, 0.0)
-                            vol = total_volume if total_volume is not None else 0
+                            lp = self.last_known_price.get(symbol, 0.0)
+                            vol = self.last_known_volume.get(symbol, 0)
                             fund = self.fundamentals_cache.get(symbol, {})
                             float_shares = fund.get('shares_outstanding', 0)
                             resume_payload = {
@@ -1048,34 +1068,43 @@ class SchwabStreamer:
                             except Exception as e:
                                 logger.error(f"Failed to dispatch Volatility Resume Celery task for {symbol}: {e}")
                 
-                # Skip if core quote fields are missing
-                if last_price is None or total_volume is None:
+                # Retrieve fully resolved fields from cache
+                lp = self.last_known_price.get(symbol)
+                vol = self.last_known_volume.get(symbol)
+                hp = self.last_known_high.get(symbol, lp)
+                lp_low = self.last_known_low.get(symbol, lp)
+                op = self.last_known_open.get(symbol, lp)
+                bid_val = self.last_known_bid.get(symbol)
+                ask_val = self.last_known_ask.get(symbol)
+
+                # Skip if basic price and volume are not yet known
+                if lp is None or vol is None:
                     continue
 
                 # Publish price tick for live_screener streaming fast-path
                 try:
                     redis_client.publish('screener:quotes', json.dumps({
                         's': symbol,
-                        'p': last_price,
-                        'v': total_volume,
-                        'h': high_price,
-                        'l': low_price,
-                        'o': open_price,
-                        'b': item.get('BID_PRICE'),
-                        'a': item.get('ASK_PRICE'),
+                        'p': lp,
+                        'v': vol,
+                        'h': hp,
+                        'l': lp_low,
+                        'o': op,
+                        'b': bid_val,
+                        'a': ask_val,
                         't': time.time(),
                     }))
                 except Exception:
                     pass  # Non-critical — fast-path degrades gracefully
 
                 asyncio.create_task(self.evaluate_and_fire_alert(
-                    symbol, last_price, total_volume,
-                    high_price or last_price,
-                    low_price or last_price,
-                    open_price or last_price
+                    symbol, lp, vol,
+                    hp or lp,
+                    lp_low or lp,
+                    op or lp
                 ))
         except Exception as e:
-            logger.error(f"Error handling quote update: {e}")
+            logger.error(f"Error handling quote update: {e}")ing quote update: {e}")
 
 
     async def run(self):

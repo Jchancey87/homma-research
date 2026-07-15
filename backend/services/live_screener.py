@@ -51,6 +51,7 @@ _cache: dict = {
     'session':         None,
     'persisted_dates': set(),
 }
+_last_update_ts: Dict[str, float] = {}
 
 # Per-ticker caches (avoid re-fetching within short windows)
 _minute_cache: Dict[str, tuple] = {}   # ticker -> (ts, metrics_dict)
@@ -616,12 +617,17 @@ def _fast_refresh():
             if not snap:
                 continue
 
+            # Skip if the streamed snapshot is not strictly newer than the cached quote
+            if snap.timestamp <= _last_update_ts.get(g['ticker'], 0):
+                continue
+
             new_price = snap.last_price
             if not new_price or new_price <= 0:
                 continue
 
             prev_close = g.get('prev_close')
             updated += 1
+            _last_update_ts[g['ticker']] = snap.timestamp
 
             # ── Core price fields ──
             g['last_price'] = round(new_price, 4)
@@ -798,6 +804,9 @@ def refresh_cache(force: bool = False) -> dict:
         _cache['gainers']    = gainers[:TOP_N]
         _cache['fetched_at'] = datetime.utcnow()
         _cache['session']    = session
+        now_ts = time.time()
+        for g in _cache['gainers']:
+            _last_update_ts[g['ticker']] = now_ts
         return dict(_cache)
 
 

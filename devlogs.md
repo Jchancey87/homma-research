@@ -1443,3 +1443,15 @@ Optimized `/health` to use pool connection health check. Created `/api/market/da
 * **PM2 Config ([ecosystem.config.js](file:///home/jackc/projects/homma-research/ecosystem.config.js))**: Added PYTHONPATH env var (`/opt/trading-journal/backend:/opt/trading-journal`) to `fastapi-backend`, `celery-worker`, and `celery-beat`. Resolves `llm` module import runtime failures inside Celery worker context.
 * **Agent Memory ([AGENT_MEMORY.md](file:///home/jackc/projects/homma-research/AGENT_MEMORY.md))**: Updated current session goals and status.
 
+---
+
+## [2026-07-15] Live Gainers Price Update and Reversion Fix
+
+### Summary
+* Fixed live screener price updating for multiple tickers. Stopped fast-path cache overwriting newer REST quotes. Cached differential quote fields in streamer.
+
+### What Changed
+* **Streamer ([stream_client.py](file:///home/jackc/projects/homma-research/momentum_screener/schwab/stream_client.py))**: Cached Level 1 quote fields in `last_known_volume/high/low/open/bid/ask` dictionaries. Merges differential updates from Schwab WS. Resolves `lp` and `vol` before publishing to Redis or triggering alerts, preventing updates from being dropped when fields are None.
+* **Live Screener ([live_screener.py](file:///home/jackc/projects/homma-research/backend/services/live_screener.py))**: Implemented `_last_update_ts` tracking last quote update timestamp per symbol. In `_fast_refresh()`, only overlays price/volume if streamed quote is strictly newer than cached one. Prevents stale websocket cache from reverting fresh REST updates.
+* **Agent Memory ([AGENT_MEMORY.md](file:///home/jackc/projects/homma-research/AGENT_MEMORY.md))**: Updated session goals and status.
+

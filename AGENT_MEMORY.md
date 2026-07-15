@@ -17,8 +17,8 @@
 * **Telegram format (RFC-004 QW-3):** `fastapi_app/tasks/alerts.py` builds messages via `_format_alert_message(alert_data)`. Header/signal/RVOL driven by `ALERT_TYPE_META: dict[str, dict]` at module top. Each value: `emoji`, `header`, `signal` (`None` | str | `"auto"` for dynamic-escape), `show_rvol` (bool). 7 known types + `FALLBACK_META` for unknown.
 
 ### 3. Live Screener & Momentum
-* **Pipeline:** Two-tier refresh in `live_screener.py`. Fast path (2s): overlay WebSocket-streamed prices from `services/streaming_prices.py` (Redis `screener:quotes` channel) — zero REST calls. Slow path (60s): full 5-step pipeline (movers + quotes + enrichment).
-* **Streaming Bridge:** `StreamingPriceBridge` subscribes to Redis pub/sub in a daemon thread, maintains `_prices: dict[str, PriceSnapshot]` with 60s staleness expiry. `stream_client.py` publishes compact JSON ticks on every Level 1 quote.
+* **Pipeline:** Two-tier refresh in `live_screener.py`. Fast path (2s): overlay WebSocket-streamed prices from `services/streaming_prices.py` (Redis `screener:quotes` channel) — zero REST calls. Slow path (60s): full 5-step pipeline (movers + quotes + enrichment). In `_fast_refresh()`, only overlays updates if streamed snapshot is strictly newer than the cached gainer row's last update (`_last_update_ts`), preventing stale websocket cache from reverting newer REST updates.
+* **Streaming Bridge:** `StreamingPriceBridge` subscribes to Redis pub/sub in a daemon thread, maintains `_prices: dict[str, PriceSnapshot]` with 60s staleness expiry. `stream_client.py` caches Level 1 quote fields (`last_known_volume/high/low/open/bid/ask`), merging differential updates from Schwab WS, and publishes compact JSON ticks on every Level 1 quote.
 * **mom_2m:** Calculated relative to target 2m ago. If closest candle is >5m old, return `None`.
 * **Caching & Sparklines:** 30s minute-cache updates metrics inline. Daily cache holds 5d metrics. Flush caches on market session transitions. `sparkline_1h` caches last 60m of minute closes.
 * **Filters:** MIN_GAP_PCT=5.0, MIN_PRICE=$0.50, MAX_PRICE=$100.
@@ -68,9 +68,8 @@
 * **UI Manager:** Next.js `/rss` curation manager page styled in TradeStation matte black.
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Troubleshoot deep ticker research.
-* **Status:** Resolved. Celery worker process sys.path was missing `/opt/trading-journal/backend` under PM2 execution. Added PYTHONPATH to ecosystem.config.js and deployed. Tested TSLA research successfully via DeepSeek R1.
-* **Actions:** Verified check_jobs.py database outputs showing completed status.
+* **Goal:** Resolved live gainer screener only updating one stock (NXTC).
+* **Status:** Complete. Verified price changes and alerts work.
 
 ## 🗑️ Rot & Pruning Log
 * Pruned old session goals.
