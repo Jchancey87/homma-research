@@ -67,9 +67,10 @@
 * **UI Manager:** Next.js `/rss` curation manager page styled in TradeStation matte black.
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Wrapped. Alert Journal + Live Gainers frontend gap closed.
-* **Status:** Committed d59ed6c. Deploy pending (sudo needed — run manually).
+* **Goal:** Surfaced regime/breadth/liquidity/risk unified 4-card summary header card on dashboard.
+* **Status:** Done. Tests passing, frontend client integrated.
 * **Assumptions:** None.
 
 ## 🗑️ Rot & Pruning Log
 * Pruned old session goals.
+

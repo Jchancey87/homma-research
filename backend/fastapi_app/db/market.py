@@ -88,3 +88,24 @@ async def active_volatility_halts_last_hour(conn: asyncpg.Connection) -> list[st
         """
     )
     return [r["ticker"] for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# volatility_halts — halt rate per hour (2-hour window / 2)
+# ---------------------------------------------------------------------------
+
+async def halt_rate_per_hour(conn: asyncpg.Connection) -> float:
+    """Average halts per hour over the last 2 hours.
+
+    ``SELECT COUNT(*) FROM volatility_halts
+      WHERE halt_time >= NOW() - INTERVAL '2 hours'``
+    then divide by 2.  Returns 0.0 if no rows / table empty.
+    """
+    row = await conn.fetchrow(
+        """
+        SELECT COUNT(*) AS cnt FROM volatility_halts
+        WHERE halt_time >= NOW() - INTERVAL '2 hours'
+        """
+    )
+    count = row["cnt"] if row else 0
+    return round(count / 2.0, 1)

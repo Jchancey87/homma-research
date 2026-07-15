@@ -1402,3 +1402,20 @@ Optimized `/health` to use pool connection health check. Created `/api/market/da
 
 ### What Changed
 * **Gainer Table (`frontend/components/live-gainers/GainerTable.tsx`)**: Added `prevRanks` state and list reference tracking. Calculates rank spot difference relative to previous data fetch. Renders ChevronUp/Down styled in TradeStation green/red sharp border box with shift count. Removed Speculative and FT badges next to ticker symbol. Deployed to production.
+
+---
+
+## [2026-07-15] Command Center Top Header: 5-Second Market Regime Card Overhaul
+
+### Summary
+* Reorganized dashboard top header metrics into unified 4-card Command Summary Strip (Regime/Indices, Small-Cap Breadth, Liquidity/Float, Risk/Anomalies) with click-to-expand details, VIX index quotes, halt rates, and sector clusters.
+
+### What Changed
+* **Backend Service (`backend/services/command_summary_service.py`)**: Created new service building consolidated payload. Computes A/D ratio, TradingView SMA-40 percent, green vs red up/down volume ratio, sector clustering, median RVOL, float theme, and halt rate.
+* **DB Module (`backend/fastapi_app/db/market.py`)**: Added `halt_rate_per_hour` counting volatility halts in last 2 hours.
+* **FastAPI Router (`backend/fastapi_app/routers/market.py`)**: Added `GET /market/command-summary` with 60s cache lock.
+* **API Client (`frontend/lib/api.ts`)**: Added `CommandSummaryData` typescript interface and `getCommandSummary` helper.
+* **Frontend Component (`frontend/components/CommandSummaryStrip.tsx`)**: Created 4-card monospace grid using 1px grid separator gaps, neon accents, and accordion expand-collapse details showing advanced stats.
+* **Main Dashboard (`frontend/app/page.tsx`)**: Replaced `MarketBreadthBar` and `MomentumBreadthBanner` with `<CommandSummaryStrip />`.
+* **Testing**: Added unit tests in `backend/tests/test_command_summary_service.py` and integration tests in `backend/tests/test_market.py`. 32/32 tests pass.
+

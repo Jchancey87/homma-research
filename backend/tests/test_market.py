@@ -127,3 +127,73 @@ async def test_dashboard_overview_shape(client):
     assert isinstance(other["sector_rotation"], list)
     assert isinstance(other["continuation_picks"], list)
     assert isinstance(other["recent_observations"], list)
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_command_summary_returns_200(client):
+    resp = await client.get("/api/market/command-summary")
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_command_summary_shape(client):
+    resp = await client.get("/api/market/command-summary")
+    body = resp.json()
+    assert "regime" in body
+    assert "breadth" in body
+    assert "liquidity" in body
+    assert "risk" in body
+    assert "fetched_at" in body
+    assert "cache_ttl_s" in body
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_command_summary_regime_shape(client):
+    resp = await client.get("/api/market/command-summary")
+    regime = resp.json()["regime"]
+    assert "tag" in regime
+    assert regime["tag"] in ("risk_on", "neutral", "risk_off")
+    assert "label" in regime
+    assert "indices" in regime
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_command_summary_breadth_shape(client):
+    resp = await client.get("/api/market/command-summary")
+    breadth = resp.json()["breadth"]
+    assert "ad_ratio_str" in breadth
+    assert "advancing" in breadth
+    assert "declining" in breadth
+    assert "pct_green" in breadth
+    assert "is_bullish" in breadth
+    assert "status" in breadth
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_command_summary_risk_shape(client):
+    resp = await client.get("/api/market/command-summary")
+    risk = resp.json()["risk"]
+    assert risk["tag"] in ("normal", "elevated", "high")
+    assert "halt_count" in risk
+    assert "halt_tickers" in risk
+    assert "halt_rate_per_hour" in risk
+    assert "signals" in risk
+    assert isinstance(risk["signals"], list)
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_command_summary_liquidity_shape(client):
+    resp = await client.get("/api/market/command-summary")
+    liq = resp.json()["liquidity"]
+    assert "avg_rvol_top5" in liq
+    assert "status" in liq
+    assert "is_high" in liq
+    assert "float_theme" in liq
+    assert "float_counts" in liq
+    assert "sector_clusters" in liq
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_command_summary_price_filter_param(client):
+    resp = await client.get("/api/market/command-summary?price_filter=false")
+    assert resp.status_code == 200

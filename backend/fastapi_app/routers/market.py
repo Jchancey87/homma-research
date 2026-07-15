@@ -383,6 +383,86 @@ async def get_momentum_breadth(
 
 
 # ---------------------------------------------------------------------------
+# GET /market/command-summary
+# ---------------------------------------------------------------------------
+
+_cmd_summary_cache: dict = {"data": None, "fetched_at": 0}
+_cmd_summary_lock = asyncio.Lock()
+CMD_SUMMARY_TTL = 60  # 60 seconds
+
+
+@router.get("/command-summary")
+async def command_summary(
+    price_filter: bool = Query(True),
+    db: asyncpg.Connection = Depends(get_db),
+):
+    """
+    Unified market command summary merging breadth, momentum, regime,
+    risk, and liquidity metrics.  Cached for 60 seconds.
+    """
+    from services.command_summary_service import build_command_summary
+    from services.live_screener import get_live_gainers
+
+    # Check cache
+    async with _cmd_summary_lock:
+        now = time.time()
+        if _cmd_summary_cache["data"] and (now - _cmd_summary_cache["fetched_at"]) < CMD_SUMMARY_TTL:
+            return _cmd_summary_cache["data"]
+
+    # Wire up DB-backed callables for the service
+    async def _halt_tickers():
+        try:
+            return await db_market.active_volatility_halts_last_hour(db)
+        except Exception as exc:
+            log.warning("[cmd-summary] halt tickers fetch failed: %s", exc)
+            return []
+
+    async def _halt_rate():
+        try:
+            return await db_market.halt_rate_per_hour(db)
+        except Exception as exc:
+            log.warning("[cmd-summary] halt rate fetch failed: %s", exc)
+            return 0.0
+
+    async def _rvol_float_fallback(pf: bool):
+        try:
+            max_date = await db_market.latest_daily_gainers_date(db)
+            if not max_date:
+                return [], []
+            rows = await db_market.top_rvol_float_on_date(
+                db,
+                max_date,
+                min_price=2.0 if pf else None,
+                max_price=25.0 if pf else None,
+                limit=5,
+            )
+            rvol_list = [r["rvol_15m"] for r in rows if r.get("rvol_15m") is not None]
+            float_list = [r["float_shares"] for r in rows if r.get("float_shares") is not None]
+            return rvol_list, float_list
+        except Exception as exc:
+            log.warning("[cmd-summary] RVOL/float DB fallback failed: %s", exc)
+            return [], []
+
+    data = await build_command_summary(
+        price_filter=price_filter,
+        polygon_api_key=settings.polygon_api_key,
+        get_live_quotes_fn=get_live_quotes,
+        get_live_gainers_fn=get_live_gainers,
+        fetch_halt_tickers_fn=_halt_tickers,
+        fetch_halt_rate_fn=_halt_rate,
+        fetch_rvol_float_fallback_fn=_rvol_float_fallback,
+    )
+
+    result = _clean_nans(data)
+
+    async with _cmd_summary_lock:
+        _cmd_summary_cache["data"] = result
+        _cmd_summary_cache["fetched_at"] = time.time()
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Debug: Candle freshness diagnostic
 # ---------------------------------------------------------------------------
 

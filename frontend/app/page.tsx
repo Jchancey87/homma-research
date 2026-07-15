@@ -3,8 +3,7 @@ import Link from 'next/link'
 import LiveGainers from '@/components/LiveGainers'
 import WatchlistQuickAccess from '@/components/WatchlistQuickAccess'
 import RecentObservations from '@/components/RecentObservations'
-import MarketBreadthBar from '@/components/MarketBreadthBar'
-import MomentumBreadthBanner from '@/components/MomentumBreadthBanner'
+import CommandSummaryStrip from '@/components/CommandSummaryStrip'
 import RepeatRunnerAlert from '@/components/RepeatRunnerAlert'
 import FollowThrough from '@/components/FollowThrough'
 import FloatBucketSummary from '@/components/FloatBucketSummary'
@@ -145,15 +144,8 @@ export default async function DashboardPage() {
       {/* ── Morning header ── */}
       <MorningHeader />
 
-      {/* ── Market breadth strip (full width) ── */}
-      <Suspense fallback={<div className="h-10 bg-[#111] border border-[#262626] rounded-none animate-pulse" />}>
-        <MarketBreadthBar />
-      </Suspense>
-
-      {/* ── Momentum Breadth & Market Health Banner ── */}
-      <Suspense fallback={<div className="h-24 bg-[#111] border border-[#262626] rounded-none animate-pulse" />}>
-        <MomentumBreadthBanner />
-      </Suspense>
+      {/* ── Command Summary Strip (Market Regime Card) ── */}
+      <CommandSummaryStrip />
 
 
       {/* ── Row 1: Live screener (full width) ── */}

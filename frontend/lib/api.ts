@@ -686,6 +686,55 @@ export const getMomentumBreadth = (priceFilter = true) =>
 
 
 
+// ── Command Summary (Market Regime Card) ────────────────────────────────────
+
+export interface CommandSummaryData {
+  regime: {
+    tag: 'risk_on' | 'neutral' | 'risk_off'
+    label: string
+    indices: Record<string, { ticker: string; price: number | null; chg_pct: number | null; volume: number | null }>
+    vix: { value: number | null; direction: string } | null
+  }
+  breadth: {
+    ad_ratio_str: string
+    ad_ratio_val: number | null
+    advancing: number
+    declining: number
+    pct_green: number | null
+    is_bullish: boolean
+    status: string
+    up_down_vol_ratio: number | null
+    above_40sma_pct: number | null
+  }
+  liquidity: {
+    median_rvol: number | null
+    avg_rvol_top5: number
+    status: string
+    is_high: boolean
+    float_theme: string
+    float_counts: Record<string, number>
+    sector_clusters: Record<string, number>
+  }
+  risk: {
+    tag: 'normal' | 'elevated' | 'high'
+    label: string
+    vix_value: number | null
+    vix_direction: string | null
+    halt_count: number
+    halt_tickers: string[]
+    halt_rate_per_hour: number | null
+    signals: string[]
+  }
+  fetched_at: string
+  cache_ttl_s: number
+}
+
+export const getCommandSummary = (priceFilter = true) =>
+  api.get<CommandSummaryData>('/api/market/command-summary', {
+    params: { price_filter: priceFilter }
+  }).then(r => r.data)
+
+
 // ── Alert Journal ───────────────────────────────────────────────────────────
 
 export interface AlertInstance {
