@@ -14,6 +14,10 @@ import httpx
 try:
     from dotenv import load_dotenv
     load_dotenv()
+    if not os.getenv("SCHWAB_API_KEY"):
+        # Fallback to backend/.env relative to script location
+        env_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../backend/.env"))
+        load_dotenv(env_path)
 except ImportError:
     pass
 
