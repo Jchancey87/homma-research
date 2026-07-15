@@ -54,6 +54,7 @@
 * **Async tests:** Run with `-p no:anyio` for clean asyncio loops.
 * **Test surface:** 264 passing, 0 regressions.
 * **Deploy:** Run `/opt/trading-journal/deploy.sh` (push from `/home/jackc/projects/homma-research` first).
+* **PYTHONPATH environment variable:** PM2 config ([ecosystem.config.js](file:///home/jackc/projects/homma-research/ecosystem.config.js)) specifies `PYTHONPATH` for Python/Celery worker/beat apps to prevent runtime `ModuleNotFoundError` inside spawned process contexts.
 
 ### 9. Optimization, Dashboards, and TimescaleDB Policies
 * **Health Endpoint:** Uses `check_db_health` connection-pool based check.
@@ -67,9 +68,9 @@
 * **UI Manager:** Next.js `/rss` curation manager page styled in TradeStation matte black.
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Troubleshoot deep ticker research. It does not return anything when user inputs a ticker.
-* **Status:** Initial search shows `/research` endpoint triggers `llm_tasks.run_deep_research`. Need to analyze Celery tasks and LLM client logs/code.
-* **Actions:** Initial codebase search.
+* **Goal:** Troubleshoot deep ticker research.
+* **Status:** Resolved. Celery worker process sys.path was missing `/opt/trading-journal/backend` under PM2 execution. Added PYTHONPATH to ecosystem.config.js and deployed. Tested TSLA research successfully via DeepSeek R1.
+* **Actions:** Verified check_jobs.py database outputs showing completed status.
 
 ## 🗑️ Rot & Pruning Log
 * Pruned old session goals.
