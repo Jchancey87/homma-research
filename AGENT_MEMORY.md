@@ -67,9 +67,9 @@
 * **UI Manager:** Next.js `/rss` curation manager page styled in TradeStation matte black.
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Migrate deploy.sh and PM2 to run completely user-owned without root.
-* **Status:** PM2 TypeError fixed. Port conflicts, root-owned files (.next, __pycache__), and active pm2-root.service block user-owned frontend and backend.
-* **Actions:** Added root check and CI=true to deploy.sh. Fixed all typescript lint warnings in frontend files. Instructed user to stop/disable pm2-root, run recursive chown, and save pm2.
+* **Goal:** Troubleshoot deep ticker research. It does not return anything when user inputs a ticker.
+* **Status:** Initial search shows `/research` endpoint triggers `llm_tasks.run_deep_research`. Need to analyze Celery tasks and LLM client logs/code.
+* **Actions:** Initial codebase search.
 
 ## 🗑️ Rot & Pruning Log
 * Pruned old session goals.

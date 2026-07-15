@@ -11,6 +11,7 @@ module.exports = {
       max_restarts: 10,
       env: {
         FLASK_ENV: "production",
+        PYTHONPATH: "/opt/trading-journal/backend:/opt/trading-journal",
       },
       error_file: "/var/log/trading-journal/fastapi-err.log",
       out_file:   "/var/log/trading-journal/fastapi-out.log",
@@ -24,6 +25,9 @@ module.exports = {
       watch: false,
       autorestart: true,
       max_restarts: 10,
+      env: {
+        PYTHONPATH: "/opt/trading-journal/backend:/opt/trading-journal",
+      },
       error_file: "/var/log/trading-journal/celery-err.log",
       out_file:   "/var/log/trading-journal/celery-out.log",
     },
@@ -36,6 +40,9 @@ module.exports = {
       watch: false,
       autorestart: true,
       max_restarts: 10,
+      env: {
+        PYTHONPATH: "/opt/trading-journal/backend:/opt/trading-journal",
+      },
       error_file: "/var/log/trading-journal/celerybeat-err.log",
       out_file:   "/var/log/trading-journal/celerybeat-out.log",
     },

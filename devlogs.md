@@ -1431,3 +1431,15 @@ Optimized `/health` to use pool connection health check. Created `/api/market/da
 * **User-owned Migration**: Verified that /opt/trading-journal and /var/log/trading-journal are owned by jackc, but .next/ and some __pycache__ files are still root-owned. Changed AGENT_MEMORY.md deploy instruction to remove sudo.
 * **Non-Interactive Deployment**: Added a root check to [deploy.sh](file:///opt/trading-journal/deploy.sh) to fail early if run as root/sudo, and exported `CI=true` to suppress interactive package manager prompts (like node_modules removal).
 * **Lint Warning Mitigation**: Fixed all 11 TypeScript warnings (unused imports, unused `TAB_ACCENT`, and explicit `any` types) in [alert-config/page.tsx](file:///home/jackc/projects/homma-research/frontend/app/alert-config/page.tsx), [research/page.tsx](file:///home/jackc/projects/homma-research/frontend/app/research/page.tsx), [rss/page.tsx](file:///home/jackc/projects/homma-research/frontend/app/rss/page.tsx), [useAlertStream.ts](file:///home/jackc/projects/homma-research/frontend/components/live-gainers/useAlertStream.ts), and [api.ts](file:///home/jackc/projects/homma-research/frontend/lib/api.ts). Verified zero errors via `tsc --noEmit`.
+
+---
+
+## [2026-07-15] Deep Research Ticker Module Path Fix
+
+### Summary
+* Fixed Celery task "No module named 'llm'" import errors. Added PYTHONPATH to PM2 config.
+
+### What Changed
+* **PM2 Config ([ecosystem.config.js](file:///home/jackc/projects/homma-research/ecosystem.config.js))**: Added PYTHONPATH env var (`/opt/trading-journal/backend:/opt/trading-journal`) to `fastapi-backend`, `celery-worker`, and `celery-beat`. Resolves `llm` module import runtime failures inside Celery worker context.
+* **Agent Memory ([AGENT_MEMORY.md](file:///home/jackc/projects/homma-research/AGENT_MEMORY.md))**: Updated current session goals and status.
+
