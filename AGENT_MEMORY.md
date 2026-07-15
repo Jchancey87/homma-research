@@ -67,9 +67,10 @@
 * **UI Manager:** Next.js `/rss` curation manager page styled in TradeStation matte black.
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Surfaced regime/breadth/liquidity/risk unified 4-card summary header card on dashboard, and refactored navbar destination groupings.
-* **Status:** Done. Tests passing, frontend clients updated and compiled successfully.
-* **Assumptions:** None.
+* **Goal:** Resolve stale frontend updates.
+* **Status:** Deploy failed due to root-owned node_modules/build folders, missing PYTHONPATH, and missing schwab-streamer credentials.
+* **Actions:** Renamed root-owned folders, updated stream_client.py load_dotenv for backend/.env, added PYTHONPATH to ecosystem.config.js, deployed to /opt/trading-journal. Streamer online.
+* **Blocker:** Port 3000 EADDRINUSE by root process (PID 6934). User must kill it to start user-owned nextjs-frontend.
 
 ## 🗑️ Rot & Pruning Log
 * Pruned old session goals.

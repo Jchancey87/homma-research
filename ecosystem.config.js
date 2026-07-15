@@ -67,7 +67,7 @@ module.exports = {
       max_restarts: 10,
       restart_delay: 10000,
       env: {
-        PYTHONPATH: "/opt/trading-journal",
+        PYTHONPATH: "/opt/trading-journal:/opt/trading-journal/backend",
       },
       error_file: "/var/log/trading-journal/streamer-err.log",
       out_file:   "/var/log/trading-journal/streamer-out.log",
