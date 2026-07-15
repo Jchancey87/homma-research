@@ -1418,4 +1418,6 @@ Optimized `/health` to use pool connection health check. Created `/api/market/da
 * **Frontend Component (`frontend/components/CommandSummaryStrip.tsx`)**: Created 4-card monospace grid using 1px grid separator gaps, neon accents, and accordion expand-collapse details showing advanced stats.
 * **Main Dashboard (`frontend/app/page.tsx`)**: Replaced `MarketBreadthBar` and `MomentumBreadthBanner` with `<CommandSummaryStrip />`.
 * **Testing**: Added unit tests in `backend/tests/test_command_summary_service.py` and integration tests in `backend/tests/test_market.py`. 32/32 tests pass.
+* **NavBar (`frontend/components/NavBar.tsx`)**: Reorganized navigation layout. Structured main links as Dashboard, Command, Research, and Watchlist. Grouped secondary destinations under dropdowns (Journals, Charts, Feeds). Shortened labels, dropped internal dropdown icons to declutter, and moved Theme/Settings utilities to a dedicated, divided right-side cluster. Active visual highlight is restricted to current active routes/triggers.
+
 

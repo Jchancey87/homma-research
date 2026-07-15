@@ -67,10 +67,11 @@
 * **UI Manager:** Next.js `/rss` curation manager page styled in TradeStation matte black.
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Surfaced regime/breadth/liquidity/risk unified 4-card summary header card on dashboard.
-* **Status:** Done. Tests passing, frontend client integrated.
+* **Goal:** Surfaced regime/breadth/liquidity/risk unified 4-card summary header card on dashboard, and refactored navbar destination groupings.
+* **Status:** Done. Tests passing, frontend clients updated and compiled successfully.
 * **Assumptions:** None.
 
 ## 🗑️ Rot & Pruning Log
 * Pruned old session goals.
+
 
