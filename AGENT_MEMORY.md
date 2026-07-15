@@ -53,7 +53,7 @@
 * **Venv Testing:** Execute backend tests using `/opt/trading-journal/backend/venv/bin/pytest`.
 * **Async tests:** Run with `-p no:anyio` for clean asyncio loops.
 * **Test surface:** 264 passing, 0 regressions.
-* **Deploy:** Run `sudo /opt/trading-journal/deploy.sh` (push from `/home/jackc/projects/homma-research` first).
+* **Deploy:** Run `/opt/trading-journal/deploy.sh` (push from `/home/jackc/projects/homma-research` first).
 
 ### 9. Optimization, Dashboards, and TimescaleDB Policies
 * **Health Endpoint:** Uses `check_db_health` connection-pool based check.
@@ -67,10 +67,9 @@
 * **UI Manager:** Next.js `/rss` curation manager page styled in TradeStation matte black.
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Resolve stale frontend updates.
-* **Status:** Deploy failed due to root-owned node_modules/build folders, missing PYTHONPATH, and missing schwab-streamer credentials.
-* **Actions:** Renamed root-owned folders, updated stream_client.py load_dotenv for backend/.env, added PYTHONPATH to ecosystem.config.js, deployed to /opt/trading-journal. Streamer online.
-* **Blocker:** Port 3000 EADDRINUSE by root process (PID 6934). User must kill it to start user-owned nextjs-frontend.
+* **Goal:** Migrate deploy.sh and PM2 to run completely user-owned without root.
+* **Status:** PM2 TypeError fixed. Port conflicts, root-owned files (.next, __pycache__), and active pm2-root.service block user-owned frontend and backend.
+* **Actions:** Added root check and CI=true to deploy.sh. Fixed all typescript lint warnings in frontend files. Instructed user to stop/disable pm2-root, run recursive chown, and save pm2.
 
 ## 🗑️ Rot & Pruning Log
 * Pruned old session goals.

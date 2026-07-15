@@ -1,10 +1,10 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { getAlertConfig, updateAlertConfig } from '@/lib/api'
-import { Save, RefreshCw, Settings, Sliders, Shield, Volume2, ToggleLeft, Activity } from 'lucide-react'
+import { getAlertConfig, updateAlertConfig, AlertConfig } from '@/lib/api'
+import { Save, RefreshCw, Settings, Sliders, ToggleLeft, Activity } from 'lucide-react'
 
 export default function AlertConfigPage() {
-  const [config, setConfig] = useState<any>(null)
+  const [config, setConfig] = useState<AlertConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -43,20 +43,26 @@ export default function AlertConfigPage() {
   }
 
   function handleWeightChange(field: string, val: number) {
-    setConfig((prev: any) => ({
-      ...prev,
-      [field]: val
-    }))
+    setConfig((prev) => {
+      if (!prev) return null
+      return {
+        ...prev,
+        [field]: val
+      }
+    })
   }
 
   function handleToggleAlert(alertType: string) {
-    setConfig((prev: any) => ({
-      ...prev,
-      enabled_alerts: {
-        ...prev.enabled_alerts,
-        [alertType]: !prev.enabled_alerts[alertType]
+    setConfig((prev) => {
+      if (!prev) return null
+      return {
+        ...prev,
+        enabled_alerts: {
+          ...prev.enabled_alerts,
+          [alertType]: !prev.enabled_alerts[alertType]
+        }
       }
-    }))
+    })
   }
 
   if (loading) {

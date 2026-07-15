@@ -80,15 +80,6 @@ const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
   { id: 'history',  label: 'History',     icon: History },
 ]
 
-const TAB_ACCENT: Record<Tab, string> = {
-  report:   'text-emerald-400 border-emerald-500',
-  risk:     'text-orange-400 border-orange-500',
-  catalyst: 'text-emerald-400 border-emerald-500',
-  context:  'text-blue-400 border-blue-500',
-  pipe:     'text-violet-400 border-violet-500',
-  history:  'text-gray-400 border-gray-500',
-}
-
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ResearchPage() {

@@ -63,7 +63,7 @@ export function useAlertStream(): UseAlertStreamResult {
       if (tier === 'Tier 3') return // Tier 3 is silent
 
       if (!audioCtxRef.current) {
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
+        const AudioContextClass = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
         if (!AudioContextClass) return
         audioCtxRef.current = new AudioContextClass()
       }

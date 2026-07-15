@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# Prevent running as root
+if [ "$EUID" -eq 0 ]; then
+  echo "❌ Error: Do not run deploy.sh as root/sudo! Run it as the regular user."
+  exit 1
+fi
+
 # --- Configuration ---
 PROJECT_ROOT="/opt/trading-journal"
 FRONTEND_DIR="$PROJECT_ROOT/frontend"
@@ -23,6 +29,7 @@ deactivate
 echo "🏗️  Building frontend..."
 cd $FRONTEND_DIR
 echo "NEXT_PUBLIC_API_URL=https://homma-research.homma.casa" > .env.local
+export CI=true
 npx pnpm@9 install --frozen-lockfile  # Ensures exact pinned packages are installed
 export NEXT_IGNORE_INCORRECT_LOCKFILE=1
 export NEXT_PUBLIC_API_URL="https://homma-research.homma.casa"

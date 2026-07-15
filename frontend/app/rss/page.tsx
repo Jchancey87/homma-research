@@ -233,7 +233,7 @@ export default function RSSCurationPage() {
                   <label className="font-mono text-[9px] text-gray-500 uppercase">Category</label>
                   <select
                     value={newSourceCat}
-                    onChange={e => setNewSourceCat(e.target.value as any)}
+                    onChange={e => setNewSourceCat(e.target.value as 'biotech' | 'tech' | 'general')}
                     className="w-full bg-[#050505] border border-[#262626] text-xs text-white p-1.5 focus:border-[#444] focus:outline-none rounded-none font-mono"
                   >
                     <option value="biotech">Biotech</option>

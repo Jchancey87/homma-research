@@ -858,11 +858,35 @@ export const updateRSSSource = (id: number, data: { name?: string; feed_url?: st
 export const deleteRSSSource = (id: number) =>
   api.delete<{ message: string }>(`/api/rss/sources/${id}`).then(r => r.data)
 
+export interface AlertConfig {
+  alert_min_pct_increase: number
+  alert_min_time_cooldown_mins: number
+  tier_1_threshold: number
+  tier_2_threshold: number
+  watchlist_presence_weight: number
+  watchlist_priority_tag_weight: number
+  catalyst_confirmed_weight: number
+  catalyst_speculative_weight: number
+  catalyst_technical_weight: number
+  float_micro_weight: number
+  float_low_weight: number
+  float_mid_weight: number
+  session_regular_weight: number
+  session_pre_weight: number
+  session_post_weight: number
+  rvol_high_weight: number
+  rvol_mid_weight: number
+  rvol_low_weight: number
+  enabled_alerts: Record<string, boolean>
+  alert_type?: string
+  [key: string]: unknown
+}
+
 export const getRSSPool = (status = 'pending') =>
   api.get<RSSFeedPoolItem[]>('/api/rss/pool', { params: { status } }).then(r => r.data)
 
 export const triggerRSSIngest = () =>
-  api.post<{ message: string; stats: any }>('/api/rss/pool/trigger-ingest').then(r => r.data)
+  api.post<{ message: string; stats: Record<string, unknown> }>('/api/rss/pool/trigger-ingest').then(r => r.data)
 
 export const curateRSSItem = (id: number, data: { title: string; description: string; associated_tickers: string[]; curated_notes?: string }) =>
   api.post<{ message: string }>(`/api/rss/pool/${id}/curate`, data).then(r => r.data)
@@ -871,7 +895,7 @@ export const rejectRSSItem = (id: number) =>
   api.post<{ message: string }>(`/api/rss/pool/${id}/reject`).then(r => r.data)
 
 export const getAlertConfig = () =>
-  api.get<any>('/api/alert-config').then(r => r.data)
+  api.get<AlertConfig>('/api/alert-config').then(r => r.data)
 
-export const updateAlertConfig = (data: any) =>
-  api.put<any>('/api/alert-config', data).then(r => r.data)
+export const updateAlertConfig = (data: AlertConfig) =>
+  api.put<{ status: string }>('/api/alert-config', data).then(r => r.data)

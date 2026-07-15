@@ -1420,4 +1420,14 @@ Optimized `/health` to use pool connection health check. Created `/api/market/da
 * **Testing**: Added unit tests in `backend/tests/test_command_summary_service.py` and integration tests in `backend/tests/test_market.py`. 32/32 tests pass.
 * **NavBar (`frontend/components/NavBar.tsx`)**: Reorganized navigation layout. Structured main links as Dashboard, Command, Research, and Watchlist. Grouped secondary destinations under dropdowns (Journals, Charts, Feeds). Shortened labels, dropped internal dropdown icons to declutter, and moved Theme/Settings utilities to a dedicated, divided right-side cluster. Active visual highlight is restricted to current active routes/triggers.
 
+## [2026-07-15] PM2 TypeError and User Migration Fix
 
+### Summary
+* Diagnosed and fixed PM2 TypeError crash. Cleaned corrupted PM2 daemon state for jackc user. Propose disabling pm2-root service to resolve port EADDRINUSE conflicts.
+
+### What Changed
+* **PM2 State**: Ran `pm2 kill` and `pm2 start ecosystem.config.js` to reset process list and align app IDs sequentially (0-4).
+* **Port Conflicts**: Identified root-owned `pm2-root.service` running PM2 daemon under `/root/.pm2` holding ports 3000, 5000, and file lock on `celerybeat-schedule`.
+* **User-owned Migration**: Verified that /opt/trading-journal and /var/log/trading-journal are owned by jackc, but .next/ and some __pycache__ files are still root-owned. Changed AGENT_MEMORY.md deploy instruction to remove sudo.
+* **Non-Interactive Deployment**: Added a root check to [deploy.sh](file:///opt/trading-journal/deploy.sh) to fail early if run as root/sudo, and exported `CI=true` to suppress interactive package manager prompts (like node_modules removal).
+* **Lint Warning Mitigation**: Fixed all 11 TypeScript warnings (unused imports, unused `TAB_ACCENT`, and explicit `any` types) in [alert-config/page.tsx](file:///home/jackc/projects/homma-research/frontend/app/alert-config/page.tsx), [research/page.tsx](file:///home/jackc/projects/homma-research/frontend/app/research/page.tsx), [rss/page.tsx](file:///home/jackc/projects/homma-research/frontend/app/rss/page.tsx), [useAlertStream.ts](file:///home/jackc/projects/homma-research/frontend/components/live-gainers/useAlertStream.ts), and [api.ts](file:///home/jackc/projects/homma-research/frontend/lib/api.ts). Verified zero errors via `tsc --noEmit`.
