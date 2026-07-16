@@ -389,6 +389,19 @@ export const removeFromWatchlist = (ticker: string) =>
 export const markWatchlistViewed = (ticker: string) =>
   api.post(`/api/watchlist/${ticker}/viewed`).then(r => r.data)
 
+export const exportWatchlistCsv = () =>
+  api.get('/api/watchlist/export', { responseType: 'blob' }).then(r => r.data)
+
+export const importWatchlistCsv = (file: File) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return api.post<{ inserted: number; updated: number }>('/api/watchlist/import', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  }).then(r => r.data)
+}
+
 // ── Continuation Picks ────────────────────────────────────────────────────
 
 export interface ContinuationPick {

@@ -91,3 +91,48 @@ async def test_watchlist_prices_returns_dict(client):
     resp = await client.get("/api/watchlist/prices")
     assert resp.status_code == 200
     assert isinstance(resp.json(), dict)
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_watchlist_export(client):
+    # Ensure there's at least one ticker
+    await client.post(
+        "/api/watchlist",
+        json={"ticker": "EXPT", "sector": "Energy", "notes": "export test", "tags": ["export"]},
+    )
+    resp = await client.get("/api/watchlist/export")
+    assert resp.status_code == 200
+    assert "text/csv" in resp.headers["content-type"]
+    content = resp.text
+    assert "ticker,sector,notes,tags" in content
+    assert "EXPT" in content
+    await client.delete("/api/watchlist/EXPT")
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_watchlist_import(client):
+    csv_content = (
+        "ticker,sector,notes,tags\n"
+        "IMP1,Tech,imported ticker 1,import\n"
+        "IMP2,Biotech,imported ticker 2,import;biotech\n"
+    )
+    
+    # Post CSV as a file upload
+    resp = await client.post(
+        "/api/watchlist/import",
+        files={"file": ("test_import.csv", csv_content.encode("utf-8"), "text/csv")}
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["inserted"] == 2
+    
+    # Retrieve and verify they exist
+    list_resp = await client.get("/api/watchlist")
+    tickers = [item["ticker"] for item in list_resp.json()]
+    assert "IMP1" in tickers
+    assert "IMP2" in tickers
+    
+    # Cleanup
+    await client.delete("/api/watchlist/IMP1")
+    await client.delete("/api/watchlist/IMP2")
+

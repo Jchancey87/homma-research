@@ -5,11 +5,12 @@ import Link from 'next/link'
 import {
   getWatchlist, addToWatchlist, removeFromWatchlist,
   getContinuationPicks, deactivateContinuationPick,
+  exportWatchlistCsv, importWatchlistCsv,
   type WatchlistItem, type ContinuationPick,
 } from '@/lib/api'
 import {
   Bookmark, Plus, Trash2, Search, RefreshCw, ExternalLink,
-  Trophy, X, ChevronDown, ChevronUp,
+  Trophy, X, ChevronDown, ChevronUp, Download, Upload,
 } from 'lucide-react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -320,6 +321,38 @@ export default function WatchlistPage() {
     setNewTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])
   }
 
+  const handleExport = async () => {
+    try {
+      const blob = await exportWatchlistCsv()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'watchlist_export.csv'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Failed to export watchlist', err)
+      alert('Failed to export watchlist')
+    }
+  }
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const res = await importWatchlistCsv(file)
+      alert(`Import completed! ${res.inserted} tickers added, ${res.updated} tickers updated.`)
+      await load()
+    } catch (err) {
+      console.error('Failed to import watchlist', err)
+      alert('Failed to import watchlist CSV')
+    }
+    e.target.value = ''
+  }
+
+
   const filteredItems = items.filter(item => {
     const tags = parseTags(item.tags)
     if (tagFilter && !tags.includes(tagFilter)) return false
@@ -456,9 +489,34 @@ export default function WatchlistPage() {
               <RefreshCw size={14} />
             </button>
             <button
+              id="export-watchlist-btn"
+              onClick={handleExport}
+              title="Export Watchlist to CSV"
+              className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 dark:border-gray-700 hover:bg-gray-150 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 font-semibold text-xs rounded-none transition-colors"
+            >
+              <Download size={14} />
+              Export
+            </button>
+            <button
+              id="import-watchlist-btn"
+              onClick={() => document.getElementById('import-csv-input')?.click()}
+              title="Import Watchlist from CSV"
+              className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 dark:border-gray-700 hover:bg-gray-150 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 font-semibold text-xs rounded-none transition-colors"
+            >
+              <Upload size={14} />
+              Import
+            </button>
+            <input
+              id="import-csv-input"
+              type="file"
+              accept=".csv"
+              onChange={handleImport}
+              className="hidden"
+            />
+            <button
               id="add-ticker-btn"
               onClick={() => setShowAdd(v => !v)}
-              className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm rounded-lg transition-colors shadow"
+              className="flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-none transition-colors shadow"
             >
               <Plus size={14} />
               Add Ticker

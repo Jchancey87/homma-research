@@ -71,6 +71,29 @@ async def insert_watchlist(
     )
 
 
+async def upsert_watchlist(
+    conn: asyncpg.Connection,
+    *,
+    ticker: str,
+    sector: Optional[str],
+    notes: Optional[str],
+    tags_json: str,
+) -> None:
+    """
+    Insert a watchlist row, or update notes/sector/tags if it already exists.
+    """
+    await conn.execute(
+        "INSERT INTO watchlist (ticker, sector, notes, tags, added_at) "
+        "VALUES ($1, $2, $3, $4, $5) "
+        "ON CONFLICT (ticker) DO UPDATE SET "
+        "sector = COALESCE(EXCLUDED.sector, watchlist.sector), "
+        "notes = COALESCE(EXCLUDED.notes, watchlist.notes), "
+        "tags = EXCLUDED.tags",
+        ticker, sector, notes, tags_json, datetime.now(timezone.utc),
+    )
+
+
+
 async def update_watchlist(
     conn: asyncpg.Connection,
     ticker: str,

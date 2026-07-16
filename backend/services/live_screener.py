@@ -246,21 +246,14 @@ def _build_gainer_rows(quotes: Dict[str, dict], candidate_meta: Dict[str, dict],
         prev_close = q.get('closePrice')  # previous session close from Schwab
 
         if not last_price or not prev_close or prev_close <= 0:
-            if sym not in watchlist:
-                continue
-            # watchlist tickers kept even with incomplete data
-            gap_pct = 0.0
-        else:
-            gap_pct = round(((last_price - prev_close) / prev_close) * 100, 2)
+            continue
+        gap_pct = round(((last_price - prev_close) / prev_close) * 100, 2)
 
-        in_watchlist = sym in watchlist
-
-        # Price filter (skip for watchlist)
-        if not in_watchlist:
-            if last_price < MIN_PRICE or last_price > MAX_PRICE:
-                continue
-            if gap_pct < MIN_GAP_PCT:
-                continue
+        # Price and gap filters (applied to all tickers, including watchlist)
+        if last_price < MIN_PRICE or last_price > MAX_PRICE:
+            continue
+        if gap_pct < MIN_GAP_PCT:
+            continue
 
         high_price = q.get('highPrice') or last_price
         open_price = q.get('openPrice')
@@ -272,6 +265,8 @@ def _build_gainer_rows(quotes: Dict[str, dict], candidate_meta: Dict[str, dict],
         rvol       = round(total_vol / avg_vol, 2) if avg_vol and avg_vol > 0 else None
         spread_pct = round(((ask - bid) / bid) * 100, 2) if ask and bid and bid > 0 else None
         is_hod     = (last_price >= high_price * 0.995) if high_price and high_price > 0 else False
+
+        in_watchlist = sym in watchlist
 
         rows.append({
             'ticker':        sym,
@@ -295,8 +290,8 @@ def _build_gainer_rows(quotes: Dict[str, dict], candidate_meta: Dict[str, dict],
             'news_fresh':    None,
         })
 
-    # Sort: watchlist first, then by gap_pct descending
-    rows.sort(key=lambda x: (not x['in_watchlist'], -x['gap_pct']))
+    # Sort: by gap_pct descending
+    rows.sort(key=lambda x: -x['gap_pct'])
     return rows
 
 

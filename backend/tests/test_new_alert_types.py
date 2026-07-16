@@ -270,6 +270,7 @@ async def test_tier_based_gating():
         assert not mock_celery.send_task.called
         
         # Test Case 2: Tier 2 (DB + SSE/Redis only, no Telegram/Celery)
+        streamer.fired_alerts_session.clear()
         streamer.calculate_confluence_score = MagicMock(return_value=(50, "Tier 2"))
         streamer.save_alert_to_db.reset_mock()
         mock_redis.publish.reset_mock()
@@ -282,6 +283,7 @@ async def test_tier_based_gating():
         assert not mock_celery.send_task.called
         
         # Test Case 3: Tier 1 (DB + SSE + Telegram)
+        streamer.fired_alerts_session.clear()
         streamer.calculate_confluence_score = MagicMock(return_value=(80, "Tier 1"))
         streamer.save_alert_to_db.reset_mock()
         mock_redis.publish.reset_mock()

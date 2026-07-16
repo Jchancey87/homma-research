@@ -13,7 +13,7 @@ import logging
 from typing import Optional
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Response
 
 from ..config import settings
 from ..db import get_db
@@ -21,6 +21,7 @@ from ..db import watchlist as db_watchlist
 from validation import normalize_ticker
 from validation.schemas import WatchlistAddBody, WatchlistUpdateBody
 from services.live_quotes_service import get_live_quotes
+from services.watchlist_service import export_watchlist_to_csv, import_watchlist_from_csv
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
@@ -165,3 +166,39 @@ async def watchlist_prices(db: asyncpg.Connection = Depends(get_db)):
         }
         for t, nq in quotes.items()
     }
+
+
+# ---------------------------------------------------------------------------
+# GET /watchlist/export
+# ---------------------------------------------------------------------------
+
+@router.get("/export")
+async def export_watchlist(db: asyncpg.Connection = Depends(get_db)):
+    """Export all watchlist tickers in CSV format."""
+    csv_data = await export_watchlist_to_csv(db)
+    return Response(
+        content=csv_data,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=watchlist_export.csv"}
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /watchlist/import
+# ---------------------------------------------------------------------------
+
+@router.post("/import")
+async def import_watchlist(
+    file: UploadFile = File(...),
+    db: asyncpg.Connection = Depends(get_db)
+):
+    """Import tickers from a CSV file."""
+    content = await file.read()
+    try:
+        csv_text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid file encoding. Must be UTF-8.")
+
+    inserted, updated = await import_watchlist_from_csv(db, csv_text)
+    return {"inserted": inserted, "updated": updated}
+
