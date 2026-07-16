@@ -6,10 +6,14 @@ These tasks run in a synchronous environment (Celery worker process).
 """
 import httpx
 from datetime import datetime
+import asyncio
+import asyncpg
 from celery.utils.log import get_task_logger
 
 from fastapi_app.celery_app import celery_app
 from fastapi_app.config import settings
+from services.alarm_metrics_service import compute_hourly_metrics, compute_daily_rollup, save_alarm_metrics
+from validation import EASTERN_TZ
 
 logger = get_task_logger(__name__)
 
@@ -276,3 +280,41 @@ def send_telegram_alert_task(alert_data: dict) -> dict:
     except httpx.RequestError as e:
         logger.error("Request error occurred while sending Telegram alert for %s: %s", symbol, e)
         raise
+
+
+@celery_app.task(name="fastapi_app.tasks.alerts.run_daily_alarm_metrics_rollup_task")
+def run_daily_alarm_metrics_rollup_task(date_str: str = None) -> dict:
+    """
+    Celery task to run the daily/hourly alarm metrics rollup.
+    If date_str is provided (format 'YYYY-MM-DD'), it calculates metrics for that date.
+    Otherwise, it defaults to the current date in America/New_York.
+    """
+    async def _run():
+        if date_str:
+            target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        else:
+            target_date = datetime.now(EASTERN_TZ).date()
+
+        logger.info("Starting alarm metrics rollup task for date %s", target_date)
+        conn = await asyncpg.connect(dsn=settings.asyncpg_dsn)
+        try:
+            # We calculate metrics for every hour from 0 to 23
+            for hour in range(24):
+                logger.info("Computing metrics for hour %s on date %s", hour, target_date)
+                hourly_metrics = await compute_hourly_metrics(conn, target_date, hour)
+                await save_alarm_metrics(conn, hourly_metrics)
+
+            # And then the daily rollup
+            logger.info("Computing daily rollup metrics for date %s", target_date)
+            daily_metrics = await compute_daily_rollup(conn, target_date)
+            await save_alarm_metrics(conn, daily_metrics)
+
+            logger.info("Completed alarm metrics rollup task successfully for date %s", target_date)
+            return {"status": "success", "date": str(target_date)}
+        except Exception as e:
+            logger.error("Error running daily alarm metrics rollup: %s", e)
+            raise
+        finally:
+            await conn.close()
+
+    return asyncio.run(_run())

@@ -326,7 +326,7 @@ async def generate_rss_xml(conn: asyncpg.Connection) -> str:
         metrics_html = []
         for ticker in item["associated_tickers"]:
             q = quotes.get(ticker)
-            if q:
+            if q and q.last_price is not None and q.change_pct is not None and q.volume is not None:
                 metrics_html.append(
                     f"<b>${ticker}</b>: ${q.last_price:.2f} ({q.change_pct:+.2f}%) | Vol: {q.volume:,}"
                 )

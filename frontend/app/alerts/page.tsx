@@ -9,12 +9,14 @@ import {
 } from 'lightweight-charts'
 import {
   getAlertDates, getAlertsDailySummary, saveAlertFeedback, getAlertsPerformance,
-  getChartData,
-  AlertDailySummary, AlertTickerSummary, AlertInstance, ScorecardRow
+  getChartData, getAlarmMetrics, getBadActors,
+  AlertDailySummary, AlertTickerSummary, AlertInstance, ScorecardRow,
+  AlarmMetricRow, BadActorRow
 } from '@/lib/api'
 import {
   Bell, ChevronLeft, ChevronRight, Loader2,
-  AlertCircle, ThumbsUp, ThumbsDown, Save, CheckCircle, Info, BarChart2
+  AlertCircle, ThumbsUp, ThumbsDown, Save, CheckCircle, Info, BarChart2,
+  Activity, AlertTriangle
 } from 'lucide-react'
 import {
   CHART_BG, GRID_COLOR, TEXT_COLOR, UP_COLOR, DOWN_COLOR, EMA21_COL,
@@ -308,9 +310,16 @@ function AlertJournalContent() {
   const [activeDate, setActiveDate] = useState<string>('')
   const [summary, setSummary] = useState<AlertDailySummary | null>(null)
   const [selectedTicker, setSelectedTicker] = useState<AlertTickerSummary | null>(null)
-  const [activeTab, setActiveTab] = useState<'journal' | 'scorecard'>('journal')
+  const [activeTab, setActiveTab] = useState<'journal' | 'scorecard' | 'metrics'>('journal')
   const [scorecard, setScorecard] = useState<ScorecardRow[] | null>(null)
   const [scorecardLoading, setScorecardLoading] = useState(false)
+
+  // Sidebar sorting state
+  const [sidebarSort, setSidebarSort] = useState<'count' | 'snr' | 'recent'>('count')
+
+  // Alarm Health state variables
+  const [metrics, setMetrics] = useState<AlarmMetricRow[]>([])
+  const [badActors, setBadActors] = useState<BadActorRow[]>([])
 
   // Feedback states
   const [selectedAlert, setSelectedAlert] = useState<AlertInstance | null>(null)
@@ -319,6 +328,16 @@ function AlertJournalContent() {
   const [savingFeedback, setSavingFeedback] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [loading, setLoading] = useState(true)
+
+  // Load alarm metrics
+  useEffect(() => {
+    Promise.all([getAlarmMetrics(30), getBadActors(30)])
+      .then(([metricsData, badActorsData]) => {
+        setMetrics(metricsData)
+        setBadActors(badActorsData)
+      })
+      .catch(() => {})
+  }, [activeDate])
 
   // Fetch available dates on mount
   useEffect(() => {
@@ -486,6 +505,17 @@ function AlertJournalContent() {
               <BarChart2 size={12} />
               Performance
             </button>
+            <button
+              onClick={() => setActiveTab('metrics')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-mono font-semibold transition-all ${
+                activeTab === 'metrics'
+                  ? 'bg-[#0a0a0a] text-[#00ff00] border-b-2 border-[#00ff00]'
+                  : 'text-gray-500 hover:text-gray-300 transition-colors'
+              }`}
+            >
+              <Activity size={12} />
+              Alarm Health
+            </button>
           </div>
           <button
             onClick={() => navigateDate(-1)}
@@ -528,20 +558,118 @@ function AlertJournalContent() {
         </div>
       </div>
 
-      {/* Date metadata summary */}
-      {!loading && summary && (
-        <div className="flex items-center gap-3 px-3 py-1.5 bg-[#0a0a0a] border border-[#262626]">
-          <span className="font-mono text-[10px] text-gray-500 uppercase">Date:</span>
-          <span className="font-mono text-xs text-gray-300">{activeDate}</span>
-          <span className="h-4 w-px bg-[#262626]" />
-          <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-amber-950/20 text-amber-400 border border-amber-500/25 rounded-none">
-            {totalAlerts} Alerts
-          </span>
-          <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-[#001a1f] text-[#00f0ff] border border-[#00f0ff]/25 rounded-none">
-            {summary.tickers.length} Stocks Alerted
-          </span>
-        </div>
-      )}
+      {/* Alarm Health Summary Bar */}
+      {!loading && summary && (() => {
+        const activeMetrics = metrics.find(m => m.date === activeDate);
+        const hourlyRate = activeMetrics ? activeMetrics.total_alarms / 6.5 : totalAlerts / 6.5;
+        
+        // EEMUA 191 benchmarks color styling
+        let rateColor = "text-[#00ff00] border-[#00ff00]/25 bg-emerald-950/20";
+        let rateLabel = "Acceptable";
+        if (hourlyRate > 12) {
+          rateColor = "text-[#ff003c] border-[#ff003c]/25 bg-red-950/20";
+          rateLabel = "Overloaded";
+        } else if (hourlyRate > 6) {
+          rateColor = "text-amber-400 border-amber-500/25 bg-amber-950/20";
+          rateLabel = "Manageable";
+        }
+
+        // 10min peak color styling
+        const peakRate = activeMetrics?.peak_10min_rate ?? 0;
+        let peakColor = "text-[#00ff00]";
+        if (peakRate > 20) {
+          peakColor = "text-[#ff003c]";
+        } else if (peakRate > 10) {
+          peakColor = "text-amber-400";
+        }
+
+        const t1Count = activeMetrics?.tier1_count ?? summary.tickers.reduce((acc, t) => acc + t.alerts.filter(a => a.priority_tier === 'Tier 1').length, 0);
+        const t2Count = activeMetrics?.tier2_count ?? summary.tickers.reduce((acc, t) => acc + t.alerts.filter(a => a.priority_tier === 'Tier 2').length, 0);
+        const t3Count = activeMetrics?.tier3_count ?? summary.tickers.reduce((acc, t) => acc + t.alerts.filter(a => a.priority_tier === 'Tier 3' || !a.priority_tier).length, 0);
+        const totalCalculated = t1Count + t2Count + t3Count;
+
+        const t1Pct = totalCalculated ? (t1Count / totalCalculated) * 100 : 0;
+        const t2Pct = totalCalculated ? (t2Count / totalCalculated) * 100 : 0;
+        const t3Pct = totalCalculated ? (t3Count / totalCalculated) * 100 : 0;
+
+        const activeDateBadActors = [...(summary?.tickers ?? [])]
+          .map(t => ({
+            symbol: t.symbol,
+            count: t.alerts.length
+          }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 2);
+
+        return (
+          <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 px-3 py-2 bg-[#0a0a0a] border border-[#262626] font-mono text-[10px] text-gray-400">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="font-bold text-white flex items-center gap-1">
+                <Activity size={12} className="text-[#00ff00]" />
+                ALARM HEALTH
+              </span>
+              <span className="h-3 w-px bg-[#262626]" />
+              
+              <span>Date: <span className="text-white">{activeDate}</span></span>
+              
+              <span className="px-2 py-0.5 font-bold bg-amber-950/20 text-amber-400 border border-amber-500/25 rounded-none">
+                {totalAlerts} Alerts
+              </span>
+              
+              <span className={`px-2 py-0.5 font-bold border rounded-none ${rateColor}`}>
+                Rate: {hourlyRate.toFixed(1)}/hr ({rateLabel})
+              </span>
+
+              {activeMetrics ? (
+                <>
+                  <span className="flex items-center gap-1">
+                    Peak 10m: <span className={`font-bold ${peakColor}`}>{peakRate}</span>
+                  </span>
+                  
+                  <span>
+                    Chattering: <span className={`font-bold ${activeMetrics.chattering_count > 0 ? "text-[#ff003c]" : "text-gray-500"}`}>{activeMetrics.chattering_count}</span>
+                  </span>
+
+                  <span>
+                    SNR: <span className={`font-bold ${activeMetrics.snr_pct && activeMetrics.snr_pct >= 70 ? "text-[#00ff00]" : "text-amber-400"}`}>{activeMetrics.snr_pct ? `${activeMetrics.snr_pct}%` : "—"}</span>
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span>SNR: <span className="text-gray-500">—</span></span>
+                </>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4">
+              {/* Stacked Tier distribution bar */}
+              {totalCalculated > 0 && (
+                <div className="flex items-center gap-2">
+                  <span>Tiers:</span>
+                  <div className="h-2.5 w-24 flex bg-[#222] border border-[#333] rounded-none overflow-hidden">
+                    <div style={{ width: `${t1Pct}%` }} className="bg-[#ff003c]" title={`Tier 1: ${t1Count}`} />
+                    <div style={{ width: `${t2Pct}%` }} className="bg-amber-400" title={`Tier 2: ${t2Count}`} />
+                    <div style={{ width: `${t3Pct}%` }} className="bg-gray-500" title={`Tier 3: ${t3Count}`} />
+                  </div>
+                  <span className="text-[9px] text-gray-500">
+                    ({t1Count}/{t2Count}/{t3Count})
+                  </span>
+                </div>
+              )}
+
+              {/* Bad actors */}
+              {activeDateBadActors.length > 0 && (
+                <div className="flex items-center gap-1 text-gray-500">
+                  <AlertTriangle size={11} className="text-amber-500" />
+                  <span>Bad Actors:</span>
+                  <span className="text-gray-300 font-bold">
+                    {activeDateBadActors.map(ba => `${ba.symbol} (${ba.count})`).join(', ')}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Main split layout */}
       {loading ? (
@@ -558,52 +686,109 @@ function AlertJournalContent() {
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-2 items-start">
           {/* Left Ticker Sidebar */}
           <div className="lg:col-span-1 bg-[#050505] border border-[#262626] max-h-[750px] overflow-y-auto">
-            <span className="font-mono text-[10px] text-gray-500 uppercase tracking-wider px-3 py-2 border-b border-[#262626] block">Stocks</span>
-            {summary.tickers.map(tk => {
-              const helpfulCount = tk.alerts.filter(a => a.feedback_score === 'helpful').length
-              const noiseCount = tk.alerts.filter(a => a.feedback_score === 'noise').length
-              const unratedCount = tk.alerts.filter(a => !a.feedback_score).length
-              const isSelected = selectedTicker?.symbol === tk.symbol
-              
-              return (
-                <div
-                  key={tk.symbol}
-                  onClick={() => setSelectedTicker(tk)}
-                  className={`px-3 py-2.5 cursor-pointer border-b border-[#1a1a1a] transition-all hover:bg-[#0a0a0a] ${
-                    isSelected ? 'bg-[#0a0a0a] border-l-2 border-[#00ff00]' : ''
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono font-bold text-white text-xs">{tk.symbol}</span>
-                    <span className="text-[9px] bg-[#111] text-gray-500 border border-[#262626] px-1.5 py-0.5 font-mono rounded-none">
-                      {tk.alerts.length}x
-                    </span>
+            <div className="flex items-center justify-between border-b border-[#262626] px-3 py-2 bg-[#050505]">
+              <span className="font-mono text-[10px] text-gray-500 uppercase tracking-wider block">Stocks</span>
+              <select
+                value={sidebarSort}
+                onChange={e => setSidebarSort(e.target.value as 'count' | 'snr' | 'recent')}
+                className="bg-black border border-[#262626] text-gray-300 font-mono text-[9px] px-1 py-0.5 focus:outline-none focus:border-[#00ff00] rounded-none [color-scheme:dark]"
+              >
+                <option value="count">Sort: Count</option>
+                <option value="snr">Sort: Best SNR</option>
+                <option value="recent">Sort: Recent</option>
+              </select>
+            </div>
+            
+            {(() => {
+              const sortedTickers = [...(summary?.tickers ?? [])].sort((a, b) => {
+                if (sidebarSort === 'count') {
+                  return b.alerts.length - a.alerts.length;
+                } else if (sidebarSort === 'snr') {
+                  const getSnr = (t: typeof a) => {
+                    const helpful = t.alerts.filter(al => al.feedback_score === 'helpful').length;
+                    const noise = t.alerts.filter(al => al.feedback_score === 'noise').length;
+                    return (helpful + noise) > 0 ? (helpful / (helpful + noise)) : -1;
+                  };
+                  return getSnr(b) - getSnr(a);
+                } else if (sidebarSort === 'recent') {
+                  const getRecentTime = (t: typeof a) => {
+                    if (t.alerts.length === 0) return 0;
+                    return Math.max(...t.alerts.map(al => new Date(al.alert_time).getTime()));
+                  };
+                  return getRecentTime(b) - getRecentTime(a);
+                }
+                return 0;
+              });
+
+              return sortedTickers.map(tk => {
+                const helpfulCount = tk.alerts.filter(a => a.feedback_score === 'helpful').length;
+                const noiseCount = tk.alerts.filter(a => a.feedback_score === 'noise').length;
+                const unratedCount = tk.alerts.filter(a => !a.feedback_score).length;
+                
+                // Count suppressed/grouped alerts
+                const suppressedCount = tk.alerts.filter(a => a.suppressed_reason).length;
+                const groupedCount = tk.alerts.filter(a => a.group_id).length;
+
+                const isSelected = selectedTicker?.symbol === tk.symbol;
+                
+                return (
+                  <div
+                    key={tk.symbol}
+                    onClick={() => setSelectedTicker(tk)}
+                    className={`px-3 py-2.5 cursor-pointer border-b border-[#1a1a1a] transition-all hover:bg-[#0a0a0a] ${
+                      isSelected ? 'bg-[#0a0a0a] border-l-2 border-[#00ff00]' : ''
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-white text-xs">{tk.symbol}</span>
+                      <div className="flex items-center gap-1">
+                        {suppressedCount > 0 && (
+                          <span 
+                            title={`${suppressedCount} alerts suppressed`}
+                            className="text-[8px] bg-red-950/20 text-[#ff003c] border border-[#ff003c]/20 px-1 py-0.5 font-mono rounded-none"
+                          >
+                            🚫 {suppressedCount}
+                          </span>
+                        )}
+                        {groupedCount > 0 && (
+                          <span 
+                            title={`${groupedCount} alerts grouped`}
+                            className="text-[8px] bg-blue-950/20 text-[#00f0ff] border border-[#00f0ff]/20 px-1 py-0.5 font-mono rounded-none"
+                          >
+                            📦 {groupedCount}
+                          </span>
+                        )}
+                        <span className="text-[9px] bg-[#111] text-gray-500 border border-[#262626] px-1.5 py-0.5 font-mono rounded-none">
+                          {tk.alerts.length}x
+                        </span>
+                      </div>
+                    </div>
+                    <div className="font-mono text-[10px] text-gray-500 truncate mt-0.5">
+                      {tk.company_name ?? 'Unknown Company'}
+                    </div>
+                    
+                    {/* Rating counts */}
+                    <div className="flex items-center gap-2 mt-2">
+                      {helpfulCount > 0 && (
+                        <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-emerald-950/20 text-[#00ff00] border border-[#00ff00]/25 rounded-none flex items-center gap-0.5">
+                          <ThumbsUp size={8} /> {helpfulCount}
+                        </span>
+                      )}
+                      {noiseCount > 0 && (
+                        <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-red-950/20 text-[#ff003c] border border-[#ff003c]/25 rounded-none flex items-center gap-0.5">
+                          <ThumbsDown size={8} /> {noiseCount}
+                        </span>
+                      )}
+                      {unratedCount > 0 && (
+                        <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-[#111] text-gray-500 border border-[#262626] rounded-none">
+                          {unratedCount} unrated
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="font-mono text-[10px] text-gray-500 truncate mt-0.5">
-                    {tk.company_name ?? 'Unknown Company'}
-                  </div>
-                  
-                  {/* Rating counts */}
-                  <div className="flex items-center gap-2 mt-2">
-                    {helpfulCount > 0 && (
-                      <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-emerald-950/20 text-[#00ff00] border border-[#00ff00]/25 rounded-none flex items-center gap-0.5">
-                        <ThumbsUp size={8} /> {helpfulCount}
-                      </span>
-                    )}
-                    {noiseCount > 0 && (
-                      <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-red-950/20 text-[#ff003c] border border-[#ff003c]/25 rounded-none flex items-center gap-0.5">
-                        <ThumbsDown size={8} /> {noiseCount}
-                      </span>
-                    )}
-                    {unratedCount > 0 && (
-                      <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-[#111] text-gray-500 border border-[#262626] rounded-none">
-                        {unratedCount} unrated
-                      </span>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
+                );
+              });
+            })()}
           </div>
 
           {/* Right Detailed Analysis Panel */}
@@ -694,6 +879,18 @@ function AlertJournalContent() {
                                 : alt.priority_tier === 'Tier 2' ? 'text-amber-400 border-amber-500/40 bg-amber-950/20'
                                 : 'text-gray-600 border-[#262626]'
                               }`}>{alt.priority_tier ?? 'T3'}</span>
+                              
+                              {/* Suppression / Grouping badges */}
+                              {alt.suppressed_reason && (
+                                <span className="px-1 py-0.5 text-[8px] font-mono font-bold text-[#ff003c] border border-[#ff003c]/30 bg-red-950/10 rounded-none">
+                                  🚫 {alt.suppressed_reason.replace(/_/g, ' ')}
+                                </span>
+                              )}
+                              {alt.group_id && (
+                                <span className="px-1 py-0.5 text-[8px] font-mono font-bold text-[#00f0ff] border border-[#00f0ff]/30 bg-blue-950/10 rounded-none" title={`Group ID: ${alt.group_id}`}>
+                                  📦 Grouped
+                                </span>
+                              )}
                             </div>
                             <div className="font-mono text-[10px] text-gray-500">
                               {localTime} · ${alt.trigger_price.toFixed(2)}
@@ -779,6 +976,18 @@ function AlertJournalContent() {
                           <span className="font-mono text-[10px] text-gray-500">RVOL:</span>
                           <span className="font-mono text-xs text-amber-400">{selectedAlert.rel_vol.toFixed(1)}x</span>
                         </div>
+                        {selectedAlert.suppressed_reason && (
+                          <div className="flex justify-between">
+                            <span className="font-mono text-[10px] text-gray-500">Suppressed:</span>
+                            <span className="font-mono text-xs text-[#ff003c] font-bold">🚫 {selectedAlert.suppressed_reason.replace(/_/g, ' ')}</span>
+                          </div>
+                        )}
+                        {selectedAlert.group_id && (
+                          <div className="flex justify-between">
+                            <span className="font-mono text-[10px] text-gray-500">Group ID:</span>
+                            <span className="font-mono text-xs text-[#00f0ff]">{selectedAlert.group_id}</span>
+                          </div>
+                        )}
                         {/* Context fields from confluence engine */}
                         {selectedAlert.catalyst && (
                           <div className="flex justify-between">
@@ -983,6 +1192,121 @@ function AlertJournalContent() {
               </table>
             </div>
           )}
+        </div>
+      )}
+      {/* ── ALARM HEALTH TAB ────────────────────────────────────────── */}
+      {activeTab === 'metrics' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Activity size={14} className="text-[#00ff00]" />
+            <span className="font-mono text-sm font-bold text-white uppercase">Alarm Health & KPIs</span>
+            <span className="font-mono text-[10px] text-gray-500">· Last 30 days · EEMUA 191 benchmarks</span>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Left columns: Daily Rollup Trend */}
+            <div className="lg:col-span-2 space-y-2">
+              <span className="font-mono text-[10px] text-gray-500 uppercase tracking-wider block">Daily Alarm Metrics History</span>
+              <div className="overflow-x-auto border border-[#262626] bg-[#050505]">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-[#050505] border-b border-[#262626]">
+                      <th className="text-left px-3 py-2 text-[10px] font-mono text-gray-500 uppercase tracking-wider">Date</th>
+                      <th className="text-right px-3 py-2 text-[10px] font-mono text-gray-500 uppercase tracking-wider">Total</th>
+                      <th className="text-right px-3 py-2 text-[10px] font-mono text-gray-500 uppercase tracking-wider">Rate (/hr)</th>
+                      <th className="text-right px-3 py-2 text-[10px] font-mono text-gray-500 uppercase tracking-wider">Peak 10m</th>
+                      <th className="text-right px-3 py-2 text-[10px] font-mono text-gray-500 uppercase tracking-wider">Chattering</th>
+                      <th className="text-right px-3 py-2 text-[10px] font-mono text-gray-500 uppercase tracking-wider">Unique Stocks</th>
+                      <th className="text-right px-3 py-2 text-[10px] font-mono text-gray-500 uppercase tracking-wider">SNR %</th>
+                      <th className="text-center px-3 py-2 text-[10px] font-mono text-gray-500 uppercase tracking-wider">Tiers (T1/T2/T3)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {metrics.map((row, i) => {
+                      const rate = row.total_alarms / 6.5;
+                      const rateColor = rate > 12 ? 'text-[#ff003c] font-semibold'
+                        : rate > 6 ? 'text-amber-400'
+                        : 'text-[#00ff00]';
+                        
+                      const peakColor = row.peak_10min_rate !== null && row.peak_10min_rate > 20 ? 'text-[#ff003c]'
+                        : row.peak_10min_rate !== null && row.peak_10min_rate > 10 ? 'text-amber-400'
+                        : 'text-gray-300';
+                        
+                      const chatterColor = row.chattering_count > 0 ? 'text-[#ff003c]' : 'text-gray-500';
+                      
+                      const snrColor = row.snr_pct === null ? 'text-gray-500'
+                        : row.snr_pct >= 70 ? 'text-[#00ff00]'
+                        : 'text-amber-400';
+
+                      return (
+                        <tr key={i} className="border-b border-[#1a1a1a] hover:bg-[#0a0a0a] transition-colors font-mono">
+                          <td className="px-3 py-2 text-gray-200">{row.date}</td>
+                          <td className="px-3 py-2 text-right text-gray-300">{row.total_alarms}</td>
+                          <td className={`px-3 py-2 text-right ${rateColor}`}>{rate.toFixed(1)}/hr</td>
+                          <td className={`px-3 py-2 text-right ${peakColor}`}>{row.peak_10min_rate ?? '—'}</td>
+                          <td className={`px-3 py-2 text-right ${chatterColor}`}>{row.chattering_count}</td>
+                          <td className="px-3 py-2 text-right text-gray-300">{row.unique_tickers}</td>
+                          <td className={`px-3 py-2 text-right ${snrColor}`}>{row.snr_pct ? `${row.snr_pct.toFixed(1)}%` : '—'}</td>
+                          <td className="px-3 py-2 text-center text-gray-400 text-[10px]">
+                            <span className="text-[#ff003c]">{row.tier1_count}</span>/
+                            <span className="text-amber-400">{row.tier2_count}</span>/
+                            <span className="text-gray-500">{row.tier3_count}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {metrics.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="px-3 py-8 text-center text-gray-500 uppercase font-mono text-xs">
+                          No historical metrics loaded.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Right column: Bad Actors */}
+            <div className="space-y-2">
+              <span className="font-mono text-[10px] text-gray-500 uppercase tracking-wider block">Top Bad Actors (Last 30 Days)</span>
+              <div className="overflow-x-auto border border-[#262626] bg-[#050505]">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-[#050505] border-b border-[#262626]">
+                      <th className="text-left px-3 py-2 text-[10px] font-mono text-gray-500 uppercase tracking-wider">Ticker</th>
+                      <th className="text-left px-3 py-2 text-[10px] font-mono text-gray-500 uppercase tracking-wider">Alert Type</th>
+                      <th className="text-right px-3 py-2 text-[10px] font-mono text-gray-500 uppercase tracking-wider">Count</th>
+                      <th className="text-right px-3 py-2 text-[10px] font-mono text-gray-500 uppercase tracking-wider">Noise %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {badActors.map((row, i) => {
+                      const noiseColor = row.noise_pct >= 75 ? 'text-[#ff003c] font-semibold'
+                        : row.noise_pct >= 40 ? 'text-amber-400'
+                        : 'text-[#00ff00]';
+
+                      return (
+                        <tr key={i} className="border-b border-[#1a1a1a] hover:bg-[#0a0a0a] transition-colors font-mono">
+                          <td className="px-3 py-2 text-white font-bold">{row.symbol}</td>
+                          <td className="px-3 py-2 text-gray-400 text-[10px]">{row.alert_type.replace(/_/g, ' ')}</td>
+                          <td className="px-3 py-2 text-right text-gray-300">{row.fire_count}</td>
+                          <td className={`px-3 py-2 text-right ${noiseColor}`}>{row.noise_pct.toFixed(1)}%</td>
+                        </tr>
+                      );
+                    })}
+                    {badActors.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-3 py-8 text-center text-gray-500 uppercase font-mono text-xs">
+                          No bad actors identified.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

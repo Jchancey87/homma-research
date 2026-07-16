@@ -55,6 +55,7 @@ async def compute_daily_summary(
                a.rel_vol, a.gap_pct, a.float_shares, a.alert_type, a.sent,
                a.feedback_score, a.feedback_notes, a.priority_score, a.priority_tier,
                a.vwap_dist_pct, a.hod_dist_pct, a.catalyst, a.stop_price, a.stop_risk_pct,
+               a.suppressed_reason, a.group_id,
                f.company_name, f.float_category, f.market_cap
         FROM public.screener_alerts a
         LEFT JOIN public.stock_fundamentals f ON a.symbol = f.symbol
@@ -329,6 +330,8 @@ def _group_alerts_by_ticker(rows: list, fwd_by_id: dict) -> list[dict]:
             "fwd_15m": fwd.get("fwd_15m"),
             "mfe": fwd.get("mfe"),
             "mae": fwd.get("mae"),
+            "suppressed_reason": r.get("suppressed_reason"),
+            "group_id": str(r["group_id"]) if r.get("group_id") else None,
         })
 
     return list(ticker_groups.values())

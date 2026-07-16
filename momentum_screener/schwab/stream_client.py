@@ -9,6 +9,8 @@ import pytz
 import redis
 import asyncpg
 import httpx
+from collections import defaultdict
+import uuid
 
 # Try loading environment variables from .env file for standalone execution
 try:
@@ -101,6 +103,8 @@ class SchwabStreamer:
         self.global_config = None
         self.configs = None
         self.config_service = "placeholder"
+        self.fired_alerts_session = defaultdict(list)
+        self.ticker_group_ids = {}
 
         
     async def init_db(self):
@@ -506,8 +510,31 @@ class SchwabStreamer:
         if result == 'OK':
             priority_score, priority_tier = self.calculate_confluence_score(symbol, alert_type, rvol=rvol)
             
+            # Correlation / Grouping (30s rolling buffer)
+            now_ts = time.time()
+            if symbol in self.ticker_group_ids and now_ts - self.ticker_group_ids[symbol][1] < 30:
+                group_id = self.ticker_group_ids[symbol][0]
+            else:
+                group_id = uuid.uuid4()
+                self.ticker_group_ids[symbol] = (group_id, now_ts)
+
+            # Already In Play suppression check
+            suppressed_reason = None
+            session_alerts = self.fired_alerts_session[symbol]
+            if session_alerts:
+                tiers_fired = [a["tier"] for a in session_alerts]
+                has_tier1_fired = "Tier 1" in tiers_fired
+                has_tier2_fired = "Tier 2" in tiers_fired
+                
+                # Suppress if lower/equal priority tier alert is triggered again unless price moved >5%
+                if (has_tier1_fired or has_tier2_fired) and (priority_tier in ("Tier 2", "Tier 3") or (priority_tier == "Tier 1" and not has_tier1_fired)):
+                    first_alert_price = session_alerts[0]["price"]
+                    price_diff_pct = abs(last_price - first_alert_price) / first_alert_price
+                    if price_diff_pct < 0.05:
+                        suppressed_reason = "ALREADY_IN_PLAY"
+
             if alert_type == "HOD_BREAKOUT":
-                self.last_hod_breakout_time[symbol] = time.time()
+                self.last_hod_breakout_time[symbol] = now_ts
 
             v_state = self.vwap_state.get(symbol, {})
             vwap_ref = v_state['cum_vp'] / v_state['cum_vol'] if v_state.get('cum_vol', 0) > 0 else 0.0
@@ -525,28 +552,7 @@ class SchwabStreamer:
                 stop_price = low_price
             stop_risk_pct = ((last_price - stop_price) / last_price * 100.0) if last_price > 0 else 0.0
                 
-            if priority_tier == 'Tier 3':
-                await self.save_alert_to_db(
-                    symbol=symbol,
-                    price=last_price,
-                    volume=total_volume,
-                    rvol=rvol,
-                    gap_pct=gap_pct,
-                    float_shares=fund['shares_outstanding'],
-                    alert_type=alert_type,
-                    priority_score=priority_score,
-                    priority_tier=priority_tier,
-                    short_int_float=fund.get('short_int_float', 0.0),
-                    vwap_dist_pct=vwap_dist_pct,
-                    hod_dist_pct=hod_dist_pct,
-                    catalyst=catalyst_val,
-                    stop_price=stop_price,
-                    stop_risk_pct=stop_risk_pct
-                )
-                logger.info(f"💾 Alert {alert_type} for {symbol} saved to DB only (Tier 3)")
-                return True
-                
-            now = datetime.utcnow()
+            # Save alert (includes group_id and suppressed_reason)
             alert_db_row = await self.save_alert_to_db(
                 symbol=symbol,
                 price=last_price,
@@ -562,9 +568,28 @@ class SchwabStreamer:
                 hod_dist_pct=hod_dist_pct,
                 catalyst=catalyst_val,
                 stop_price=stop_price,
-                stop_risk_pct=stop_risk_pct
+                stop_risk_pct=stop_risk_pct,
+                suppressed_reason=suppressed_reason,
+                group_id=group_id
             )
 
+            if suppressed_reason:
+                logger.info(f"🔇 Alert {alert_type} for {symbol} suppressed: {suppressed_reason}")
+                return True
+
+            if priority_tier == 'Tier 3':
+                logger.info(f"💾 Alert {alert_type} for {symbol} saved to DB only (Tier 3)")
+                return True
+
+            # Track in-session fired alerts
+            self.fired_alerts_session[symbol].append({
+                "time": now_ts,
+                "price": last_price,
+                "tier": priority_tier,
+                "alert_type": alert_type
+            })
+
+            now = datetime.utcnow()
             bar_state = self.bars_1m.get(symbol)
             open_price_ref = bar_state['open'] if bar_state and bar_state.get('open') else 0.0
             daily_pct = ((last_price - open_price_ref) / open_price_ref * 100.0) if open_price_ref > 0 else 0.0
@@ -927,17 +952,18 @@ class SchwabStreamer:
         #                     v_state['vwap_test'] = False
         #                     v_state['vwap_low'] = None
 
-    async def save_alert_to_db(self, symbol, price, volume, rvol, gap_pct, float_shares, alert_type, priority_score=0, priority_tier='Tier 3', short_int_float=None, vwap_dist_pct=0.0, hod_dist_pct=0.0, catalyst='Technical / No News', stop_price=0.0, stop_risk_pct=0.0):
+    async def save_alert_to_db(self, symbol, price, volume, rvol, gap_pct, float_shares, alert_type, priority_score=0, priority_tier='Tier 3', short_int_float=None, vwap_dist_pct=0.0, hod_dist_pct=0.0, catalyst='Technical / No News', stop_price=0.0, stop_risk_pct=0.0, suppressed_reason=None, group_id=None):
         try:
             async with self.db_pool.acquire() as conn:
                 row = await conn.fetchrow("""
                     INSERT INTO screener_alerts (
-                        symbol, trigger_price, total_volume, rvol, gap_pct,
+                        symbol, trigger_price, trigger_volume, rvol, gap_pct,
                         short_int_float, float_shares, alert_type, priority_score, priority_tier,
-                        vwap_dist_pct, hod_dist_pct, catalyst, stop_price, stop_risk_pct
-                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+                        vwap_dist_pct, hod_dist_pct, catalyst, stop_price, stop_risk_pct,
+                        suppressed_reason, group_id
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
                     RETURNING id, alert_time
-                """, symbol, price, volume, rvol, gap_pct, short_int_float, float_shares, alert_type, priority_score, priority_tier, vwap_dist_pct, hod_dist_pct, catalyst, stop_price, stop_risk_pct)
+                """, symbol, price, volume, rvol, gap_pct, short_int_float, float_shares, alert_type, priority_score, priority_tier, vwap_dist_pct, hod_dist_pct, catalyst, stop_price, stop_risk_pct, suppressed_reason, group_id)
                 return row
         except Exception as e:
             logger.error(f"Failed to save alert for {symbol} to database: {e}")
@@ -1104,7 +1130,7 @@ class SchwabStreamer:
                     op or lp
                 ))
         except Exception as e:
-            logger.error(f"Error handling quote update: {e}")ing quote update: {e}")
+            logger.error(f"Error handling quote update: {e}")
 
 
     async def run(self):

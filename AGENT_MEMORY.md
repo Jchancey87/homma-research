@@ -67,9 +67,16 @@
 * **Syndication:** Approved items sent to Telegram, truncated to 500 characters to fit API payload limits.
 * **UI Manager:** Next.js `/rss` curation manager page styled in TradeStation matte black.
 
+### 11. Alarm Management Overhaul (M1 & M2)
+* **Database:** `alerts.alarm_metrics` table logs hourly/daily metrics rollups. Added `suppressed_reason`, `group_id` to `screener_alerts`, `screener_alerts_archive`.
+* **Rollup Service:** `alarm_metrics_service.py` runs Celery task/real-time rollups. Tracks peak 10m rate, chattering, SNR, bad actors.
+* **Grouping Correlation:** Group alerts on same symbol within 30s under shared UUID `group_id`.
+* **Already In Play Suppression:** Suppress lower/equal priority alerts if Tier 1/2 already fired in session, unless price moves >5% from first alert. Saves to DB with reason `ALREADY_IN_PLAY`.
+* **UI Journal Refactor:** Refactored alerts dashboard [page.tsx](file:///home/jackc/projects/homma-research/frontend/app/alerts/page.tsx) with EEMUA-aligned Alarm Health bar, sidebar sort, suppressed badges, Alarm Health view tab.
+
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Resolved live gainer screener only updating one stock (NXTC).
-* **Status:** Complete. Verified price changes and alerts work.
+* **Goal:** Completed Milestone 1 (KPI tracking), Milestone 2 (Suppressions/Grouping), and Milestone 3 (UI updates).
+* **Status:** Verified clean Next.js build and full pytest passing (297 tests).
 
 ## 🗑️ Rot & Pruning Log
 * Pruned old session goals.

@@ -13,6 +13,7 @@ import redis.asyncio as aioredis
 from fastapi_app.db import get_db
 from fastapi_app.db import screener_alerts as db_screener_alerts
 from services.alerts_analytics import compute_daily_summary, compute_performance_scorecard
+import services.alarm_metrics_service as alarm_metrics_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/alerts", tags=["alerts"])
@@ -124,3 +125,26 @@ async def get_alerts_performance(
     Delegates the CTE+FILTER aggregation to services.alerts_analytics.
     """
     return await compute_performance_scorecard(db, days)
+
+
+@router.get("/alarm-metrics")
+async def get_alarm_metrics(
+    days: int = 30,
+    db: asyncpg.Connection = Depends(get_db),
+):
+    """
+    Retrieve alarm metrics trend.
+    """
+    return await alarm_metrics_service.get_alarm_rate_trend(db, days)
+
+
+@router.get("/bad-actors")
+async def get_bad_actors(
+    days: int = 30,
+    top_n: int = 10,
+    db: asyncpg.Connection = Depends(get_db),
+):
+    """
+    Retrieve top bad actors (ticker + alert type combos).
+    """
+    return await alarm_metrics_service.get_bad_actors(db, days, top_n)

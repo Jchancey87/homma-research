@@ -127,6 +127,8 @@ CREATE TABLE IF NOT EXISTS screener_alerts (
     catalyst        VARCHAR(50)  DEFAULT 'Technical / No News',
     stop_price      FLOAT        DEFAULT 0.0,
     stop_risk_pct   FLOAT        DEFAULT 0.0,
+    suppressed_reason VARCHAR(50) DEFAULT NULL,
+    group_id        UUID         DEFAULT NULL,
     PRIMARY KEY (id, alert_time)
 );
 
@@ -162,7 +164,9 @@ CREATE TABLE IF NOT EXISTS screener_alerts_archive (
     hod_dist_pct    FLOAT        DEFAULT 0.0,
     catalyst        VARCHAR(50)  DEFAULT 'Technical / No News',
     stop_price      FLOAT        DEFAULT 0.0,
-    stop_risk_pct   FLOAT        DEFAULT 0.0
+    stop_risk_pct   FLOAT        DEFAULT 0.0,
+    suppressed_reason VARCHAR(50) DEFAULT NULL,
+    group_id        UUID         DEFAULT NULL
 );
 
 -- Continuous Aggregates for price_history_1min

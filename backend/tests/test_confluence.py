@@ -154,3 +154,90 @@ async def test_real_db_save_confluence():
         
         # Clean up
         await conn.execute("DELETE FROM public.screener_alerts WHERE symbol = 'TCON'")
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_alert_grouping_and_already_in_play_suppression():
+    """Verify that multiple alerts triggered on same ticker within 30s share a group_id,
+    and lower/equal priority alerts are suppressed under already-in-play rules."""
+    with patch('momentum_screener.schwab.stream_client.get_client'), \
+         patch('momentum_screener.schwab.stream_client.StreamClient'), \
+         patch('momentum_screener.schwab.stream_client.redis_client'), \
+         patch('momentum_screener.schwab.stream_client.celery_app'):
+         
+        streamer = SchwabStreamer()
+        
+        symbol = "ABCD"
+        streamer.fundamentals_cache = {
+            symbol: {
+                "shares_outstanding": 10_000_000,
+                "float_category": "Micro-Float",
+                "market_cap": 50_000_000,
+                "yesterday_high": 10.0
+            }
+        }
+        
+        # Mock DB pool/conn
+        mock_pool = MagicMock()
+        mock_conn = AsyncMock()
+        mock_conn.fetchval = AsyncMock(return_value='OK')
+        mock_conn.fetchrow = AsyncMock(return_value={'id': 1, 'alert_time': datetime.now()})
+        
+        mock_ctx = MagicMock()
+        mock_ctx.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_ctx.__aexit__ = AsyncMock(return_value=None)
+        mock_pool.acquire.return_value = mock_ctx
+        streamer.db_pool = mock_pool
+
+        # 1. Trigger first alert (Tier 1/2)
+        # Bypasses suppression because it's first alert
+        res1 = await streamer.check_and_fire_alert(
+            symbol=symbol,
+            last_price=10.0,
+            total_volume=10000,
+            rvol=3.0,
+            gap_pct=5.0,
+            alert_type="VOLUME_SPIKE"
+        )
+        assert res1 is True
+        assert len(streamer.fired_alerts_session[symbol]) == 1
+        first_group_id = streamer.ticker_group_ids[symbol][0]
+        assert first_group_id is not None
+        
+        # 2. Trigger second alert within 30 seconds, same price (no 5% move)
+        # Should be suppressed as ALREADY_IN_PLAY but share the same group_id
+        res2 = await streamer.check_and_fire_alert(
+            symbol=symbol,
+            last_price=10.1,  # 1% price increase (not 5%)
+            total_volume=12000,
+            rvol=3.5,
+            gap_pct=5.0,
+            alert_type="HOD_BREAKOUT"
+        )
+        assert res2 is True
+        # Verify it did not add to fired_alerts_session (it was suppressed)
+        assert len(streamer.fired_alerts_session[symbol]) == 1
+        
+        # Verify save_alert_to_db was called with ALREADY_IN_PLAY reason and same group_id
+        args, kwargs = mock_conn.fetchrow.call_args
+        insert_params = args[1:]
+        assert insert_params[15] == "ALREADY_IN_PLAY"
+        assert insert_params[16] == first_group_id
+        
+        # 3. Trigger third alert with >5% price move (e.g. 10.6, which is 6% move from 10.0)
+        # Should NOT be suppressed, should share same group_id if within 30s
+        res3 = await streamer.check_and_fire_alert(
+            symbol=symbol,
+            last_price=10.6,
+            total_volume=15000,
+            rvol=4.0,
+            gap_pct=5.0,
+            alert_type="HOD_BREAKOUT"
+        )
+        assert res3 is True
+        assert len(streamer.fired_alerts_session[symbol]) == 2
+        
+        args, kwargs = mock_conn.fetchrow.call_args
+        insert_params = args[1:]
+        assert insert_params[15] is None # not suppressed
+        assert insert_params[16] == first_group_id

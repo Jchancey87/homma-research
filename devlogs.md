@@ -3,6 +3,20 @@
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
 
+## [2026-07-15] M1 Alarm Rate KPI Tracking & Alert Journal Refactor
+
+### Summary
+* Created `alerts.alarm_metrics` table. Added `suppressed_reason`, `group_id` columns to `screener_alerts`, `screener_alerts_archive`.
+* Created [alarm_metrics_service.py](file:///home/jackc/projects/homma-research/backend/services/alarm_metrics_service.py). Tracks hourly/daily rollups, chattering, peak 10m, SNR, bad actors.
+* Added `/alerts/alarm-metrics`, `/alerts/bad-actors` routes to [alerts.py (router)](file:///home/jackc/projects/homma-research/backend/fastapi_app/routers/alerts.py).
+* Added `run_daily_alarm_metrics_rollup_task` Celery task.
+* Backfilled 30 days metrics via script.
+* Updated [api.ts](file:///home/jackc/projects/homma-research/frontend/lib/api.ts) types, fetchers.
+* Refactored [page.tsx](file:///home/jackc/projects/homma-research/frontend/app/alerts/page.tsx) with Alarm Health bar, sidebar sort, suppressed badges, Alarm Health view tab.
+* Created [test_alarm_metrics.py](file:///home/jackc/projects/homma-research/backend/tests/test_alarm_metrics.py) test suite. All tests pass.
+
+---
+
 ## [2026-07-08] Alert Journal + Live Gainers: Tier/Context fields surfaced
 
 ### Summary

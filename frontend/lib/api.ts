@@ -760,6 +760,8 @@ export interface AlertInstance {
   fwd_15m: number | null
   mfe: number | null
   mae: number | null
+  suppressed_reason: string | null
+  group_id: string | null
 }
 
 export interface AlertTickerSummary {
@@ -818,6 +820,39 @@ interface AlertsPerformance {
 export const getAlertsPerformance = (days = 30) =>
   api.get<AlertsPerformance>('/api/alerts/performance', {
     params: { days }
+  }).then(r => r.data)
+
+export interface AlarmMetricRow {
+  date: string
+  total_alarms: number
+  tier1_count: number
+  tier2_count: number
+  tier3_count: number
+  unique_tickers: number
+  chattering_count: number
+  peak_10min_rate: number | null
+  noise_count: number
+  helpful_count: number
+  snr_pct: number | null
+}
+
+export interface BadActorRow {
+  symbol: string
+  alert_type: string
+  fire_count: number
+  noise_count: number
+  helpful_count: number
+  noise_pct: number
+}
+
+export const getAlarmMetrics = (days = 30) =>
+  api.get<AlarmMetricRow[]>('/api/alerts/alarm-metrics', {
+    params: { days }
+  }).then(r => r.data)
+
+export const getBadActors = (days = 30, topN = 10) =>
+  api.get<BadActorRow[]>('/api/alerts/bad-actors', {
+    params: { days, top_n: topN }
   }).then(r => r.data)
 
 // ── RSS Curation ──────────────────────────────────────────────────────────
