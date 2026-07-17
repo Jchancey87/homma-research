@@ -139,20 +139,25 @@ async def test_watchlist_import(client):
 
 @pytest.mark.asyncio(loop_scope="session")
 async def test_watchlist_groups_crud(client):
+    import uuid
+    rand_suffix = uuid.uuid4().hex[:6]
+    name1 = f"FDA Approved {rand_suffix}"
+    name2 = f"Awaiting Trials {rand_suffix}"
+
     # 1. Create a watchlist group
-    g1_resp = await client.post("/api/watchlist/groups", json={"name": "FDA Approved"})
+    g1_resp = await client.post("/api/watchlist/groups", json={"name": name1})
     assert g1_resp.status_code == 201
     g1 = g1_resp.json()
-    assert g1["name"] == "FDA Approved"
+    assert g1["name"] == name1
     g1_id = g1["id"]
 
-    g2_resp = await client.post("/api/watchlist/groups", json={"name": "Awaiting Trials"})
+    g2_resp = await client.post("/api/watchlist/groups", json={"name": name2})
     assert g2_resp.status_code == 201
     g2 = g2_resp.json()
     g2_id = g2["id"]
 
     # Try creating duplicate group name (should fail 409)
-    g_dupe = await client.post("/api/watchlist/groups", json={"name": "FDA Approved"})
+    g_dupe = await client.post("/api/watchlist/groups", json={"name": name1})
     assert g_dupe.status_code == 409
 
     # 2. Add ticker BIIB to FDA Approved
@@ -193,8 +198,8 @@ async def test_watchlist_groups_crud(client):
     groups_list = await client.get("/api/watchlist/groups")
     assert groups_list.status_code == 200
     group_names = [g["name"] for g in groups_list.json()]
-    assert "FDA Approved" in group_names
-    assert "Awaiting Trials" in group_names
+    assert name1 in group_names
+    assert name2 in group_names
 
     # 4. Clean up groups (this should cascade delete the items)
     del_g1 = await client.delete(f"/api/watchlist/groups/{g1_id}")

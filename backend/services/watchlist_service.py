@@ -213,7 +213,7 @@ async def import_watchlist_from_csv(
     return inserted, updated
 
 
-async def _fetch_single_ticker_metrics(
+def _fetch_single_ticker_metrics(
     ticker: str,
     prev_runway: Optional[float],
     prev_dilution: Optional[str]
@@ -403,7 +403,12 @@ async def enrich_watchlist_fundamentals(
             ticker_symbol = r["ticker"]
             try:
                 log.info(f"Fetching metrics for {ticker_symbol}")
-                res = await _fetch_single_ticker_metrics(ticker_symbol, r.get("runway_months"), r.get("dilution_risk"))
+                res = await asyncio.to_thread(
+                    _fetch_single_ticker_metrics,
+                    ticker_symbol,
+                    r.get("runway_months"),
+                    r.get("dilution_risk")
+                )
                 return res
             except Exception as e:
                 log.error(f"Error fetching fundamentals for {ticker_symbol}: {e}")
