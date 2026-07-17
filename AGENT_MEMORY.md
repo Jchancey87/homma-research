@@ -46,7 +46,7 @@
 ### 6. Frontend & UI
 * **Interaction:** Toggle row expansion on click. No hover handlers.
 * **Audio/Charts:** Dynamic chimes via Web Audio API. Split chart hooks (init vs decorators) in `page.tsx`.
-* **TradeStation Style:** High density look. Matte black (#000000). Sharp 90deg edges (rounded-none). 1px charcoal grid gaps. Stark dotted canvas grid (#444444, style: 1). Neon series colors (bull #00ff00, bear #ff003c). Overlay HUD info (symbol, change %, EMA coordinates, volume color mapping) inside canvas to minimize vertical padding. Applied universally across all pages, NavBar, tables, details, badges, inputs.
+* **TradeStation Style:** Redesigned visual system dark-mode dashboard. Preserve zero-round sharp edges. Map 4-level dark surface depth variables in `globals.css`: app background `#070A0D`, cards/panels `#0D1218`, nested/headers `#131B24`, hover states `#192431`. Unified colors via Tailwind config (`green-custom`, `red-custom`, `amber-custom`, `info-custom`). Applied `tabular-nums` universally for price, change, momentum, volume, float data columns. Added faint raised background containers to inline sparklines.
 * **Continuation Journal:** Card-based UI grouped by date. Left colored border reflects tracking outcomes (Runner, Win, Flat, Fade, Active). Custom SVG inline sparklines show 3-day closes. Details pane opens inline. Scorecard metrics rendered as visual stacked percentage edge bars instead of static tables.
 
 ### 7. Testing & DevOps
@@ -79,7 +79,8 @@
 * **Enrichment:** Non-blocking `POST /enrich` runs in FastAPI `BackgroundTasks`. Fetches yfinance/SEC/LLM metrics in parallel (`asyncio.to_thread`, semaphore=4) to prevent loop starvation. Falls back to SEC facts for cash/operating cash flows. Safely alerts Telegram if runway < 6 months or dilution high.
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Idle. Watchlist groups and concurrent background enrichment fully implemented and deployed.
+* **Goal:** Idle. Dashboard visual redesign completed, compiled, verified.
+
 
 ## 🗑️ Rot & Pruning Log
 * Pruned completed watchlist enrichment goals.

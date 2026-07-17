@@ -69,38 +69,38 @@ export default function NavBar() {
   }
 
   const getLinkClass = (isActive: boolean) => {
-    return `flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider px-3 py-1.5 border rounded-none transition-colors ${
+    return `flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-wider px-3 py-1.5 border rounded-none transition-all duration-150 ${
       isActive
-        ? 'border-[#00ff00]/30 text-[#00ff00] bg-emerald-950/10'
-        : 'border-transparent text-gray-400 hover:text-white hover:border-[#262626]'
+        ? 'border-border-strong text-text-primary bg-hover border-b-2 border-b-info-custom font-bold shadow-sm'
+        : 'border-transparent text-text-secondary hover:text-text-primary hover:bg-raised hover:border-border-subtle'
     }`
   }
 
   const getDropdownItemClass = (isActive: boolean) => {
-    return `block w-full text-left font-mono text-[11px] uppercase tracking-wider px-3 py-2 border rounded-none transition-colors ${
+    return `block w-full text-left font-mono text-[11px] uppercase tracking-wider px-3 py-2 border rounded-none transition-all duration-150 ${
       isActive
-        ? 'border-[#00ff00]/30 text-[#00ff00] bg-emerald-950/10'
-        : 'border-transparent text-gray-400 hover:text-white hover:bg-[#121212] hover:border-[#262626]'
+        ? 'border-border-strong text-text-primary bg-hover border-l-2 border-l-info-custom font-bold'
+        : 'border-transparent text-text-secondary hover:text-text-primary hover:bg-hover hover:border-border-subtle'
     }`
   }
 
   const getMobileLinkClass = (isActive: boolean) => {
-    return `flex items-center gap-2.5 w-full font-mono text-[11px] uppercase tracking-wider px-3 py-2 border rounded-none transition-colors ${
+    return `flex items-center gap-2.5 w-full font-mono text-[11px] uppercase tracking-wider px-3 py-2 border rounded-none transition-all duration-150 ${
       isActive
-        ? 'border-[#00ff00]/30 text-[#00ff00] bg-emerald-950/10'
-        : 'border-transparent text-gray-400 hover:text-white hover:border-[#262626]'
+        ? 'border-border-strong text-text-primary bg-hover border-l-2 border-l-info-custom font-bold'
+        : 'border-transparent text-text-secondary hover:text-text-primary hover:border-border-subtle'
     }`
   }
 
   return (
-    <nav className="bg-black border-b border-[#262626] sticky top-0 z-50">
+    <nav className="bg-panel border-b border-border-subtle sticky top-0 z-50 shadow-sm">
       <div className="max-w-screen-2xl mx-auto px-4">
         <div className="flex items-center justify-between h-14">
           
           <div className="flex items-center gap-6">
             {/* Brand/Logo */}
             <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-              <BarChart2 className="text-[#00ff00]" size={22} />
+              <BarChart2 className="text-green-custom" size={22} />
               <span className="font-mono font-bold text-white text-sm uppercase tracking-widest">TradeJournal</span>
             </Link>
 
@@ -134,7 +134,7 @@ export default function NavBar() {
                   <ChevronDown size={10} className="opacity-60" />
                 </button>
                 {journalsOpen && (
-                  <div className="absolute left-0 mt-1 w-48 bg-black border border-[#262626] z-50 flex flex-col p-1 gap-1">
+                  <div className="absolute left-0 mt-1 w-48 bg-panel border border-border-subtle z-50 flex flex-col p-1 gap-1 shadow-lg">
                     {journalsLinks.map(({ href, label }) => (
                       <Link
                         key={href}
@@ -165,7 +165,7 @@ export default function NavBar() {
                   <ChevronDown size={10} className="opacity-60" />
                 </button>
                 {chartsOpen && (
-                  <div className="absolute left-0 mt-1 w-48 bg-black border border-[#262626] z-50 flex flex-col p-1 gap-1">
+                  <div className="absolute left-0 mt-1 w-48 bg-panel border border-border-subtle z-50 flex flex-col p-1 gap-1 shadow-lg">
                     {chartsLinks.map(({ href, label }) => (
                       <Link
                         key={href}
@@ -196,7 +196,7 @@ export default function NavBar() {
                   <ChevronDown size={10} className="opacity-60" />
                 </button>
                 {feedsOpen && (
-                  <div className="absolute left-0 mt-1 w-48 bg-black border border-[#262626] z-50 flex flex-col p-1 gap-1">
+                  <div className="absolute left-0 mt-1 w-48 bg-panel border border-border-subtle z-50 flex flex-col p-1 gap-1 shadow-lg">
                     {feedsLinks.map(({ href, label }) => (
                       <Link
                         key={href}
@@ -220,22 +220,22 @@ export default function NavBar() {
               {/* Theme Toggle Button */}
               <button
                 onClick={toggleTheme}
-                className="p-1.5 border border-transparent text-gray-400 hover:text-white hover:border-[#262626] bg-black rounded-none transition-colors"
+                className="p-1.5 border border-transparent text-text-secondary hover:text-text-primary hover:border-border-subtle bg-panel hover:bg-hover rounded-none transition-all duration-150"
                 aria-label="Toggle theme"
               >
                 {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
               </button>
 
               {/* Vertical Divider */}
-              <div className="h-6 w-[1px] bg-[#262626] mx-2" />
+              <div className="h-6 w-[1px] bg-border-subtle mx-2" />
 
               {/* Settings Cog */}
               <Link
                 href="/alert-config"
-                className={`p-1.5 border bg-black rounded-none transition-colors ${
+                className={`p-1.5 border bg-panel rounded-none transition-all duration-150 ${
                   path === '/alert-config'
-                    ? 'border-[#00ff00]/30 text-[#00ff00] bg-emerald-950/10'
-                    : 'border-transparent text-gray-400 hover:text-white hover:border-[#262626]'
+                    ? 'border-border-strong text-text-primary bg-hover border-b-2 border-b-info-custom font-bold'
+                    : 'border-transparent text-text-secondary hover:text-text-primary hover:bg-hover hover:border-border-subtle'
                 }`}
                 aria-label="Alert Settings"
               >
@@ -248,7 +248,7 @@ export default function NavBar() {
               {/* Theme Toggle Button */}
               <button
                 onClick={toggleTheme}
-                className="p-1.5 border border-[#262626] text-gray-400 hover:text-white bg-black rounded-none transition-colors"
+                className="p-1.5 border border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-strong bg-panel hover:bg-hover rounded-none transition-all duration-150 shadow-sm"
                 aria-label="Toggle theme"
               >
                 {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
@@ -257,7 +257,7 @@ export default function NavBar() {
               {/* Mobile Hamburger Burger Button */}
               <button
                 onClick={() => setMenuOpen(!menuOpen)}
-                className="p-1.5 border border-[#262626] text-gray-400 hover:text-white bg-black rounded-none transition-colors"
+                className="p-1.5 border border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-strong bg-panel hover:bg-hover rounded-none transition-all duration-150 shadow-sm"
                 aria-label="Toggle navigation menu"
               >
                 {menuOpen ? <X size={16} /> : <Menu size={16} />}
@@ -269,11 +269,11 @@ export default function NavBar() {
 
         {/* Mobile Navigation Drawer */}
         {menuOpen && (
-          <div className="lg:hidden bg-black border-t border-[#262626] py-2 space-y-3">
+          <div className="lg:hidden bg-panel border-t border-border-subtle py-2 space-y-3">
             
             {/* PRIMARY */}
             <div>
-              <div className="px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-gray-500 font-semibold border-b border-[#262626]/40 mb-1">
+              <div className="px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-text-muted font-semibold border-b border-border-subtle/40 mb-1">
                 PRIMARY
               </div>
               <div className="space-y-0.5">
@@ -293,7 +293,7 @@ export default function NavBar() {
 
             {/* JOURNALS */}
             <div>
-              <div className="px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-gray-500 font-semibold border-b border-[#262626]/40 mb-1">
+              <div className="px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-text-muted font-semibold border-b border-border-subtle/40 mb-1">
                 JOURNALS
               </div>
               <div className="space-y-0.5">
@@ -312,7 +312,7 @@ export default function NavBar() {
 
             {/* CHARTS */}
             <div>
-              <div className="px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-gray-500 font-semibold border-b border-[#262626]/40 mb-1">
+              <div className="px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-text-muted font-semibold border-b border-border-subtle/40 mb-1">
                 CHARTS
               </div>
               <div className="space-y-0.5">
@@ -331,7 +331,7 @@ export default function NavBar() {
 
             {/* FEEDS */}
             <div>
-              <div className="px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-gray-500 font-semibold border-b border-[#262626]/40 mb-1">
+              <div className="px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-text-muted font-semibold border-b border-border-subtle/40 mb-1">
                 FEEDS
               </div>
               <div className="space-y-0.5">

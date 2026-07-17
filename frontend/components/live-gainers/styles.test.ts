@@ -26,14 +26,14 @@ describe('getRvolBadgeStyle', () => {
 
 describe('getRvolColor', () => {
   it('returns muted color for null', () => {
-    expect(getRvolColor(null)).toBe('text-gray-400')
+    expect(getRvolColor(null)).toBe('text-text-muted')
   })
 
   it('escalates class with tier', () => {
-    expect(getRvolColor(1500)).toContain('rose')
-    expect(getRvolColor(300)).toContain('emerald-200')
-    expect(getRvolColor(75)).toContain('emerald-300')
-    expect(getRvolColor(7)).toContain('emerald-400')
+    expect(getRvolColor(1500)).toContain('red-custom')
+    expect(getRvolColor(300)).toContain('green-custom')
+    expect(getRvolColor(75)).toContain('green-custom')
+    expect(getRvolColor(7)).toContain('green-custom')
   })
 })
 
@@ -65,8 +65,8 @@ describe('getSpreadBadgeStyle', () => {
 
 describe('getAtrHodColor', () => {
   it('muted for null', () => {
-    expect(getAtrHodColor(null)).toBe('text-slate-500')
-    expect(getAtrHodColor(undefined)).toBe('text-slate-500')
+    expect(getAtrHodColor(null)).toBe('text-text-muted')
+    expect(getAtrHodColor(undefined)).toBe('text-text-muted')
   })
 
   it('emphasises 0 with underline (at HOD)', () => {
@@ -74,11 +74,11 @@ describe('getAtrHodColor', () => {
   })
 
   it('fades as value grows', () => {
-    expect(getAtrHodColor(0.1)).toContain('emerald-300')
-    expect(getAtrHodColor(0.3)).toContain('emerald-400/70')
-    expect(getAtrHodColor(0.7)).toBe('text-slate-300')
-    expect(getAtrHodColor(1.5)).toBe('text-slate-400')
-    expect(getAtrHodColor(3)).toBe('text-slate-500')
+    expect(getAtrHodColor(0.1)).toContain('green-custom')
+    expect(getAtrHodColor(0.3)).toContain('green-custom')
+    expect(getAtrHodColor(0.7)).toBe('text-text-primary')
+    expect(getAtrHodColor(1.5)).toBe('text-text-secondary')
+    expect(getAtrHodColor(3)).toBe('text-text-muted')
   })
 })
 

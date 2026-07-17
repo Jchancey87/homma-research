@@ -10,8 +10,8 @@ import {
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 function chgColor(v: number | null) {
-  if (v == null) return 'text-gray-500'
-  return v > 0 ? 'text-[#00ff00]' : v < 0 ? 'text-[#ff003c]' : 'text-gray-400'
+  if (v == null) return 'text-text-muted'
+  return v > 0 ? 'text-green-custom' : v < 0 ? 'text-red-custom' : 'text-text-secondary'
 }
 
 function chgSign(v: number | null) {
@@ -32,23 +32,23 @@ function fmtInt(v: number | null): string {
 const INDEX_ORDER = ['SPY', 'QQQ', 'IWM'] as const
 
 const REGIME_STYLE: Record<string, { bg: string; text: string; border: string }> = {
-  risk_on:  { bg: 'bg-[#00ff00]/10', text: 'text-[#00ff00]', border: 'border-[#00ff00]/30' },
-  neutral:  { bg: 'bg-amber-400/10',  text: 'text-amber-400',  border: 'border-amber-400/30' },
-  risk_off: { bg: 'bg-[#ff003c]/10', text: 'text-[#ff003c]', border: 'border-[#ff003c]/30' },
+  risk_on:  { bg: 'bg-green-custom/15', text: 'text-green-custom', border: 'border-green-custom/35' },
+  neutral:  { bg: 'bg-amber-custom/15',  text: 'text-amber-custom',  border: 'border-amber-custom/35' },
+  risk_off: { bg: 'bg-red-custom/15', text: 'text-red-custom', border: 'border-red-custom/35' },
 }
 
 const RISK_STYLE: Record<string, { bg: string; text: string; border: string }> = {
-  normal:   { bg: 'bg-gray-500/10',    text: 'text-gray-400',   border: 'border-gray-500/30' },
-  elevated: { bg: 'bg-amber-400/10',   text: 'text-amber-400',  border: 'border-amber-400/30' },
-  high:     { bg: 'bg-[#ff003c]/10',  text: 'text-[#ff003c]', border: 'border-[#ff003c]/30' },
+  normal:   { bg: 'bg-info-custom/15',    text: 'text-info-custom',   border: 'border-info-custom/35' },
+  elevated: { bg: 'bg-amber-custom/15',   text: 'text-amber-custom',  border: 'border-amber-custom/35' },
+  high:     { bg: 'bg-red-custom/20',  text: 'text-red-custom', border: 'border-red-custom/40 font-black' },
 }
 
 function getFloatThemeStyle(theme: string) {
   if (theme.includes('MICRO'))
-    return 'bg-[#ff003c]/10 text-[#ff003c] border-[#ff003c]/20'
+    return 'bg-red-custom/15 text-red-custom border-red-custom/25'
   if (theme.includes('MID'))
-    return 'bg-amber-400/10 text-amber-400 border-amber-400/20'
-  return 'bg-blue-400/10 text-blue-400 border-blue-400/20'
+    return 'bg-amber-custom/15 text-amber-custom border-amber-custom/25'
+  return 'bg-info-custom/15 text-info-custom border-info-custom/25'
 }
 
 type CardId = 'regime' | 'breadth' | 'liquidity' | 'risk'
@@ -57,17 +57,17 @@ type CardId = 'regime' | 'breadth' | 'liquidity' | 'risk'
 
 function SkeletonCard() {
   return (
-    <div className="bg-[#050505] p-3">
+    <div className="bg-panel border border-border-subtle p-3 shadow-sm">
       <div className="flex items-center gap-1.5 mb-3">
-        <div className="h-3 w-3 bg-[#1a1a1a] animate-pulse" />
-        <div className="h-3 w-24 bg-[#1a1a1a] animate-pulse" />
+        <div className="h-3 w-3 bg-[#131B24] animate-pulse" />
+        <div className="h-3 w-24 bg-[#131B24] animate-pulse" />
       </div>
-      <div className="h-7 w-20 bg-[#1a1a1a] animate-pulse mb-2" />
-      <div className="h-4 w-16 bg-[#111] animate-pulse mb-3" />
+      <div className="h-7 w-20 bg-[#131B24] animate-pulse mb-2" />
+      <div className="h-4 w-16 bg-[#131B24] animate-pulse mb-3" />
       <div className="space-y-1.5">
-        <div className="h-3 w-full bg-[#111] animate-pulse" />
-        <div className="h-3 w-3/4 bg-[#111] animate-pulse" />
-        <div className="h-3 w-2/3 bg-[#111] animate-pulse" />
+        <div className="h-3 w-full bg-[#131B24] animate-pulse" />
+        <div className="h-3 w-3/4 bg-[#131B24] animate-pulse" />
+        <div className="h-3 w-2/3 bg-[#131B24] animate-pulse" />
       </div>
     </div>
   )
@@ -129,7 +129,7 @@ export default function CommandSummaryStrip() {
   // ── Loading skeleton ──
   if (loading && !data) {
     return (
-      <div className="bg-[#262626] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-[1px]">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-transparent">
         {[1, 2, 3, 4].map(i => <SkeletonCard key={i} />)}
       </div>
     )
@@ -189,11 +189,11 @@ export default function CommandSummaryStrip() {
 
   return (
     <div>
-      {/* 4-card grid with 1px charcoal gaps */}
-      <div className="bg-[#262626] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-[1px]">
+      {/* 4-card grid using space surface depth layout */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-transparent">
 
         {/* ─── Card 1: REGIME & INDICES ─── */}
-        <div className="bg-[#050505] p-3">
+        <div className="bg-panel border border-border-subtle p-3 shadow-sm">
           <CardHeader
             icon={regime.tag === 'risk_on' ? TrendingUp : regime.tag === 'risk_off' ? TrendingDown : Minus}
             title="Market Regime"
@@ -266,7 +266,7 @@ export default function CommandSummaryStrip() {
         </div>
 
         {/* ─── Card 2: SMALL-CAP BREADTH ─── */}
-        <div className="bg-[#050505] p-3">
+        <div className="bg-panel border border-border-subtle p-3 shadow-sm">
           <CardHeader icon={Activity} title="Small-Cap Breadth" cardId="breadth" />
 
           {/* Hero: A/D ratio */}
@@ -330,7 +330,7 @@ export default function CommandSummaryStrip() {
         </div>
 
         {/* ─── Card 3: LIQUIDITY & FLOAT ─── */}
-        <div className="bg-[#050505] p-3">
+        <div className="bg-panel border border-border-subtle p-3 shadow-sm">
           <CardHeader icon={Gauge} title="Liquidity & Float" cardId="liquidity" />
 
           {/* Hero: avg_rvol_top5 */}
@@ -399,7 +399,7 @@ export default function CommandSummaryStrip() {
         </div>
 
         {/* ─── Card 4: RISK & ANOMALIES ─── */}
-        <div className="bg-[#050505] p-3">
+        <div className="bg-panel border border-border-subtle p-3 shadow-sm">
           <CardHeader icon={AlertOctagon} title="Risk & Anomalies" cardId="risk" showRefresh />
 
           {/* Hero: Risk tag */}

@@ -7,13 +7,28 @@
   --foreground: #0f172a;
   --panel-bg: #ffffff;
   --panel-border: #e2e8f0;
+
+  /* Redesign Dark Theme Tokens */
+  --bg-app: #070A0D;
+  --bg-panel: #0D1218;
+  --bg-raised: #131B24;
+  --bg-hover: #192431;
+  --border-subtle: #22303D;
+  --border-strong: #344454;
+  --text-primary: #E7EEF5;
+  --text-secondary: #AAB8C5;
+  --text-muted: #708090;
+  --green: #36D98A;
+  --red: #FF5C70;
+  --amber: #F4B84A;
+  --info: #58A6FF;
 }
 
 html.dark {
-  --background: #000000;
-  --foreground: #cccccc;
-  --panel-bg: #0a0a0a;
-  --panel-border: #262626;
+  --background: var(--bg-app);
+  --foreground: var(--text-primary);
+  --panel-bg: var(--bg-panel);
+  --panel-border: var(--border-subtle);
 }
 
 /* Strict TradeStation zero rounded-corner rule */
@@ -25,7 +40,16 @@ body {
   color: var(--foreground);
   background: var(--background);
   font-family: Consolas, "Roboto Mono", ui-monospace, monospace;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 @layer utilities {
@@ -45,20 +69,21 @@ html {
 }
 
 ::-webkit-scrollbar-track {
-  background: #000000;
+  background: var(--bg-app);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #262626;
+  background: var(--border-subtle);
   border-radius: 0px !important;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #444444;
+  background: var(--border-strong);
 }
 
 /* Firefox scrollbar support */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #262626 #000000;
+  scrollbar-color: var(--border-subtle) var(--bg-app);
 }
+

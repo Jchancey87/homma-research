@@ -28,7 +28,7 @@ export function Sparkline({ points, width = 64, height = 20 }: SparklineProps) {
   }, '')
   
   const lastPoint = coords[coords.length - 1]
-  const strokeColor = points[points.length - 1] >= points[0] ? '#10b981' : '#f43f5e'
+  const strokeColor = points[points.length - 1] >= points[0] ? 'var(--green)' : 'var(--red)'
   
   return (
     <svg width={width} height={height} className="overflow-visible inline-block">

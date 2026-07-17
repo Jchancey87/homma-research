@@ -13,7 +13,7 @@ export function Panel({
   children, className = '',
 }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-[#050505] border border-[#262626] rounded-none p-3 ${className}`}>
+    <div className={`bg-panel border border-border-subtle rounded-none p-3 shadow-md ${className}`}>
       {children}
     </div>
   )
