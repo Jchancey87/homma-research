@@ -75,10 +75,10 @@
 * **UI Journal Refactor:** Refactored alerts dashboard [page.tsx](file:///home/jackc/projects/homma-research/frontend/app/alerts/page.tsx) with EEMUA-aligned Alarm Health bar, sidebar sort, suppressed badges, Alarm Health view tab.
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Completed Milestone 1 (KPI tracking), Milestone 2 (Suppressions/Grouping), and Milestone 3 (UI updates).
-* **Status:** Verified clean Next.js build and full pytest passing (297 tests).
+* **Goal:** Watchlist groups biotech FDA trials.
+* **Status:** Groups DB frontend API done. 318 tests pass.
 
 ## 🗑️ Rot & Pruning Log
-* Pruned old session goals.
+* Pruned completed goals.
 
 

@@ -17,11 +17,11 @@ from validation import normalize_ticker
 
 log = logging.getLogger(__name__)
 
-async def export_watchlist_to_csv(conn: asyncpg.Connection) -> str:
+async def export_watchlist_to_csv(conn: asyncpg.Connection, group_id: Optional[int] = None) -> str:
     """
     Exports the current watchlist to a CSV string.
     """
-    rows = await db_watchlist.list_watchlist(conn)
+    rows = await db_watchlist.list_watchlist(conn, group_id=group_id)
     output = io.StringIO()
     writer = csv.writer(output)
     
@@ -50,7 +50,11 @@ async def export_watchlist_to_csv(conn: asyncpg.Connection) -> str:
         
     return output.getvalue()
 
-async def import_watchlist_from_csv(conn: asyncpg.Connection, csv_content: str) -> Tuple[int, int]:
+async def import_watchlist_from_csv(
+    conn: asyncpg.Connection,
+    csv_content: str,
+    group_id: Optional[int] = None,
+) -> Tuple[int, int]:
     """
     Parses CSV content and imports/upserts symbols into the watchlist.
     CSV can have headers: ticker, sector, notes, tags
@@ -58,7 +62,7 @@ async def import_watchlist_from_csv(conn: asyncpg.Connection, csv_content: str) 
     
     Returns a tuple of (inserted_count, updated_count).
     """
-    existing_tickers = {t.upper() for t in await db_watchlist.list_watchlist_tickers(conn)}
+    existing_tickers = {t.upper() for t in await db_watchlist.list_watchlist_tickers(conn, group_id=group_id)}
     
     # Read CSV
     f = io.StringIO(csv_content)
@@ -146,6 +150,7 @@ async def import_watchlist_from_csv(conn: asyncpg.Connection, csv_content: str) 
             sector=sector,
             notes=notes,
             tags_json=tags_json,
+            group_id=group_id,
         )
         
         if is_update:

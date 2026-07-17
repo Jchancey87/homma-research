@@ -6,7 +6,8 @@ import {
   getWatchlist, addToWatchlist, removeFromWatchlist,
   getContinuationPicks, deactivateContinuationPick,
   exportWatchlistCsv, importWatchlistCsv,
-  type WatchlistItem, type ContinuationPick,
+  getWatchlistGroups, createWatchlistGroup, deleteWatchlistGroup, markWatchlistViewed,
+  type WatchlistItem, type ContinuationPick, type WatchlistGroup,
 } from '@/lib/api'
 import {
   Bookmark, Plus, Trash2, Search, RefreshCw, ExternalLink,
@@ -255,10 +256,16 @@ export default function WatchlistPage() {
 
   const [items,   setItems]   = useState<WatchlistItem[]>([])
   const [picks,   setPicks]   = useState<ContinuationPick[]>([])
+  const [groups,  setGroups]  = useState<WatchlistGroup[]>([])
+  const [selectedGroupId, setSelectedGroupId] = useState<number>(0) // 0 = Main Watchlist (ungrouped)
   const [loading, setLoading] = useState(true)
   const [search,  setSearch]  = useState('')
   const [tagFilter, setTagFilter] = useState('')
   const [showHistory, setShowHistory] = useState(false)
+
+  // Group creation form
+  const [newGroupName, setNewGroupName] = useState('')
+  const [creatingGroup, setCreatingGroup] = useState(false)
 
   // Add form
   const [showAdd,   setShowAdd]   = useState(false)
@@ -272,16 +279,18 @@ export default function WatchlistPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [w, p] = await Promise.all([
-        getWatchlist(),
+      const [w, p, g] = await Promise.all([
+        getWatchlist(selectedGroupId === 0 ? 0 : selectedGroupId),
         getContinuationPicks(showHistory),
+        getWatchlistGroups(),
       ])
       setItems(w)
       setPicks(p)
+      setGroups(g)
     } finally {
       setLoading(false)
     }
-  }, [showHistory])
+  }, [showHistory, selectedGroupId])
 
   useEffect(() => { load() }, [load])
 
@@ -290,13 +299,19 @@ export default function WatchlistPage() {
     if (!ticker) return setAddError('Ticker is required')
     setAdding(true); setAddError('')
     try {
-      await addToWatchlist({ ticker, notes: newNotes || undefined, sector: newSector || undefined, tags: newTags })
+      await addToWatchlist({
+        ticker,
+        notes: newNotes || undefined,
+        sector: newSector || undefined,
+        tags: newTags,
+        group_id: selectedGroupId === 0 ? undefined : selectedGroupId
+      })
       setNewTicker(''); setNewNotes(''); setNewSector(''); setNewTags([])
       setShowAdd(false)
       await load()
     } catch (e) {
-      const err = e as { response?: { data?: { error?: string } } }
-      setAddError(err?.response?.data?.error || 'Failed to add ticker')
+      const err = e as { response?: { data?: { error?: string; detail?: string } } }
+      setAddError(err?.response?.data?.detail || err?.response?.data?.error || 'Failed to add ticker')
     } finally {
       setAdding(false)
     }
@@ -304,7 +319,7 @@ export default function WatchlistPage() {
 
   const handleRemove = async (ticker: string) => {
     if (!confirm(`Remove ${ticker} from watchlist?`)) return
-    await removeFromWatchlist(ticker)
+    await removeFromWatchlist(ticker, selectedGroupId === 0 ? undefined : selectedGroupId)
     setItems(prev => prev.filter(i => i.ticker !== ticker))
   }
 
@@ -313,7 +328,8 @@ export default function WatchlistPage() {
     setPicks(prev => prev.filter(p => p.id !== id))
   }
 
-  const handleResearch = (ticker: string) => {
+  const handleResearch = async (ticker: string) => {
+    await markWatchlistViewed(ticker, selectedGroupId === 0 ? undefined : selectedGroupId).catch(() => {})
     router.push(`/research?ticker=${ticker}`)
   }
 
@@ -321,13 +337,45 @@ export default function WatchlistPage() {
     setNewTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag])
   }
 
+  const handleCreateGroup = async () => {
+    const name = newGroupName.trim()
+    if (!name) return
+    setCreatingGroup(true)
+    try {
+      const newG = await createWatchlistGroup(name)
+      setGroups(prev => [...prev, newG])
+      setSelectedGroupId(newG.id)
+      setNewGroupName('')
+    } catch (e) {
+      const err = e as { response?: { data?: { detail?: string; error?: string } } }
+      alert(err?.response?.data?.detail || err?.response?.data?.error || 'Failed to create group')
+    } finally {
+      setCreatingGroup(false)
+    }
+  }
+
+  const handleDeleteGroup = async (groupId: number, groupName: string) => {
+    if (!confirm(`Delete group "${groupName}" and all its tickers?`)) return
+    try {
+      await deleteWatchlistGroup(groupId)
+      setGroups(prev => prev.filter(g => g.id !== groupId))
+      if (selectedGroupId === groupId) {
+        setSelectedGroupId(0)
+      }
+    } catch {
+      alert('Failed to delete group')
+    }
+  }
+
   const handleExport = async () => {
     try {
-      const blob = await exportWatchlistCsv()
+      const blob = await exportWatchlistCsv(selectedGroupId === 0 ? undefined : selectedGroupId)
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = 'watchlist_export.csv'
+      const activeGroup = groups.find(g => g.id === selectedGroupId)
+      const groupName = activeGroup ? activeGroup.name.toLowerCase().replace(/[^a-z0-9]+/g, '_') : 'main'
+      a.download = `watchlist_${groupName}_export.csv`
       document.body.appendChild(a)
       a.click()
       a.remove()
@@ -342,7 +390,7 @@ export default function WatchlistPage() {
     const file = e.target.files?.[0]
     if (!file) return
     try {
-      const res = await importWatchlistCsv(file)
+      const res = await importWatchlistCsv(file, selectedGroupId === 0 ? undefined : selectedGroupId)
       alert(`Import completed! ${res.inserted} tickers added, ${res.updated} tickers updated.`)
       await load()
     } catch (err) {
@@ -351,7 +399,6 @@ export default function WatchlistPage() {
     }
     e.target.value = ''
   }
-
 
   const filteredItems = items.filter(item => {
     const tags = parseTags(item.tags)
@@ -472,12 +519,12 @@ export default function WatchlistPage() {
       {/* ── My Watchlist ─────────────────────────────────────────────── */}
       <section>
         {/* Header */}
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-4 border-b border-gray-200 dark:border-gray-800 pb-3">
           <div className="flex items-center gap-2">
             <Bookmark className="text-emerald-500 dark:text-emerald-400" size={20} />
             <div>
               <h2 className="text-lg font-bold text-gray-900 dark:text-white leading-tight">My Watchlist</h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Manually tracked tickers — one click to full research</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Group and track tickers of interest</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -491,7 +538,7 @@ export default function WatchlistPage() {
             <button
               id="export-watchlist-btn"
               onClick={handleExport}
-              title="Export Watchlist to CSV"
+              title="Export Current Group to CSV"
               className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 dark:border-gray-700 hover:bg-gray-150 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 font-semibold text-xs rounded-none transition-colors"
             >
               <Download size={14} />
@@ -500,7 +547,7 @@ export default function WatchlistPage() {
             <button
               id="import-watchlist-btn"
               onClick={() => document.getElementById('import-csv-input')?.click()}
-              title="Import Watchlist from CSV"
+              title="Import CSV into Current Group"
               className="flex items-center gap-1.5 px-3 py-2 border border-gray-300 dark:border-gray-700 hover:bg-gray-150 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 font-semibold text-xs rounded-none transition-colors"
             >
               <Upload size={14} />
@@ -524,145 +571,216 @@ export default function WatchlistPage() {
           </div>
         </div>
 
-        {/* Add form */}
-        {showAdd && (
-          <div className="mb-4 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Add to Watchlist</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <input
-                id="new-ticker-input"
-                placeholder="Ticker (e.g. AAPL)"
-                value={newTicker}
-                onChange={e => setNewTicker(e.target.value.toUpperCase())}
-                className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-900 dark:text-white text-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-              />
-              <input
-                id="new-sector-input"
-                placeholder="Sector (optional)"
-                value={newSector}
-                onChange={e => setNewSector(e.target.value)}
-                className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-900 dark:text-white text-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-              />
-              <input
-                id="new-notes-input"
-                placeholder="Notes (optional)"
-                value={newNotes}
-                onChange={e => setNewNotes(e.target.value)}
-                className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg px-3 py-2 text-gray-900 dark:text-white text-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-              />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {SENTIMENT_TAGS.map(tag => (
-                <button
-                  key={tag}
-                  id={`tag-${tag}`}
-                  onClick={() => toggleTag(tag)}
-                  className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${
-                    newTags.includes(tag)
-                      ? (TAG_COLORS[tag] ?? 'bg-gray-750 dark:bg-gray-700 text-white dark:text-white border-gray-500')
-                      : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500'
-                  }`}
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
-            {addError && <p className="text-red-500 dark:text-red-400 text-sm">{addError}</p>}
-            <div className="flex gap-2">
+        {/* Layout split: Left groups sidebar, Right watchlist data */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {/* Sidebar */}
+          <div className="md:col-span-1 border border-gray-200 dark:border-gray-800 bg-[#000000] p-4 flex flex-col space-y-4 rounded-none shadow-sm h-fit">
+            <h3 className="text-xs font-bold text-gray-400 dark:text-gray-550 uppercase tracking-widest border-b border-gray-850 pb-2 font-mono">Groups</h3>
+            <div className="flex flex-col space-y-1">
               <button
-                id="confirm-add-btn"
-                onClick={handleAdd}
-                disabled={adding}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold text-sm rounded-lg transition-colors min-w-[100px]"
-              >
-                {adding ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <RefreshCw size={14} className="animate-spin" />
-                    Enriching...
-                  </span>
-                ) : 'Add Ticker'}
-              </button>
-              <button
-                onClick={() => setShowAdd(false)}
-                className="px-4 py-2 bg-gray-205 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Filters */}
-        <div className="flex items-center gap-3 mb-3">
-          <div className="relative flex-1 max-w-xs">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-            <input
-              id="watchlist-search"
-              placeholder="Search ticker or notes…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg pl-8 pr-3 py-2 text-gray-900 dark:text-white text-sm placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-            />
-          </div>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {SENTIMENT_TAGS.map(tag => (
-              <button
-                key={tag}
-                id={`filter-tag-${tag}`}
-                onClick={() => setTagFilter(prev => prev === tag ? '' : tag)}
-                className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${
-                  tagFilter === tag
-                    ? (TAG_COLORS[tag] ?? 'bg-gray-750 dark:bg-gray-700 text-white dark:text-white border-gray-500')
-                    : 'bg-gray-100 dark:bg-gray-800/60 text-gray-650 dark:text-gray-400 border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500'
+                onClick={() => setSelectedGroupId(0)}
+                className={`flex items-center justify-between px-3 py-2 text-xs font-mono font-bold tracking-wide uppercase transition-colors rounded-none border text-left ${
+                  selectedGroupId === 0
+                    ? 'bg-emerald-500/10 text-[#00ff00] border-emerald-500/25'
+                    : 'text-gray-400 border-transparent hover:text-white hover:bg-gray-800/30'
                 }`}
               >
-                {tag}
+                <span>Main Watchlist</span>
               </button>
-            ))}
-            {tagFilter && (
-              <button onClick={() => setTagFilter('')} className="text-xs text-gray-500 hover:text-gray-950 dark:hover:text-white ml-1">
-                Clear
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* List */}
-        <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-2xl overflow-hidden shadow-sm">
-          {loading ? (
-            <div className="text-center py-12 text-gray-400 dark:text-gray-650 text-sm animate-pulse">Loading…</div>
-          ) : filteredItems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-3 border-b border-gray-200 dark:border-gray-800 last:border-0">
-              <Bookmark size={28} className="text-gray-400 dark:text-gray-600" />
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {items.length === 0
-                  ? 'Your watchlist is empty. Add a ticker to get started.'
-                  : 'No tickers match the current filter.'}
-              </p>
+              {groups.map(g => (
+                <div
+                  key={g.id}
+                  className={`group/item flex items-center justify-between px-3 py-1 text-xs font-mono font-bold tracking-wide uppercase transition-colors rounded-none border ${
+                    selectedGroupId === g.id
+                      ? 'bg-emerald-500/10 text-[#00ff00] border-emerald-500/25'
+                      : 'text-gray-400 border-transparent hover:text-white hover:bg-gray-800/30'
+                  }`}
+                >
+                  <button
+                    onClick={() => setSelectedGroupId(g.id)}
+                    className="flex-1 text-left py-1 truncate text-xs"
+                  >
+                    {g.name}
+                  </button>
+                  <button
+                    onClick={() => handleDeleteGroup(g.id, g.name)}
+                    className="opacity-0 group-hover/item:opacity-100 hover:text-red-500 transition-opacity p-1 text-gray-500"
+                    title="Delete Group"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              ))}
             </div>
-          ) : (
-            <table className="w-full text-left">
-              <thead className="border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/80">
-                <tr className="text-[10px] text-gray-500 dark:text-gray-450 uppercase tracking-widest font-bold">
-                  <th className="px-4 py-3">Ticker</th>
-                  <th className="px-4 py-3">Notes</th>
-                  <th className="px-4 py-3 hidden md:table-cell">Tags</th>
-                  <th className="px-4 py-3 hidden lg:table-cell">Added</th>
-                  <th className="px-4 py-3 text-right" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-800/60">
-                {filteredItems.map(item => (
-                  <WatchlistRow
-                    key={item.ticker}
-                    item={item}
-                    onRemove={handleRemove}
-                    onResearch={handleResearch}
+
+            {/* Create Group */}
+            <div className="border-t border-gray-850 pt-3">
+              <div className="flex gap-2">
+                <input
+                  placeholder="NEW GROUP NAME"
+                  value={newGroupName}
+                  onChange={e => setNewGroupName(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') handleCreateGroup()
+                  }}
+                  className="w-full bg-[#111] border border-gray-850 rounded-none px-2 py-1.5 text-xs font-mono text-white placeholder-gray-650 focus:outline-none focus:border-emerald-500"
+                />
+                <button
+                  onClick={handleCreateGroup}
+                  disabled={creatingGroup || !newGroupName.trim()}
+                  className="px-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-none transition-colors text-xs font-bold font-mono"
+                >
+                  <Plus size={12} />
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Main content */}
+          <div className="md:col-span-3 space-y-4">
+            {/* Add form */}
+            {showAdd && (
+              <div className="bg-[#000000] border border-gray-200 dark:border-gray-800 rounded-none p-4 space-y-4">
+                <h3 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider font-mono">
+                  Add to {selectedGroupId === 0 ? 'Main Watchlist' : groups.find(g => g.id === selectedGroupId)?.name}
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <input
+                    id="new-ticker-input"
+                    placeholder="Ticker (e.g. AAPL)"
+                    value={newTicker}
+                    onChange={e => setNewTicker(e.target.value.toUpperCase())}
+                    className="bg-[#111] border border-gray-800 rounded-none px-3 py-2 text-white text-xs font-mono placeholder-gray-650 focus:outline-none focus:border-emerald-500"
                   />
+                  <input
+                    id="new-sector-input"
+                    placeholder="Sector (optional)"
+                    value={newSector}
+                    onChange={e => setNewSector(e.target.value)}
+                    className="bg-[#111] border border-gray-800 rounded-none px-3 py-2 text-white text-xs font-mono placeholder-gray-655 focus:outline-none focus:border-emerald-500"
+                  />
+                  <input
+                    id="new-notes-input"
+                    placeholder="Notes (optional)"
+                    value={newNotes}
+                    onChange={e => setNewNotes(e.target.value)}
+                    className="bg-[#111] border border-gray-800 rounded-none px-3 py-2 text-white text-xs placeholder-gray-655 focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {SENTIMENT_TAGS.map(tag => (
+                    <button
+                      key={tag}
+                      id={`tag-${tag}`}
+                      onClick={() => toggleTag(tag)}
+                      className={`px-2.5 py-1 rounded-none text-[10px] font-mono uppercase border transition-colors ${
+                        newTags.includes(tag)
+                          ? (TAG_COLORS[tag] ?? 'bg-gray-750 dark:bg-gray-700 text-white border-gray-500')
+                          : 'bg-[#111] text-gray-500 border-gray-850 hover:border-gray-550'
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+                {addError && <p className="text-red-500 dark:text-red-400 text-xs font-mono">{addError}</p>}
+                <div className="flex gap-2">
+                  <button
+                    id="confirm-add-btn"
+                    onClick={handleAdd}
+                    disabled={adding}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs rounded-none transition-colors min-w-[100px]"
+                  >
+                    {adding ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <RefreshCw size={12} className="animate-spin" />
+                        Enriching...
+                      </span>
+                    ) : 'Add Ticker'}
+                  </button>
+                  <button
+                    onClick={() => setShowAdd(false)}
+                    className="px-4 py-2 bg-gray-800 hover:bg-gray-750 text-gray-300 text-xs rounded-none transition-colors font-mono"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Filters */}
+            <div className="flex items-center gap-3">
+              <div className="relative flex-1 max-w-xs">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" />
+                <input
+                  id="watchlist-search"
+                  placeholder="Search ticker or notes…"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="w-full bg-[#000000] border border-gray-800 rounded-none pl-8 pr-3 py-2 text-white text-xs placeholder-gray-655 focus:outline-none focus:border-emerald-500 font-mono"
+                />
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {SENTIMENT_TAGS.map(tag => (
+                  <button
+                    key={tag}
+                    id={`filter-tag-${tag}`}
+                    onClick={() => setTagFilter(prev => prev === tag ? '' : tag)}
+                    className={`px-2.5 py-1 rounded-none text-[10px] font-mono uppercase border transition-colors ${
+                      tagFilter === tag
+                        ? (TAG_COLORS[tag] ?? 'bg-gray-750 dark:bg-gray-700 text-white border-gray-500')
+                        : 'bg-[#111] text-gray-500 border-gray-850 hover:border-gray-550'
+                    }`}
+                  >
+                    {tag}
+                  </button>
                 ))}
-              </tbody>
-            </table>
-          )}
+                {tagFilter && (
+                  <button onClick={() => setTagFilter('')} className="text-[10px] font-mono uppercase text-gray-500 hover:text-white ml-1">
+                    Clear
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Watchlist table */}
+            <div className="bg-[#000000] border border-gray-200 dark:border-gray-800 rounded-none overflow-hidden shadow-sm">
+              {loading ? (
+                <div className="text-center py-12 text-gray-500 text-xs font-mono animate-pulse font-bold">Loading…</div>
+              ) : filteredItems.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3">
+                  <Bookmark size={28} className="text-gray-800" />
+                  <p className="text-xs text-gray-500 font-mono">
+                    {items.length === 0
+                      ? 'This group is empty. Add a ticker to get started.'
+                      : 'No tickers match the current filter.'}
+                  </p>
+                </div>
+              ) : (
+                <table className="w-full text-left">
+                  <thead className="border-b border-gray-800 bg-[#0c0c0c]">
+                    <tr className="text-[10px] text-gray-500 uppercase tracking-widest font-mono font-bold">
+                      <th className="px-4 py-3">Ticker</th>
+                      <th className="px-4 py-3">Notes</th>
+                      <th className="px-4 py-3 hidden md:table-cell">Tags</th>
+                      <th className="px-4 py-3 hidden lg:table-cell">Added</th>
+                      <th className="px-4 py-3 text-right" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-900 bg-[#000000]">
+                    {filteredItems.map(item => (
+                      <WatchlistRow
+                        key={item.ticker}
+                        item={item}
+                        onRemove={handleRemove}
+                        onResearch={handleResearch}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
         </div>
       </section>
     </div>

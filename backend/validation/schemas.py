@@ -322,12 +322,23 @@ class ObservationFilterQuery(BaseModel):
 # watchlist.py
 # ---------------------------------------------------------------------------
 
+class WatchlistGroupAddBody(BaseModel):
+    """POST /watchlist/groups"""
+    name: Annotated[str, Field(min_length=1, max_length=100)]
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def strip_name(cls, v):
+        return str(v).strip() if v else v
+
+
 class WatchlistAddBody(BaseModel):
     """POST /watchlist"""
     ticker: Annotated[str, Field(min_length=1, max_length=10)]
     sector: Optional[str] = None
     notes: Optional[str] = None
     tags: list[str] = []
+    group_id: Optional[int] = None
 
     @field_validator("ticker", mode="before")
     @classmethod

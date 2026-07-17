@@ -19,7 +19,7 @@ from ..config import settings
 from ..db import get_db
 from ..db import watchlist as db_watchlist
 from validation import normalize_ticker
-from validation.schemas import WatchlistAddBody, WatchlistUpdateBody
+from validation.schemas import WatchlistAddBody, WatchlistUpdateBody, WatchlistGroupAddBody
 from services.live_quotes_service import get_live_quotes
 from services.watchlist_service import export_watchlist_to_csv, import_watchlist_from_csv
 
@@ -28,13 +28,50 @@ router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 
 
 # ---------------------------------------------------------------------------
+# GET /watchlist/groups
+# ---------------------------------------------------------------------------
+
+@router.get("/groups")
+async def list_groups(db: asyncpg.Connection = Depends(get_db)):
+    """Return all watchlist groups."""
+    return await db_watchlist.list_watchlist_groups(db)
+
+
+# ---------------------------------------------------------------------------
+# POST /watchlist/groups
+# ---------------------------------------------------------------------------
+
+@router.post("/groups", status_code=201)
+async def create_group(data: WatchlistGroupAddBody, db: asyncpg.Connection = Depends(get_db)):
+    """Create a new watchlist group."""
+    name = data.name
+    if await db_watchlist.watchlist_group_exists_by_name(db, name):
+        raise HTTPException(status_code=409, detail=f"Group '{name}' already exists")
+    
+    return await db_watchlist.insert_watchlist_group(db, name)
+
+
+# ---------------------------------------------------------------------------
+# DELETE /watchlist/groups/{group_id}
+# ---------------------------------------------------------------------------
+
+@router.delete("/groups/{group_id}")
+async def delete_group(group_id: int, db: asyncpg.Connection = Depends(get_db)):
+    """Delete a watchlist group and all its member tickers."""
+    deleted = await db_watchlist.delete_watchlist_group(db, group_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Group not found")
+    return {"success": True}
+
+
+# ---------------------------------------------------------------------------
 # GET /watchlist
 # ---------------------------------------------------------------------------
 
 @router.get("")
-async def list_watchlist(db: asyncpg.Connection = Depends(get_db)):
-    """Return all watchlist tickers ordered by last viewed / added."""
-    return await db_watchlist.list_watchlist(db)
+async def list_watchlist(db: asyncpg.Connection = Depends(get_db), group_id: Optional[int] = None):
+    """Return watchlist tickers, optionally filtered by group_id."""
+    return await db_watchlist.list_watchlist(db, group_id=group_id)
 
 
 # ---------------------------------------------------------------------------
@@ -48,6 +85,7 @@ async def add_to_watchlist(data: WatchlistAddBody, db: asyncpg.Connection = Depe
     sector   = data.sector
     notes    = data.notes
     tags_raw = list(data.tags)
+    group_id = data.group_id
 
     # Enrich via FMP + LLM if any key field is missing (sync, so offload)
     if not sector or not notes or not tags_raw:
@@ -90,9 +128,10 @@ async def add_to_watchlist(data: WatchlistAddBody, db: asyncpg.Connection = Depe
             sector=sector,
             notes=notes,
             tags_json=tags_json,
+            group_id=group_id,
         )
     except asyncpg.UniqueViolationError:
-        raise HTTPException(status_code=409, detail=f"{ticker} is already on your watchlist")
+        raise HTTPException(status_code=409, detail=f"{ticker} is already on your watchlist in this group")
 
     return {"ticker": ticker}
 
@@ -106,9 +145,10 @@ async def update_watchlist_item(
     ticker: str,
     data: WatchlistUpdateBody,
     db: asyncpg.Connection = Depends(get_db),
+    group_id: Optional[int] = None,
 ):
     ticker = normalize_ticker(ticker)
-    if not await db_watchlist.watchlist_ticker_exists(db, ticker):
+    if not await db_watchlist.watchlist_ticker_exists(db, ticker, group_id):
         raise HTTPException(status_code=404, detail="Not found")
 
     updates: dict = {}
@@ -119,7 +159,7 @@ async def update_watchlist_item(
     if data.tags is not None:
         updates["tags"] = json.dumps(data.tags)
 
-    await db_watchlist.update_watchlist(db, ticker, updates)
+    await db_watchlist.update_watchlist(db, ticker, updates, group_id)
     return {"success": True}
 
 
@@ -128,8 +168,12 @@ async def update_watchlist_item(
 # ---------------------------------------------------------------------------
 
 @router.post("/{ticker}/viewed")
-async def mark_viewed(ticker: str, db: asyncpg.Connection = Depends(get_db)):
-    await db_watchlist.mark_watchlist_viewed(db, normalize_ticker(ticker))
+async def mark_viewed(
+    ticker: str,
+    db: asyncpg.Connection = Depends(get_db),
+    group_id: Optional[int] = None,
+):
+    await db_watchlist.mark_watchlist_viewed(db, normalize_ticker(ticker), group_id=group_id)
     return {"success": True}
 
 
@@ -138,9 +182,13 @@ async def mark_viewed(ticker: str, db: asyncpg.Connection = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @router.delete("/{ticker}")
-async def remove_from_watchlist(ticker: str, db: asyncpg.Connection = Depends(get_db)):
+async def remove_from_watchlist(
+    ticker: str,
+    db: asyncpg.Connection = Depends(get_db),
+    group_id: Optional[int] = None,
+):
     ticker = normalize_ticker(ticker)
-    deleted = await db_watchlist.delete_watchlist(db, ticker)
+    deleted = await db_watchlist.delete_watchlist(db, ticker, group_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Not found")
     return {"success": True}
@@ -151,9 +199,9 @@ async def remove_from_watchlist(ticker: str, db: asyncpg.Connection = Depends(ge
 # ---------------------------------------------------------------------------
 
 @router.get("/prices")
-async def watchlist_prices(db: asyncpg.Connection = Depends(get_db)):
+async def watchlist_prices(db: asyncpg.Connection = Depends(get_db), group_id: Optional[int] = None):
     """Return Schwab (or Polygon fallback) price + % change for every watchlist ticker in batch."""
-    tickers = await db_watchlist.list_watchlist_tickers(db)
+    tickers = await db_watchlist.list_watchlist_tickers(db, group_id=group_id)
     if not tickers:
         return {}
 
@@ -173,13 +221,14 @@ async def watchlist_prices(db: asyncpg.Connection = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 @router.get("/export")
-async def export_watchlist(db: asyncpg.Connection = Depends(get_db)):
+async def export_watchlist(db: asyncpg.Connection = Depends(get_db), group_id: Optional[int] = None):
     """Export all watchlist tickers in CSV format."""
-    csv_data = await export_watchlist_to_csv(db)
+    csv_data = await export_watchlist_to_csv(db, group_id=group_id)
+    filename = "watchlist_export.csv" if not group_id else f"watchlist_group_{group_id}_export.csv"
     return Response(
         content=csv_data,
         media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=watchlist_export.csv"}
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
 
@@ -190,7 +239,8 @@ async def export_watchlist(db: asyncpg.Connection = Depends(get_db)):
 @router.post("/import")
 async def import_watchlist(
     file: UploadFile = File(...),
-    db: asyncpg.Connection = Depends(get_db)
+    db: asyncpg.Connection = Depends(get_db),
+    group_id: Optional[int] = None,
 ):
     """Import tickers from a CSV file."""
     content = await file.read()
@@ -199,6 +249,6 @@ async def import_watchlist(
     except UnicodeDecodeError:
         raise HTTPException(status_code=400, detail="Invalid file encoding. Must be UTF-8.")
 
-    inserted, updated = await import_watchlist_from_csv(db, csv_text)
+    inserted, updated = await import_watchlist_from_csv(db, csv_text, group_id=group_id)
     return {"inserted": inserted, "updated": updated}
 

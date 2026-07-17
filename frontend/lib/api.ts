@@ -358,6 +358,12 @@ export const chartImageUrl = (imagePath: string) =>
 
 // ── Watchlist ─────────────────────────────────────────────────────────────
 
+export interface WatchlistGroup {
+  id: number
+  name: string
+  created_at: string
+}
+
 export interface WatchlistItem {
   id: number
   ticker: string
@@ -366,39 +372,64 @@ export interface WatchlistItem {
   tags: string          // JSON array string
   added_at: string
   last_viewed_at: string | null
+  group_id: number | null
 }
 
-export const getWatchlist = () =>
-  api.get<WatchlistItem[]>('/api/watchlist').then(r => r.data)
+export const getWatchlistGroups = () =>
+  api.get<WatchlistGroup[]>('/api/watchlist/groups').then(r => r.data)
+
+export const createWatchlistGroup = (name: string) =>
+  api.post<WatchlistGroup>('/api/watchlist/groups', { name }).then(r => r.data)
+
+export const deleteWatchlistGroup = (groupId: number) =>
+  api.delete(`/api/watchlist/groups/${groupId}`).then(r => r.data)
+
+export const getWatchlist = (groupId?: number) => {
+  const params = groupId !== undefined ? { group_id: groupId } : {}
+  return api.get<WatchlistItem[]>('/api/watchlist', { params }).then(r => r.data)
+}
 
 export const addToWatchlist = (data: {
   ticker: string
   sector?: string
   notes?: string
   tags?: string[]
+  group_id?: number
 }) => api.post<{ ticker: string }>('/api/watchlist', data).then(r => r.data)
 
 export const updateWatchlistItem = (
   ticker: string,
-  data: { notes?: string; tags?: string[]; sector?: string }
-) => api.put(`/api/watchlist/${ticker}`, data).then(r => r.data)
+  data: { notes?: string; tags?: string[]; sector?: string },
+  groupId?: number
+) => {
+  const params = groupId !== undefined ? { group_id: groupId } : {}
+  return api.put(`/api/watchlist/${ticker}`, data, { params }).then(r => r.data)
+}
 
-export const removeFromWatchlist = (ticker: string) =>
-  api.delete(`/api/watchlist/${ticker}`).then(r => r.data)
+export const removeFromWatchlist = (ticker: string, groupId?: number) => {
+  const params = groupId !== undefined ? { group_id: groupId } : {}
+  return api.delete(`/api/watchlist/${ticker}`, { params }).then(r => r.data)
+}
 
-export const markWatchlistViewed = (ticker: string) =>
-  api.post(`/api/watchlist/${ticker}/viewed`).then(r => r.data)
+export const markWatchlistViewed = (ticker: string, groupId?: number) => {
+  const params = groupId !== undefined ? { group_id: groupId } : {}
+  return api.post(`/api/watchlist/${ticker}/viewed`, null, { params }).then(r => r.data)
+}
 
-export const exportWatchlistCsv = () =>
-  api.get('/api/watchlist/export', { responseType: 'blob' }).then(r => r.data)
+export const exportWatchlistCsv = (groupId?: number) => {
+  const params = groupId !== undefined ? { group_id: groupId } : {}
+  return api.get('/api/watchlist/export', { responseType: 'blob', params }).then(r => r.data)
+}
 
-export const importWatchlistCsv = (file: File) => {
+export const importWatchlistCsv = (file: File, groupId?: number) => {
   const formData = new FormData()
   formData.append('file', file)
+  const params = groupId !== undefined ? { group_id: groupId } : {}
   return api.post<{ inserted: number; updated: number }>('/api/watchlist/import', formData, {
     headers: {
       'Content-Type': 'multipart/form-data'
-    }
+    },
+    params
   }).then(r => r.data)
 }
 
@@ -653,8 +684,10 @@ export interface WatchlistPrice {
   chg_pct: number | null
   volume:  number | null
 }
-export const getWatchlistPrices = () =>
-  api.get<Record<string, WatchlistPrice>>('/api/watchlist/prices').then(r => r.data)
+export const getWatchlistPrices = (groupId?: number) => {
+  const params = groupId !== undefined ? { group_id: groupId } : {}
+  return api.get<Record<string, WatchlistPrice>>('/api/watchlist/prices', { params }).then(r => r.data)
+}
 
 export interface DashboardOverviewData {
   live_gainers: LiveGainerSnapshot

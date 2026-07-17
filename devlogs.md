@@ -1469,3 +1469,20 @@ Optimized `/health` to use pool connection health check. Created `/api/market/da
 * **Live Screener ([live_screener.py](file:///home/jackc/projects/homma-research/backend/services/live_screener.py))**: Implemented `_last_update_ts` tracking last quote update timestamp per symbol. In `_fast_refresh()`, only overlays price/volume if streamed quote is strictly newer than cached one. Prevents stale websocket cache from reverting fresh REST updates.
 * **Agent Memory ([AGENT_MEMORY.md](file:///home/jackc/projects/homma-research/AGENT_MEMORY.md))**: Updated session goals and status.
 
+---
+
+## [2026-07-16] Add Watchlist Groups
+
+### Summary
+* Added watchlist groups support for segmenting tickers (e.g. FDA approved vs trials).
+
+### What Changed
+* **Database Schema (`backend/models/schema.sql`)**: Defined `watchlist_groups` table. Modified `watchlist` table, added `group_id` foreign key, dropped global `ticker` unique constraint, added group-scoped unique indexes.
+* **DB Helper (`backend/fastapi_app/db/watchlist.py`)**: Added group CRUD. Scoped watchlist queries to target group.
+* **FastAPI Router (`backend/fastapi_app/routers/watchlist.py`)**: Added group endpoints. Added group_id parameter support. Swapped db and group_id parameters to prevent positional Depends mismatches.
+* **Service Layer (`backend/services/watchlist_service.py`)**: Updated import/export helpers with group_id parameter.
+* **Frontend Client (`frontend/lib/api.ts`)**: Added watchlist group API methods and types.
+* **Frontend View (`frontend/app/watchlist/page.tsx`)**: Replaced grid with group selector sidebar. Scoped watchlist additions, removals, and import/export to selected group.
+* **Tests (`backend/tests/test_watchlist.py`)**: Added `test_watchlist_groups_crud` integration tests. 318/318 tests pass.
+
+

@@ -136,3 +136,75 @@ async def test_watchlist_import(client):
     await client.delete("/api/watchlist/IMP1")
     await client.delete("/api/watchlist/IMP2")
 
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_watchlist_groups_crud(client):
+    # 1. Create a watchlist group
+    g1_resp = await client.post("/api/watchlist/groups", json={"name": "FDA Approved"})
+    assert g1_resp.status_code == 201
+    g1 = g1_resp.json()
+    assert g1["name"] == "FDA Approved"
+    g1_id = g1["id"]
+
+    g2_resp = await client.post("/api/watchlist/groups", json={"name": "Awaiting Trials"})
+    assert g2_resp.status_code == 201
+    g2 = g2_resp.json()
+    g2_id = g2["id"]
+
+    # Try creating duplicate group name (should fail 409)
+    g_dupe = await client.post("/api/watchlist/groups", json={"name": "FDA Approved"})
+    assert g_dupe.status_code == 409
+
+    # 2. Add ticker BIIB to FDA Approved
+    r_add1 = await client.post(
+        "/api/watchlist",
+        json={"ticker": "BIIB", "sector": "Biotech", "notes": "Approved", "tags": ["fda"], "group_id": g1_id}
+    )
+    assert r_add1.status_code == 201
+
+    # Add ticker BIIB to Awaiting Trials (different group, should succeed)
+    r_add2 = await client.post(
+        "/api/watchlist",
+        json={"ticker": "BIIB", "sector": "Biotech", "notes": "Trials", "tags": ["trials"], "group_id": g2_id}
+    )
+    assert r_add2.status_code == 201
+
+    # Add duplicate to same group (should fail 409)
+    r_add_dupe = await client.post(
+        "/api/watchlist",
+        json={"ticker": "BIIB", "sector": "Biotech", "notes": "Approved again", "tags": ["fda"], "group_id": g1_id}
+    )
+    assert r_add_dupe.status_code == 409
+
+    # 3. List watchlist for each group
+    w1 = await client.get(f"/api/watchlist?group_id={g1_id}")
+    assert w1.status_code == 200
+    assert len(w1.json()) == 1
+    assert w1.json()[0]["ticker"] == "BIIB"
+    assert w1.json()[0]["notes"] == "Approved"
+
+    w2 = await client.get(f"/api/watchlist?group_id={g2_id}")
+    assert w2.status_code == 200
+    assert len(w2.json()) == 1
+    assert w2.json()[0]["ticker"] == "BIIB"
+    assert w2.json()[0]["notes"] == "Trials"
+
+    # List all groups
+    groups_list = await client.get("/api/watchlist/groups")
+    assert groups_list.status_code == 200
+    group_names = [g["name"] for g in groups_list.json()]
+    assert "FDA Approved" in group_names
+    assert "Awaiting Trials" in group_names
+
+    # 4. Clean up groups (this should cascade delete the items)
+    del_g1 = await client.delete(f"/api/watchlist/groups/{g1_id}")
+    assert del_g1.status_code == 200
+
+    del_g2 = await client.delete(f"/api/watchlist/groups/{g2_id}")
+    assert del_g2.status_code == 200
+
+    # Verify BIIB is no longer in any group
+    w1_after = await client.get(f"/api/watchlist?group_id={g1_id}")
+    assert len(w1_after.json()) == 0
+
+

@@ -111,19 +111,33 @@ CREATE TABLE IF NOT EXISTS llm_jobs (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS watchlist_groups (
+    id          SERIAL PRIMARY KEY,
+    name        TEXT NOT NULL UNIQUE,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Watchlist: tickers of interest saved between research sessions
 CREATE TABLE IF NOT EXISTS watchlist (
     id             SERIAL PRIMARY KEY,
-    ticker         TEXT    NOT NULL UNIQUE,
+    ticker         TEXT    NOT NULL,
     sector         TEXT,
     notes          TEXT,
     tags           TEXT    DEFAULT '[]',     -- JSON array of string labels
     alert_threshold DOUBLE PRECISION,        -- optional gap% drop threshold for auto-expiry
     added_at       TIMESTAMPTZ DEFAULT NOW(),
-    last_viewed_at TIMESTAMPTZ
+    last_viewed_at TIMESTAMPTZ,
+    group_id       INTEGER REFERENCES watchlist_groups(id) ON DELETE CASCADE
 );
 
 ALTER TABLE watchlist ADD COLUMN IF NOT EXISTS alert_threshold DOUBLE PRECISION;
+ALTER TABLE watchlist ADD COLUMN IF NOT EXISTS group_id INTEGER REFERENCES watchlist_groups(id) ON DELETE CASCADE;
+
+-- Drop constraint if exists on older setups
+ALTER TABLE watchlist DROP CONSTRAINT IF EXISTS watchlist_ticker_key;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_watchlist_group_ticker ON watchlist(group_id, ticker) WHERE group_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_watchlist_null_group_ticker ON watchlist(ticker) WHERE group_id IS NULL;
 
 CREATE INDEX IF NOT EXISTS idx_watchlist_ticker ON watchlist(ticker);
 
