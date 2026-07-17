@@ -8,6 +8,7 @@ import FloatBucketSummary from '@/components/FloatBucketSummary'
 import SectorRotation from '@/components/SectorRotation'
 import EconomicCalendar from '@/components/EconomicCalendar'
 import HelpGuide from '@/components/HelpGuide'
+import DashboardHeader from '@/components/DashboardHeader'
 import { Panel, PanelLabel } from '@/components/Panel'
 import { getContinuationPicks, ContinuationPick, getDashboardOverview, DashboardOverviewData } from '@/lib/api'
 import {
@@ -18,30 +19,7 @@ import {
 
 export const dynamic = 'force-dynamic'
 
-// ── Morning date header ────────────────────────────────────────────────────────
-
-function MorningHeader() {
-  const now = new Date()
-  const dayName = now.toLocaleDateString('en-US', { weekday: 'long' })
-  const dateStr = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-  const hour = now.getHours()
-  const greeting = hour < 9 ? 'Pre-market briefing' : hour < 16 ? 'Market open' : 'After-hours'
-
-  return (
-    <div className="flex items-baseline justify-between pb-3 flex-wrap gap-2">
-      <div>
-        <h1 className="font-mono text-lg font-bold text-white uppercase tracking-tight">{dayName}</h1>
-        <p className="font-mono text-[11px] text-gray-500 mt-0.5">{dateStr} · {greeting}</p>
-      </div>
-      <Link
-        href="/history"
-        className="font-mono text-[11px] text-[#00ff00] border border-[#00ff00]/30 bg-emerald-950/10 px-3 py-1 flex items-center gap-1 hover:bg-emerald-950/20 transition-colors rounded-none"
-      >
-        Command Center <ArrowRight size={11} />
-      </Link>
-    </div>
-  )
-}
+// ── Dashboard Header ──────────────────────────────────────────────────────────
 
 // ── Continuation picks (promoted from watchlist page) ─────────────────────────
 
@@ -139,8 +117,11 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-2 max-w-[1920px] mx-auto">
 
-      {/* ── Morning header ── */}
-      <MorningHeader />
+      {/* ── Dashboard Header ── */}
+      <DashboardHeader
+        initialSessionState={overviewData.live_gainers.session}
+        initialFetchedAt={overviewData.live_gainers.fetched_at}
+      />
 
       {/* ── Command Summary Strip (Market Regime Card) ── */}
       <CommandSummaryStrip />

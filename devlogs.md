@@ -1509,5 +1509,18 @@ Optimized `/health` to use pool connection health check. Created `/api/market/da
 * **Frontend View (`frontend/app/watchlist/page.tsx`)**: Aligned `handleEnrich` to handle the background task response, display a toast notification, and trigger an auto-refresh after 5 seconds.
 * **Tests**: Updated `backend/tests/test_watchlist_enrichment.py` to match the 202 background endpoint response. Passed all 321 tests.
 
+---
+
+## [2026-07-17] Reusable Dashboard Header Refactoring
+
+### Summary
+* Created reusable DashboardHeader. Replaced MorningHeader. Added live ET clock, market session indicator, dynamic state coloring, data freshness tracking, Next.js refresh actions.
+
+### What Changed
+* **Frontend Component ([DashboardHeader.tsx](file:///home/jackc/projects/homma-research/frontend/components/DashboardHeader.tsx))**: Implemented component with flexible props, 10s API state polling, 1s Eastern time clock ticking, status dot animations, and StartTransition server refresh.
+* **Dashboard Page ([page.tsx](file:///home/jackc/projects/homma-research/frontend/app/page.tsx))**: Removed deprecated `MorningHeader`. Integrated `<DashboardHeader />` wired to server-loaded `overviewData.live_gainers` session details.
+* **Verification**: Completed compiler check with zero TypeScript/lint errors.
+
+
 
 

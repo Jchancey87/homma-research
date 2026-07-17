@@ -79,7 +79,9 @@
 * **Enrichment:** Non-blocking `POST /enrich` runs in FastAPI `BackgroundTasks`. Fetches yfinance/SEC/LLM metrics in parallel (`asyncio.to_thread`, semaphore=4) to prevent loop starvation. Falls back to SEC facts for cash/operating cash flows. Safely alerts Telegram if runway < 6 months or dilution high.
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Idle. Watchlist and Observations widgets removed, codebase compiled and verified.
+* **Goal:** Refactor dashboard header. Create reusable DashboardHeader component. Integrate with page.tsx. Wire with live market/date data. Ensure responsive terminal-like aesthetic.
+* **Scope:** Edit app/page.tsx, components/DashboardHeader.tsx. Preserve existing comment structures.
+* **Assumptions:** Data-driven session states. Timezone EDT/EST (America/New_York).
 
 
 ## 🗑️ Rot & Pruning Log
