@@ -74,19 +74,15 @@
 * **Already In Play Suppression:** Suppress lower/equal priority alerts if Tier 1/2 already fired in session, unless price moves >5% from first alert. Saves to DB with reason `ALREADY_IN_PLAY`.
 * **UI Journal Refactor:** Refactored alerts dashboard [page.tsx](file:///home/jackc/projects/homma-research/frontend/app/alerts/page.tsx) with EEMUA-aligned Alarm Health bar, sidebar sort, suppressed badges, Alarm Health view tab.
 
+### 12. Watchlist Group & Enrichment
+* **Segmentation:** Groups table segments biotech etfs (e.g. FDA approved vs trials). Scopes queries/imports/exports.
+* **Enrichment:** Non-blocking `POST /enrich` runs in FastAPI `BackgroundTasks`. Fetches yfinance/SEC/LLM metrics in parallel (`asyncio.to_thread`, semaphore=4) to prevent loop starvation. Falls back to SEC facts for cash/operating cash flows. Safely alerts Telegram if runway < 6 months or dilution high.
+
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Biotech watchlist enrichment.
-* **Scope:**
-  - Alter `watchlist` table: add `runway_months` (double), `dilution_risk` (text), `upcoming_catalyst` (text), `catalyst_date` (date).
-  - Edit `schema.sql` (main + migration). Run db init.
-  - Edit `db/watchlist.py` (select, insert, upsert, update, `update_watchlist_metrics`).
-  - Add `enrich_watchlist_fundamentals` in `services/watchlist_service.py`. Calculate runway, dilution risk. Send Telegram if runway drops < 6. Extract catalyst from SEC/LLM.
-  - Update router `watchlist.py` to add `/watchlist/enrich`, trigger on POST, return in GET/prices/import/export.
-  - Add Celery nightly task.
-  - Update frontend API and watchlist table/columns/refresh.
-* **Status:** Watchlist enrichment optimized. Parallel fetches (Semaphore=4), SEC EDGAR fallback, background task, NoneType guard done. 321 tests pass.
+* **Goal:** Idle. Watchlist groups and concurrent background enrichment fully implemented and deployed.
 
 ## 🗑️ Rot & Pruning Log
-* Pruned completed goals.
+* Pruned completed watchlist enrichment goals.
+
 
 
