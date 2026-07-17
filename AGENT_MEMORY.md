@@ -79,7 +79,7 @@
 * **Enrichment:** Non-blocking `POST /enrich` runs in FastAPI `BackgroundTasks`. Fetches yfinance/SEC/LLM metrics in parallel (`asyncio.to_thread`, semaphore=4) to prevent loop starvation. Falls back to SEC facts for cash/operating cash flows. Safely alerts Telegram if runway < 6 months or dilution high.
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Idle. Dashboard visual redesign completed, compiled, verified.
+* **Goal:** Idle. Watchlist and Observations widgets removed, codebase compiled and verified.
 
 
 ## 🗑️ Rot & Pruning Log

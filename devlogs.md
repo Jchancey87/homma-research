@@ -3,13 +3,14 @@
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
 
-## [2026-07-17] Visual Redesign: Dark-mode Trading Dashboard
+## [2026-07-17] Visual Redesign & Layout Optimization: Dark-mode Trading Dashboard
 
 ### Summary
 * Redesign dark UI visual hierarchy, contrast, scanability.
 * Maintain TradeStation zero-round edges.
 * Introduce 4-level dark surface background colors.
 * Increase text contrast ticker, price, change, numeric alignment.
+* Removed Watchlist and Recent Observations dashboard widgets to save space; cleaned up unused imports.
 
 ## [2026-07-15] M1 Alarm Rate KPI Tracking & Alert Journal Refactor
 

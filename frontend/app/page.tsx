@@ -1,8 +1,6 @@
 import { Suspense } from 'react'
 import Link from 'next/link'
 import LiveGainers from '@/components/LiveGainers'
-import WatchlistQuickAccess from '@/components/WatchlistQuickAccess'
-import RecentObservations from '@/components/RecentObservations'
 import CommandSummaryStrip from '@/components/CommandSummaryStrip'
 import RepeatRunnerAlert from '@/components/RepeatRunnerAlert'
 import FollowThrough from '@/components/FollowThrough'
@@ -13,7 +11,7 @@ import HelpGuide from '@/components/HelpGuide'
 import { Panel, PanelLabel } from '@/components/Panel'
 import { getContinuationPicks, ContinuationPick, getDashboardOverview, DashboardOverviewData } from '@/lib/api'
 import {
-  TrendingUp, Bookmark, FileText, RotateCcw,
+  TrendingUp, RotateCcw,
   BarChart2, ArrowRight, CalendarDays,
   Layers, TrendingDown, Zap,
 } from 'lucide-react'
@@ -205,22 +203,6 @@ export default async function DashboardPage() {
         </Suspense>
       </div>
 
-      {/* ── Row 4: Watchlist (live prices) + Observations (stacked on mobile, side-by-side on lg) ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-        <Panel>
-          <PanelLabel icon={Bookmark} label="Watchlist" href="/watchlist" />
-          <Suspense fallback={<div className="space-y-1.5 animate-pulse">{[1,2,3].map(i=><div key={i} className="h-9 bg-[#111] rounded-none" />)}</div>}>
-            <WatchlistQuickAccess initialItems={overviewData.watchlist} initialPrices={overviewData.watchlist_prices} />
-          </Suspense>
-        </Panel>
-
-        <Panel>
-          <PanelLabel icon={FileText} label="Recent Observations" href="/observations" />
-          <Suspense fallback={<div className="h-32 bg-[#111] rounded-none animate-pulse" />}>
-            <RecentObservations />
-          </Suspense>
-        </Panel>
-      </div>
 
       {/* ── Economic calendar (full width, compact) ── */}
       <Panel>
