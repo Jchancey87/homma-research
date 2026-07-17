@@ -14,7 +14,7 @@ Read completely on startup before beginning any task.
 * **Edits:** Use `replace_file_content` for single contiguous blocks. Use `multi_replace_file_content` for separate blocks. *Never execute these in parallel on the same file.*
 * **Scratchpads:** Store temporary scripts, test queries, or debug logs exclusively in `scratch/` or `backend/scratch/`.
 * **Token Efficiency:** Do not read entire files >200 lines if targeted chunks suffice. Use atomic search-and-replace instead of rewriting entire unchanged code blocks.
-* **QA:** Run local tests and lints immediately after modifying any code.
+* **QA:** Run targeted tests/lints immediately on modified code. Run full test suite only before commit/push/deploy.
 
 ### 3. Memory & Context Management (`AGENT_MEMORY.md`)
 * **Session Start:** Locate files using `sigmap`. Define current goals, assumptions, and scope in the `session` section of `AGENT_MEMORY.md`.
