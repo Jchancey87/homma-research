@@ -1485,4 +1485,20 @@ Optimized `/health` to use pool connection health check. Created `/api/market/da
 * **Frontend View (`frontend/app/watchlist/page.tsx`)**: Replaced grid with group selector sidebar. Scoped watchlist additions, removals, and import/export to selected group.
 * **Tests (`backend/tests/test_watchlist.py`)**: Added `test_watchlist_groups_crud` integration tests. 318/318 tests pass.
 
+---
+
+## [2026-07-16] Watchlist Enrichment Optimization & SEC Fallback
+
+### Summary
+* Optimized watchlist enrichment to prevent HTTP timeouts. Added parallel fetches, non-blocking background tasks, error guards, and SEC EDGAR facts fallback.
+
+### What Changed
+* **Enrichment Service (`backend/services/watchlist_service.py`)**: Decoupled slow external fetches from database writes. Refactored to fetch concurrently using `asyncio.gather` with a semaphore limit of 4. Implemented SEC EDGAR facts fallback for cash runway calculations if FMP/yfinance fail.
+* **SEC Service (`backend/services/sec_service.py`)**: Added `get_sec_financials` fetching cash and operating cash flow from SEC XBRL company facts API.
+* **LLM Client (`backend/llm/llm_client.py`)**: Added `NoneType` guard on OpenRouter completions to prevent strip attribute errors.
+* **FastAPI Router (`backend/fastapi_app/routers/watchlist.py`)**: Converted `POST /watchlist/enrich` to launch in FastAPI `BackgroundTasks` with status 202, preventing connection release and browser timeouts.
+* **Frontend View (`frontend/app/watchlist/page.tsx`)**: Aligned `handleEnrich` to handle the background task response, display a toast notification, and trigger an auto-refresh after 5 seconds.
+* **Tests**: Updated `backend/tests/test_watchlist_enrichment.py` to match the 202 background endpoint response. Passed all 321 tests.
+
+
 

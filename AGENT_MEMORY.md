@@ -84,7 +84,7 @@
   - Update router `watchlist.py` to add `/watchlist/enrich`, trigger on POST, return in GET/prices/import/export.
   - Add Celery nightly task.
   - Update frontend API and watchlist table/columns/refresh.
-* **Status:** Completed. Schema altered, DB helpers updated, enrichment logic implemented, router endpoints added, Celery task configured, API + UI updated, and all tests/compilation passed.
+* **Status:** Watchlist enrichment optimized. Parallel fetches (Semaphore=4), SEC EDGAR fallback, background task, NoneType guard done. 321 tests pass.
 
 ## 🗑️ Rot & Pruning Log
 * Pruned completed goals.

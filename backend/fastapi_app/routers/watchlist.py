@@ -13,7 +13,7 @@ import logging
 from typing import Optional
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Response
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Response, BackgroundTasks
 
 from ..config import settings
 from ..db import get_db
@@ -201,19 +201,26 @@ async def remove_from_watchlist(
     return {"success": True}
 
 
-# ---------------------------------------------------------------------------
-# POST /watchlist/enrich
-# ---------------------------------------------------------------------------
-
-@router.post("/enrich")
-async def enrich_watchlist(
-    group_id: Optional[int] = None,
-    db: asyncpg.Connection = Depends(get_db)
-):
-    """Enrich watchlist items with fundamental metrics."""
+async def _run_enrichment_in_background(group_id: Optional[int]):
+    from ..db import get_pool
     from services.watchlist_service import enrich_watchlist_fundamentals
-    processed = await enrich_watchlist_fundamentals(db, group_id=group_id)
-    return {"success": True, "processed": processed}
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        try:
+            await enrich_watchlist_fundamentals(conn, group_id=group_id)
+            log.info("Background watchlist enrichment completed successfully.")
+        except Exception as e:
+            log.error(f"Error running background watchlist enrichment: {e}")
+
+
+@router.post("/enrich", status_code=202)
+async def enrich_watchlist(
+    background_tasks: BackgroundTasks,
+    group_id: Optional[int] = None,
+):
+    """Enrich watchlist items with fundamental metrics in the background."""
+    background_tasks.add_task(_run_enrichment_in_background, group_id)
+    return {"success": True, "message": "Enrichment started in background."}
 
 
 # ---------------------------------------------------------------------------

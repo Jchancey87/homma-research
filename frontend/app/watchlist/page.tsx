@@ -446,12 +446,16 @@ export default function WatchlistPage() {
   const handleEnrich = async () => {
     setEnriching(true)
     try {
-      const res = await enrichWatchlist(selectedGroupId === 0 ? undefined : selectedGroupId)
-      alert(`Enrichment complete! Processed ${res.processed} tickers.`)
+      await enrichWatchlist(selectedGroupId === 0 ? undefined : selectedGroupId)
+      alert('Fundamentals refresh started in the background. Tickers will update in 30-60 seconds.')
       await load()
+      // Auto-refresh again in 5 seconds to catch early updates
+      setTimeout(async () => {
+        await load()
+      }, 5000)
     } catch (err) {
       console.error('Failed to enrich watchlist', err)
-      alert('Failed to enrich watchlist fundamentals')
+      alert('Failed to start watchlist enrichment')
     } finally {
       setEnriching(false)
     }

@@ -243,7 +243,8 @@ def _chat(system: str, user: str, max_tokens: int = 1024, use_deep_client: bool 
         max_tokens=max_tokens,
         temperature=0.3,
     )
-    return response.choices[0].message.content.strip()
+    content = response.choices[0].message.content
+    return content.strip() if content else ""
 
 
 def _fmt_float(shares) -> str:

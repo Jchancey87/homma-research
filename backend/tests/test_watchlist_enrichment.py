@@ -54,9 +54,8 @@ async def test_watchlist_enrich_endpoint(client):
         mock_llm.return_value = {"upcoming_catalyst": "Phase 3 test", "catalyst_date": "2026-12-31"}
         
         resp = await client.post("/api/watchlist/enrich")
-        assert resp.status_code == 200
+        assert resp.status_code == 202
         assert resp.json()["success"] is True
-        assert resp.json()["processed"] > 0
 
     # Clean up
     await client.delete("/api/watchlist/TESTENR2")

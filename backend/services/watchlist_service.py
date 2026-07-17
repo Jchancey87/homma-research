@@ -213,6 +213,158 @@ async def import_watchlist_from_csv(
     return inserted, updated
 
 
+async def _fetch_single_ticker_metrics(
+    ticker: str,
+    prev_runway: Optional[float],
+    prev_dilution: Optional[str]
+) -> dict:
+    import yfinance as yf
+    from datetime import datetime
+    from llm.llm_client import get_upcoming_catalyst
+    from services.sec_service import search_filings_text, get_sec_financials
+    
+    # 1. Fetch metrics
+    cash_val = None
+    net_income_val = None
+    ocf_val = None
+    runway_months = None
+    dilution = "Low"
+    shares_history = {}
+    
+    # Try FMP if available
+    try:
+        from services.fmp_service import get_cash_position
+        fmp_cash = get_cash_position(ticker)
+        if fmp_cash and fmp_cash.get("cash") is not None:
+            cash_val = fmp_cash["cash"]
+    except Exception:
+        pass
+        
+    # Try yfinance
+    try:
+        t = yf.Ticker(ticker)
+        bs = t.quarterly_balance_sheet
+        fin = t.quarterly_financials
+        cf = t.quarterly_cashflow
+        
+        if bs is not None and not bs.empty:
+            if cash_val is None:
+                for k in ['Cash Cash Equivalents And Short Term Investments', 'Cash And Cash Equivalents', 'Cash Financial', 'Cash']:
+                    if k in bs.index:
+                        val = bs.loc[k].dropna()
+                        if not val.empty:
+                            cash_val = float(val.iloc[0])
+                            break
+                            
+            for k in ['Ordinary Shares Number', 'Share Issued']:
+                if k in bs.index:
+                    row = bs.loc[k].dropna()
+                    for d_idx, val in row.items():
+                        shares_history[str(d_idx).split()[0]] = float(val)
+                    break
+
+        if fin is not None and not fin.empty:
+            for k in ['Net Income', 'Net Income Common Stockholders']:
+                if k in fin.index:
+                    val = fin.loc[k].dropna()
+                    if not val.empty:
+                        net_income_val = float(val.iloc[0])
+                        break
+
+        if cf is not None and not cf.empty:
+            for k in ['Operating Cash Flow', 'Cash Flow From Operating Activities']:
+                if k in cf.index:
+                    val = cf.loc[k].dropna()
+                    if not val.empty:
+                        ocf_val = float(val.iloc[0])
+                        break
+    except Exception as e:
+        log.warning(f"yfinance fetch failed for {ticker}: {e}")
+
+    # Fallback to SEC EDGAR facts if cash or ocf is missing
+    if cash_val is None or ocf_val is None:
+        try:
+            sec_fin = get_sec_financials(ticker)
+            if sec_fin:
+                if cash_val is None:
+                    cash_val = sec_fin.get("cash")
+                if ocf_val is None:
+                    ocf_val = sec_fin.get("operating_cash_flow")
+        except Exception as e:
+            log.warning(f"SEC EDGAR financials fetch failed for {ticker}: {e}")
+
+    # Calculate Runway
+    burn = None
+    if ocf_val and ocf_val < 0:
+        burn = abs(ocf_val)
+    elif net_income_val and net_income_val < 0:
+        burn = abs(net_income_val)
+        
+    if cash_val is not None and burn:
+        runway_months = round(float((cash_val / burn) * 3), 1)
+        
+    # Dilution Risk
+    if runway_months and runway_months < 6:
+        dilution = '🔴 HIGH'
+    elif len(shares_history) > 1:
+        dates_sorted = sorted(list(shares_history.keys()))
+        first_shares = shares_history[dates_sorted[0]]
+        last_shares = shares_history[dates_sorted[-1]]
+        if last_shares > first_shares * 1.10:
+            dilution = '🔴 HIGH'
+        elif last_shares > first_shares * 1.02:
+            dilution = '🟡 MODERATE'
+            
+    # Try SEC shares history for dilution fallback
+    if dilution == 'Low':
+        try:
+            from services.sec_service import get_shares_history
+            sec_shares = get_shares_history(ticker, n_periods=4)
+            if len(sec_shares) > 1:
+                sec_shares.sort(key=lambda x: x["end_date"])
+                first_shares = sec_shares[0]["shares"]
+                last_shares = sec_shares[-1]["shares"]
+                if last_shares > first_shares * 1.10:
+                    dilution = '🔴 HIGH'
+                elif last_shares > first_shares * 1.02:
+                    dilution = '🟡 MODERATE'
+        except Exception:
+            pass
+
+    # 2. Extract milestone from SEC / news / LLM
+    upcoming_catalyst = None
+    catalyst_date = None
+    
+    try:
+        sec_hits = search_filings_text(ticker, ["PDUFA", "clinical", "trial", "phase"], days_back=180, n=5)
+        
+        news_hits = []
+        try:
+            t_instance = yf.Ticker(ticker)
+            news_hits = t_instance.news or []
+        except Exception:
+            pass
+            
+        catalyst_info = get_upcoming_catalyst(ticker, news_hits, sec_hits)
+        upcoming_catalyst = catalyst_info.get("upcoming_catalyst")
+        catalyst_date_str = catalyst_info.get("catalyst_date")
+        
+        if catalyst_date_str:
+            try:
+                catalyst_date = datetime.strptime(catalyst_date_str, "%Y-%m-%d").date()
+            except ValueError:
+                pass
+    except Exception as e:
+        log.warning(f"Failed to extract milestone for {ticker}: {e}")
+
+    return {
+        "runway_months": runway_months,
+        "dilution": dilution,
+        "upcoming_catalyst": upcoming_catalyst,
+        "catalyst_date": catalyst_date,
+    }
+
+
 async def enrich_watchlist_fundamentals(
     conn: asyncpg.Connection,
     group_id: Optional[int] = None,
@@ -222,11 +374,9 @@ async def enrich_watchlist_fundamentals(
     Enrich watchlist tickers with fundamental metrics and extract milestones.
     Returns the number of tickers processed.
     """
-    import yfinance as yf
+    import asyncio
     from datetime import datetime
     from fastapi_app.db import watchlist as db_watchlist
-    from llm.llm_client import get_upcoming_catalyst
-    from services.sec_service import search_filings_text
     from fastapi_app.tasks.alerts import send_telegram_message
     
     if ticker:
@@ -244,109 +394,38 @@ async def enrich_watchlist_fundamentals(
     if not rows:
         return 0
         
+    log.info(f"Enriching fundamentals for {len(rows)} tickers in parallel")
+    
+    # Process concurrent network/API fetches using a Semaphore
+    sem = asyncio.Semaphore(4)
+    async def sem_fetch(r):
+        async with sem:
+            ticker_symbol = r["ticker"]
+            try:
+                log.info(f"Fetching metrics for {ticker_symbol}")
+                res = await _fetch_single_ticker_metrics(ticker_symbol, r.get("runway_months"), r.get("dilution_risk"))
+                return res
+            except Exception as e:
+                log.error(f"Error fetching fundamentals for {ticker_symbol}: {e}")
+                return None
+
+    results = await asyncio.gather(*(sem_fetch(r) for r in rows))
+    
     processed = 0
-    for r in rows:
+    # Update DB sequentially
+    for r, res in zip(rows, results):
+        if not res:
+            continue
+            
         ticker = r["ticker"]
         prev_runway = r.get("runway_months")
         prev_dilution = r.get("dilution_risk")
         
-        log.info(f"Enriching fundamentals for {ticker}")
+        runway_months = res["runway_months"]
+        dilution = res["dilution"]
+        upcoming_catalyst = res["upcoming_catalyst"]
+        catalyst_date = res["catalyst_date"]
         
-        # 1. Fetch yfinance metrics
-        cash_val = None
-        net_income_val = None
-        ocf_val = None
-        runway_months = None
-        dilution = "Low"
-        shares_history = {}
-        
-        try:
-            t = yf.Ticker(ticker)
-            bs = t.quarterly_balance_sheet
-            fin = t.quarterly_financials
-            cf = t.quarterly_cashflow
-            
-            if bs is not None and not bs.empty:
-                for k in ['Cash Cash Equivalents And Short Term Investments', 'Cash And Cash Equivalents', 'Cash Financial', 'Cash']:
-                    if k in bs.index:
-                        val = bs.loc[k].dropna()
-                        if not val.empty:
-                            cash_val = float(val.iloc[0])
-                            break
-                            
-                for k in ['Ordinary Shares Number', 'Share Issued']:
-                    if k in bs.index:
-                        row = bs.loc[k].dropna()
-                        for d_idx, val in row.items():
-                            shares_history[str(d_idx).split()[0]] = float(val)
-                        break
-
-            if fin is not None and not fin.empty:
-                for k in ['Net Income', 'Net Income Common Stockholders']:
-                    if k in fin.index:
-                        val = fin.loc[k].dropna()
-                        if not val.empty:
-                            net_income_val = float(val.iloc[0])
-                            break
-
-            if cf is not None and not cf.empty:
-                for k in ['Operating Cash Flow', 'Cash Flow From Operating Activities']:
-                    if k in cf.index:
-                        val = cf.loc[k].dropna()
-                        if not val.empty:
-                            ocf_val = float(val.iloc[0])
-                            break
-                            
-            # Calculate Runway
-            burn = None
-            if ocf_val and ocf_val < 0:
-                burn = abs(ocf_val)
-            elif net_income_val and net_income_val < 0:
-                burn = abs(net_income_val)
-                
-            if cash_val is not None and burn:
-                runway_months = round(float((cash_val / burn) * 3), 1)
-                
-            # Dilution Risk
-            if runway_months and runway_months < 6:
-                dilution = '🔴 HIGH'
-            elif len(shares_history) > 1:
-                dates_sorted = sorted(list(shares_history.keys()))
-                first_shares = shares_history[dates_sorted[0]]
-                last_shares = shares_history[dates_sorted[-1]]
-                if last_shares > first_shares * 1.10:
-                    dilution = '🔴 HIGH'
-                elif last_shares > first_shares * 1.02:
-                    dilution = '🟡 MODERATE'
-        except Exception as e:
-            log.warning(f"Failed to fetch yfinance data for {ticker}: {e}")
-            
-        # 2. Extract milestone from SEC / news / LLM
-        upcoming_catalyst = None
-        catalyst_date = None
-        
-        try:
-            sec_hits = search_filings_text(ticker, ["PDUFA", "clinical", "trial", "phase"], days_back=180, n=5)
-            
-            news_hits = []
-            try:
-                t_instance = yf.Ticker(ticker)
-                news_hits = t_instance.news or []
-            except Exception:
-                pass
-                
-            catalyst_info = get_upcoming_catalyst(ticker, news_hits, sec_hits)
-            upcoming_catalyst = catalyst_info.get("upcoming_catalyst")
-            catalyst_date_str = catalyst_info.get("catalyst_date")
-            
-            if catalyst_date_str:
-                try:
-                    catalyst_date = datetime.strptime(catalyst_date_str, "%Y-%m-%d").date()
-                except ValueError:
-                    pass
-        except Exception as e:
-            log.warning(f"Failed to extract milestone for {ticker}: {e}")
-            
         # 3. Update DB
         await db_watchlist.update_watchlist_metrics(
             conn,

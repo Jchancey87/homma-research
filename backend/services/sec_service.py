@@ -222,6 +222,69 @@ def get_shares_history(ticker: str, n_periods: int = 8) -> list[dict]:
     ]
 
 
+def get_sec_financials(ticker: str) -> dict:
+    """
+    Query SEC XBRL Company Facts to retrieve cash position and operating cash flow.
+    Returns dict: {'cash': float | None, 'operating_cash_flow': float | None}
+    """
+    cik = get_cik_from_ticker(ticker)
+    if not cik:
+        return {}
+
+    try:
+        _sleep()
+        resp = requests.get(_FACTS_URL.format(cik=cik), headers=_HEADERS, timeout=15)
+        resp.raise_for_status()
+        facts = resp.json()
+    except Exception as e:
+        log.warning(f'[SEC] Company facts fetch failed for {ticker}: {e}')
+        return {}
+
+    us_gaap = facts.get('facts', {}).get('us-gaap', {})
+    
+    # 1. Parse Cash
+    cash_val = None
+    for k in [
+        'CashAndCashEquivalentsAtCarryingValue',
+        'CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents',
+        'Cash',
+    ]:
+        if k in us_gaap:
+            units = us_gaap[k].get('units', {})
+            for u in units.values():
+                if isinstance(u, list) and u:
+                    entries = [e for e in u if (e.get('form', '') or '').startswith('10-')]
+                    if entries:
+                        entries.sort(key=lambda x: x.get('end', ''), reverse=True)
+                        cash_val = float(entries[0]['val'])
+                        break
+            if cash_val is not None:
+                break
+
+    # 2. Parse Operating Cash Flow (OCF)
+    ocf_val = None
+    for k in [
+        'NetCashProvidedByUsedInOperatingActivities',
+        'NetCashProvidedByUsedInOperatingActivitiesContinuingOperations',
+    ]:
+        if k in us_gaap:
+            units = us_gaap[k].get('units', {})
+            for u in units.values():
+                if isinstance(u, list) and u:
+                    entries = [e for e in u if (e.get('form', '') or '').startswith('10-')]
+                    if entries:
+                        entries.sort(key=lambda x: x.get('end', ''), reverse=True)
+                        ocf_val = float(entries[0]['val'])
+                        break
+            if ocf_val is not None:
+                break
+
+    return {
+        'cash': cash_val,
+        'operating_cash_flow': ocf_val,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
