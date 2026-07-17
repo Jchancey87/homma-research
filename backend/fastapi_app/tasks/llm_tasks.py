@@ -315,3 +315,27 @@ def run_pipe_analysis(job_id: str, ticker: str, date: str):
         _set_status(job_id, 'done', output=output, model_used=model)
     except Exception as e:
         _set_status(job_id, 'error', output=str(e))
+
+
+@celery_app.task(name="tasks.enrich_watchlist_task")
+def enrich_watchlist_task():
+    """Celery periodic task to run watchlist fundamentals enrichment nightly."""
+    import asyncio
+    import asyncpg
+    from fastapi_app.config import settings
+    from services.watchlist_service import enrich_watchlist_fundamentals
+
+    async def _run():
+        conn = await asyncpg.connect(settings.asyncpg_dsn)
+        try:
+            processed = await enrich_watchlist_fundamentals(conn)
+            return processed
+        finally:
+            await conn.close()
+
+    try:
+        processed_count = asyncio.run(_run())
+        return {"status": "success", "processed": processed_count}
+    except Exception as e:
+        return {"status": "failed", "error": str(e)}
+

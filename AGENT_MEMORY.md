@@ -75,8 +75,16 @@
 * **UI Journal Refactor:** Refactored alerts dashboard [page.tsx](file:///home/jackc/projects/homma-research/frontend/app/alerts/page.tsx) with EEMUA-aligned Alarm Health bar, sidebar sort, suppressed badges, Alarm Health view tab.
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Watchlist groups biotech FDA trials.
-* **Status:** Groups DB frontend API done. 318 tests pass.
+* **Goal:** Biotech watchlist enrichment.
+* **Scope:**
+  - Alter `watchlist` table: add `runway_months` (double), `dilution_risk` (text), `upcoming_catalyst` (text), `catalyst_date` (date).
+  - Edit `schema.sql` (main + migration). Run db init.
+  - Edit `db/watchlist.py` (select, insert, upsert, update, `update_watchlist_metrics`).
+  - Add `enrich_watchlist_fundamentals` in `services/watchlist_service.py`. Calculate runway, dilution risk. Send Telegram if runway drops < 6. Extract catalyst from SEC/LLM.
+  - Update router `watchlist.py` to add `/watchlist/enrich`, trigger on POST, return in GET/prices/import/export.
+  - Add Celery nightly task.
+  - Update frontend API and watchlist table/columns/refresh.
+* **Status:** Completed. Schema altered, DB helpers updated, enrichment logic implemented, router endpoints added, Celery task configured, API + UI updated, and all tests/compilation passed.
 
 ## 🗑️ Rot & Pruning Log
 * Pruned completed goals.

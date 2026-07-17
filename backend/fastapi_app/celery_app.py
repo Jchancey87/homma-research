@@ -23,6 +23,8 @@ celery_app = Celery(
     ]
 )
 
+from celery.schedules import crontab
+
 # Optional configuration
 celery_app.conf.update(
     task_serializer="json",
@@ -31,6 +33,12 @@ celery_app.conf.update(
     timezone=EASTERN_TZ,
     enable_utc=True,
     worker_prefetch_multiplier=1, # Since these are heavy LLM/scraping tasks, don't prefetch too many
+    beat_schedule={
+        "enrich-watchlist-nightly": {
+            "task": "tasks.enrich_watchlist_task",
+            "schedule": crontab(hour=1, minute=0),  # 1:00 AM Eastern Time
+        }
+    }
 )
 
 if __name__ == "__main__":

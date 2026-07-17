@@ -373,6 +373,10 @@ export interface WatchlistItem {
   added_at: string
   last_viewed_at: string | null
   group_id: number | null
+  runway_months: number | null
+  dilution_risk: string | null
+  upcoming_catalyst: string | null
+  catalyst_date: string | null
 }
 
 export const getWatchlistGroups = () =>
@@ -414,6 +418,11 @@ export const removeFromWatchlist = (ticker: string, groupId?: number) => {
 export const markWatchlistViewed = (ticker: string, groupId?: number) => {
   const params = groupId !== undefined ? { group_id: groupId } : {}
   return api.post(`/api/watchlist/${ticker}/viewed`, null, { params }).then(r => r.data)
+}
+
+export const enrichWatchlist = (groupId?: number) => {
+  const params = groupId !== undefined ? { group_id: groupId } : {}
+  return api.post<{ success: boolean; processed: number }>('/api/watchlist/enrich', null, { params }).then(r => r.data)
 }
 
 export const exportWatchlistCsv = (groupId?: number) => {
@@ -683,6 +692,10 @@ export interface WatchlistPrice {
   price:   number | null
   chg_pct: number | null
   volume:  number | null
+  runway_months?: number | null
+  dilution_risk?: string | null
+  upcoming_catalyst?: string | null
+  catalyst_date?: string | null
 }
 export const getWatchlistPrices = (groupId?: number) => {
   const params = groupId !== undefined ? { group_id: groupId } : {}

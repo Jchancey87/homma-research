@@ -14,7 +14,7 @@ dicts/lists/booleans so routers stay Router-Layer-Rules compliant.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from typing import Optional
 
 import asyncpg
@@ -93,15 +93,19 @@ async def insert_watchlist(
     notes: Optional[str],
     tags_json: str,
     group_id: Optional[int] = None,
+    runway_months: Optional[float] = None,
+    dilution_risk: Optional[str] = None,
+    upcoming_catalyst: Optional[str] = None,
+    catalyst_date: Optional[date] = None,
 ) -> None:
     """
     Insert a new watchlist row. Raises ``asyncpg.UniqueViolationError``
     if the ticker is already on the watchlist in this group.
     """
     await conn.execute(
-        "INSERT INTO watchlist (ticker, sector, notes, tags, group_id, added_at) "
-        "VALUES ($1, $2, $3, $4, $5, $6)",
-        ticker, sector, notes, tags_json, group_id, datetime.now(timezone.utc),
+        "INSERT INTO watchlist (ticker, sector, notes, tags, group_id, added_at, runway_months, dilution_risk, upcoming_catalyst, catalyst_date) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+        ticker, sector, notes, tags_json, group_id, datetime.now(timezone.utc), runway_months, dilution_risk, upcoming_catalyst, catalyst_date
     )
 
 
@@ -113,6 +117,10 @@ async def upsert_watchlist(
     notes: Optional[str],
     tags_json: str,
     group_id: Optional[int] = None,
+    runway_months: Optional[float] = None,
+    dilution_risk: Optional[str] = None,
+    upcoming_catalyst: Optional[str] = None,
+    catalyst_date: Optional[date] = None,
 ) -> None:
     """
     Insert a watchlist row, or update notes/sector/tags if it already exists in the group.
@@ -134,24 +142,32 @@ async def upsert_watchlist(
                 "UPDATE watchlist SET "
                 "sector = COALESCE($1, sector), "
                 "notes = COALESCE($2, notes), "
-                "tags = $3 "
-                "WHERE ticker = $4 AND group_id IS NULL",
-                sector, notes, tags_json, ticker
+                "tags = $3, "
+                "runway_months = COALESCE($4, runway_months), "
+                "dilution_risk = COALESCE($5, dilution_risk), "
+                "upcoming_catalyst = COALESCE($6, upcoming_catalyst), "
+                "catalyst_date = COALESCE($7, catalyst_date) "
+                "WHERE ticker = $8 AND group_id IS NULL",
+                sector, notes, tags_json, runway_months, dilution_risk, upcoming_catalyst, catalyst_date, ticker
             )
         else:
             await conn.execute(
                 "UPDATE watchlist SET "
                 "sector = COALESCE($1, sector), "
                 "notes = COALESCE($2, notes), "
-                "tags = $3 "
-                "WHERE ticker = $4 AND group_id = $5",
-                sector, notes, tags_json, ticker, group_id
+                "tags = $3, "
+                "runway_months = COALESCE($4, runway_months), "
+                "dilution_risk = COALESCE($5, dilution_risk), "
+                "upcoming_catalyst = COALESCE($6, upcoming_catalyst), "
+                "catalyst_date = COALESCE($7, catalyst_date) "
+                "WHERE ticker = $8 AND group_id = $9",
+                sector, notes, tags_json, runway_months, dilution_risk, upcoming_catalyst, catalyst_date, ticker, group_id
             )
     else:
         await conn.execute(
-            "INSERT INTO watchlist (ticker, sector, notes, tags, group_id, added_at) "
-            "VALUES ($1, $2, $3, $4, $5, $6)",
-            ticker, sector, notes, tags_json, group_id, datetime.now(timezone.utc)
+            "INSERT INTO watchlist (ticker, sector, notes, tags, group_id, added_at, runway_months, dilution_risk, upcoming_catalyst, catalyst_date) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+            ticker, sector, notes, tags_json, group_id, datetime.now(timezone.utc), runway_months, dilution_risk, upcoming_catalyst, catalyst_date
         )
 
 
@@ -218,6 +234,42 @@ async def delete_watchlist(
         result = await conn.execute("DELETE FROM watchlist WHERE ticker = $1 AND group_id IS NULL", ticker)
     else:
         result = await conn.execute("DELETE FROM watchlist WHERE ticker = $1 AND group_id = $2", ticker, group_id)
+    return not result.endswith(" 0")
+
+
+async def update_watchlist_metrics(
+    conn: asyncpg.Connection,
+    ticker: str,
+    *,
+    runway_months: Optional[float],
+    dilution_risk: Optional[str],
+    upcoming_catalyst: Optional[str],
+    catalyst_date: Optional[date],
+    group_id: Optional[int] = None,
+) -> bool:
+    """Update biotech enrichment metrics for a watchlist ticker."""
+    if group_id is not None:
+        if group_id == 0:
+            result = await conn.execute(
+                "UPDATE watchlist SET runway_months = $1, dilution_risk = $2, "
+                "upcoming_catalyst = $3, catalyst_date = $4 "
+                "WHERE ticker = $5 AND group_id IS NULL",
+                runway_months, dilution_risk, upcoming_catalyst, catalyst_date, ticker
+            )
+        else:
+            result = await conn.execute(
+                "UPDATE watchlist SET runway_months = $1, dilution_risk = $2, "
+                "upcoming_catalyst = $3, catalyst_date = $4 "
+                "WHERE ticker = $5 AND group_id = $6",
+                runway_months, dilution_risk, upcoming_catalyst, catalyst_date, ticker, group_id
+            )
+    else:
+        result = await conn.execute(
+            "UPDATE watchlist SET runway_months = $1, dilution_risk = $2, "
+            "upcoming_catalyst = $3, catalyst_date = $4 "
+            "WHERE ticker = $5",
+            runway_months, dilution_risk, upcoming_catalyst, catalyst_date, ticker
+        )
     return not result.endswith(" 0")
 
 

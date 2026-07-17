@@ -133,6 +133,13 @@ async def add_to_watchlist(data: WatchlistAddBody, db: asyncpg.Connection = Depe
     except asyncpg.UniqueViolationError:
         raise HTTPException(status_code=409, detail=f"{ticker} is already on your watchlist in this group")
 
+    # Trigger enrichment inline
+    from services.watchlist_service import enrich_watchlist_fundamentals
+    try:
+        await enrich_watchlist_fundamentals(db, group_id=group_id, ticker=ticker)
+    except Exception as e:
+        log.warning(f"Failed to run inline fundamental enrichment for {ticker}: {e}")
+
     return {"ticker": ticker}
 
 
@@ -195,24 +202,47 @@ async def remove_from_watchlist(
 
 
 # ---------------------------------------------------------------------------
+# POST /watchlist/enrich
+# ---------------------------------------------------------------------------
+
+@router.post("/enrich")
+async def enrich_watchlist(
+    group_id: Optional[int] = None,
+    db: asyncpg.Connection = Depends(get_db)
+):
+    """Enrich watchlist items with fundamental metrics."""
+    from services.watchlist_service import enrich_watchlist_fundamentals
+    processed = await enrich_watchlist_fundamentals(db, group_id=group_id)
+    return {"success": True, "processed": processed}
+
+
+# ---------------------------------------------------------------------------
 # GET /watchlist/prices
 # ---------------------------------------------------------------------------
 
 @router.get("/prices")
 async def watchlist_prices(db: asyncpg.Connection = Depends(get_db), group_id: Optional[int] = None):
     """Return Schwab (or Polygon fallback) price + % change for every watchlist ticker in batch."""
-    tickers = await db_watchlist.list_watchlist_tickers(db, group_id=group_id)
-    if not tickers:
+    rows = await db_watchlist.list_watchlist(db, group_id=group_id)
+    if not rows:
         return {}
 
+    tickers = [r["ticker"] for r in rows]
     quotes = await get_live_quotes(tickers, polygon_api_key=settings.polygon_api_key)
+    
+    row_map = {r["ticker"].upper(): r for r in rows}
+    
     return {
         t: {
             "price":   nq.last_price,
             "chg_pct": nq.change_pct,
             "volume":  nq.volume,
+            "runway_months": row_map[t.upper()].get("runway_months"),
+            "dilution_risk": row_map[t.upper()].get("dilution_risk"),
+            "upcoming_catalyst": row_map[t.upper()].get("upcoming_catalyst"),
+            "catalyst_date": row_map[t.upper()].get("catalyst_date") if row_map[t.upper()].get("catalyst_date") is not None else None,
         }
-        for t, nq in quotes.items()
+        for t, nq in quotes.items() if t.upper() in row_map
     }
 
 

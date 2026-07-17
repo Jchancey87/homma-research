@@ -127,11 +127,19 @@ CREATE TABLE IF NOT EXISTS watchlist (
     alert_threshold DOUBLE PRECISION,        -- optional gap% drop threshold for auto-expiry
     added_at       TIMESTAMPTZ DEFAULT NOW(),
     last_viewed_at TIMESTAMPTZ,
-    group_id       INTEGER REFERENCES watchlist_groups(id) ON DELETE CASCADE
+    group_id       INTEGER REFERENCES watchlist_groups(id) ON DELETE CASCADE,
+    runway_months  DOUBLE PRECISION,
+    dilution_risk  TEXT,
+    upcoming_catalyst TEXT,
+    catalyst_date  DATE
 );
 
 ALTER TABLE watchlist ADD COLUMN IF NOT EXISTS alert_threshold DOUBLE PRECISION;
 ALTER TABLE watchlist ADD COLUMN IF NOT EXISTS group_id INTEGER REFERENCES watchlist_groups(id) ON DELETE CASCADE;
+ALTER TABLE watchlist ADD COLUMN IF NOT EXISTS runway_months DOUBLE PRECISION;
+ALTER TABLE watchlist ADD COLUMN IF NOT EXISTS dilution_risk TEXT;
+ALTER TABLE watchlist ADD COLUMN IF NOT EXISTS upcoming_catalyst TEXT;
+ALTER TABLE watchlist ADD COLUMN IF NOT EXISTS catalyst_date DATE;
 
 -- Drop constraint if exists on older setups
 ALTER TABLE watchlist DROP CONSTRAINT IF EXISTS watchlist_ticker_key;

@@ -7,6 +7,7 @@ import {
   getContinuationPicks, deactivateContinuationPick,
   exportWatchlistCsv, importWatchlistCsv,
   getWatchlistGroups, createWatchlistGroup, deleteWatchlistGroup, markWatchlistViewed,
+  enrichWatchlist,
   type WatchlistItem, type ContinuationPick, type WatchlistGroup,
 } from '@/lib/api'
 import {
@@ -105,7 +106,7 @@ function WatchlistRow({
       </td>
 
       {/* Notes */}
-      <td className="px-4 py-3 align-top min-w-0 max-w-md">
+      <td className="px-4 py-3 align-top min-w-0 max-w-xs">
         {item.notes ? (
           <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">{item.notes}</p>
         ) : (
@@ -121,6 +122,47 @@ function WatchlistRow({
             : <span className="text-[11px] text-gray-400 dark:text-gray-600">—</span>
           }
         </div>
+      </td>
+
+      {/* Runway */}
+      <td className="px-4 py-3 align-top font-mono text-xs">
+        {item.runway_months != null ? (
+          <span className={item.runway_months < 6 ? 'text-[#ff003c] font-bold' : 'text-[#00ff00]'}>
+            {item.runway_months.toFixed(1)}m
+          </span>
+        ) : (
+          <span className="text-gray-600">—</span>
+        )}
+      </td>
+
+      {/* Dilution Risk */}
+      <td className="px-4 py-3 align-top font-mono text-xs">
+        {item.dilution_risk ? (
+          <span className={
+            item.dilution_risk.includes('HIGH') ? 'text-[#ff003c] font-bold' :
+            item.dilution_risk.includes('MODERATE') ? 'text-amber-400' : 'text-[#00ff00]'
+          }>
+            {item.dilution_risk}
+          </span>
+        ) : (
+          <span className="text-gray-600">—</span>
+        )}
+      </td>
+
+      {/* Catalyst Date */}
+      <td className="px-4 py-3 align-top font-mono text-xs max-w-[150px]">
+        {item.upcoming_catalyst && (
+          <div className="text-[11px] leading-tight text-gray-300 mb-0.5 truncate" title={item.upcoming_catalyst}>
+            {item.upcoming_catalyst}
+          </div>
+        )}
+        {item.catalyst_date ? (
+          <span className="text-[10px] text-amber-400 bg-amber-950/20 border border-amber-500/25 px-1 py-0.5 uppercase">
+            {new Date(item.catalyst_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </span>
+        ) : (
+          item.upcoming_catalyst ? null : <span className="text-gray-600">—</span>
+        )}
       </td>
 
       {/* Meta */}
@@ -259,6 +301,7 @@ export default function WatchlistPage() {
   const [groups,  setGroups]  = useState<WatchlistGroup[]>([])
   const [selectedGroupId, setSelectedGroupId] = useState<number>(0) // 0 = Main Watchlist (ungrouped)
   const [loading, setLoading] = useState(true)
+  const [enriching, setEnriching] = useState(false)
   const [search,  setSearch]  = useState('')
   const [tagFilter, setTagFilter] = useState('')
   const [showHistory, setShowHistory] = useState(false)
@@ -398,6 +441,20 @@ export default function WatchlistPage() {
       alert('Failed to import watchlist CSV')
     }
     e.target.value = ''
+  }
+
+  const handleEnrich = async () => {
+    setEnriching(true)
+    try {
+      const res = await enrichWatchlist(selectedGroupId === 0 ? undefined : selectedGroupId)
+      alert(`Enrichment complete! Processed ${res.processed} tickers.`)
+      await load()
+    } catch (err) {
+      console.error('Failed to enrich watchlist', err)
+      alert('Failed to enrich watchlist fundamentals')
+    } finally {
+      setEnriching(false)
+    }
   }
 
   const filteredItems = items.filter(item => {
@@ -560,6 +617,16 @@ export default function WatchlistPage() {
               onChange={handleImport}
               className="hidden"
             />
+            <button
+              id="enrich-watchlist-btn"
+              onClick={handleEnrich}
+              disabled={enriching}
+              className="flex items-center gap-1.5 px-3 py-2 bg-blue-950/20 text-blue-400 border border-blue-500/25 hover:bg-blue-950/40 disabled:opacity-50 font-semibold text-xs rounded-none transition-colors shadow"
+              title="Enrich watchlist with latest fundamentals"
+            >
+              <RefreshCw size={12} className={enriching ? 'animate-spin' : ''} />
+              {enriching ? 'Enriching...' : 'Refresh Fundamentals'}
+            </button>
             <button
               id="add-ticker-btn"
               onClick={() => setShowAdd(v => !v)}
@@ -763,6 +830,9 @@ export default function WatchlistPage() {
                       <th className="px-4 py-3">Ticker</th>
                       <th className="px-4 py-3">Notes</th>
                       <th className="px-4 py-3 hidden md:table-cell">Tags</th>
+                      <th className="px-4 py-3">Runway</th>
+                      <th className="px-4 py-3">Dilution</th>
+                      <th className="px-4 py-3">Catalyst Date</th>
                       <th className="px-4 py-3 hidden lg:table-cell">Added</th>
                       <th className="px-4 py-3 text-right" />
                     </tr>

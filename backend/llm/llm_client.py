@@ -577,3 +577,49 @@ def get_ticker_enrichment(ticker: str, sector: str, description: str) -> dict:
         log.warning(f"Watchlist enrichment failed for {ticker}: {str(e)}")
         # log.debug(traceback.format_exc()) # Optional: very verbose
         return {"notes": None, "tags": []}
+
+
+# ---------------------------------------------------------------------------
+# Biotech Catalyst Extraction
+# ---------------------------------------------------------------------------
+
+BIOTECH_CATALYST_SYSTEM = """
+You are a biotech equity research assistant. You are given news headlines and SEC filings full-text search results for a stock ticker.
+Your job is to identify the single most significant upcoming trial readout, FDA decision, PDUFA date, or clinical milestone.
+Extract:
+1. The upcoming catalyst description (concise, max 20 words).
+2. The estimated catalyst date (must be formatted as YYYY-MM-DD if a specific date is given, or null if unknown or only a broad range like "Q4 2026" or "mid-2026" is given).
+
+Respond ONLY with valid JSON in this format:
+{
+  "upcoming_catalyst": "Concise description of the catalyst",
+  "catalyst_date": "YYYY-MM-DD or null"
+}
+"""
+
+def get_upcoming_catalyst(ticker: str, news: list[dict], sec_filings: list[dict]) -> dict:
+    """Extract biotech upcoming trials/milestones using LLM."""
+    import json
+    data_payload = {
+        "news": news,
+        "sec_filings": sec_filings
+    }
+    user_msg = (
+        f"Ticker: {ticker}\n"
+        f"Data: {json.dumps(data_payload, default=str)}\n"
+    )
+    try:
+        raw = _chat(BIOTECH_CATALYST_SYSTEM, user_msg, max_tokens=250, use_deep_client=True)
+        clean = raw.strip().replace('```json', '').replace('```', '').strip()
+        parsed = json.loads(clean)
+        # Ensure correct keys and defaults
+        return {
+            "upcoming_catalyst": parsed.get("upcoming_catalyst") or None,
+            "catalyst_date": parsed.get("catalyst_date") or None
+        }
+    except Exception as e:
+        import logging
+        log = logging.getLogger(__name__)
+        log.warning(f"Catalyst extraction failed for {ticker}: {e}")
+        return {"upcoming_catalyst": None, "catalyst_date": None}
+
