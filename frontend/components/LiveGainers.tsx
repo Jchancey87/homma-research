@@ -348,7 +348,6 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = [],
           gainers={loading ? [] : filteredGainers}
           fullList={loading ? [] : filteredGainers}
           title="All Live Gainers"
-          showRank={true}
           emptyMessage={
             session === 'closed'
               ? 'Market is closed. Check back during pre-market (4 AM ET) or regular hours.'
@@ -363,7 +362,6 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = [],
           gainers={loading ? [] : filteredGainers.filter(g => g.atr_hod != null && g.atr_hod < 1.0)}
           fullList={loading ? [] : filteredGainers}
           title="Near HOD Radar"
-          showRank={false}
           emptyMessage="No Near HOD breakout setups coiling right now (AtrHoD < 1.0)."
           onOpenModal={setModalGainer}
           handleResearch={handleResearch}

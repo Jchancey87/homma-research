@@ -14,6 +14,7 @@ from typing import List, Dict, Any, Tuple, Optional
 import asyncpg
 from fastapi_app.db import watchlist as db_watchlist
 from validation import normalize_ticker
+from services.stock_state import StockState
 
 log = logging.getLogger(__name__)
 
@@ -382,7 +383,8 @@ def _fetch_single_ticker_metrics(
 async def enrich_watchlist_fundamentals(
     conn: asyncpg.Connection,
     group_id: Optional[int] = None,
-    ticker: Optional[str] = None
+    ticker: Optional[str] = None,
+    state: StockState | None = None
 ) -> int:
     """
     Enrich watchlist tickers with fundamental metrics and extract milestones.
@@ -392,6 +394,33 @@ async def enrich_watchlist_fundamentals(
     from datetime import datetime
     from fastapi_app.db import watchlist as db_watchlist
     from fastapi_app.tasks.alerts import send_telegram_message
+    
+    if state is not None:
+        ticker_to_check = ticker or state.ticker
+        if ticker_to_check:
+            if group_id is not None:
+                if group_id == 0:
+                    is_watchlist_member = await conn.fetchval(
+                        "SELECT EXISTS(SELECT 1 FROM watchlist WHERE ticker = $1 AND group_id IS NULL)",
+                        ticker_to_check
+                    )
+                else:
+                    is_watchlist_member = await conn.fetchval(
+                        "SELECT EXISTS(SELECT 1 FROM watchlist WHERE ticker = $1 AND group_id = $2)",
+                        ticker_to_check, group_id
+                    )
+            else:
+                is_watchlist_member = await conn.fetchval(
+                    "SELECT EXISTS(SELECT 1 FROM watchlist WHERE ticker = $1)",
+                    ticker_to_check
+                )
+            is_watchlist_member = bool(is_watchlist_member)
+        else:
+            is_watchlist_member = False
+
+        if not state.should_enrich(is_watchlist_member):
+            log.info(f"Skipping enrichment for {ticker_to_check} because state gating rule returned False (is_watchlist_member: {is_watchlist_member})")
+            return 0
     
     if ticker:
         if group_id is not None:

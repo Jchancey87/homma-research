@@ -3,6 +3,68 @@
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
 
+## [2026-07-17] Phase 5: Target-Ranked Bull/Bear Debate (Idea 2)
+
+### Summary
+* Added BULL_SYSTEM, BEAR_SYSTEM, SYNTHESIS_SYSTEM, and SINGLE_PASS_SYSTEM prompts to [llm_client.py](file:///home/jackc/projects/homma-research/backend/llm/llm_client.py).
+* Refactored `get_continuation_analysis()`: gap_pct >= 15.0 triggers Bull/Bear debate pass (fast model) + Synthesis (deep model). gap_pct < 15.0 runs standard single-pass (deep model).
+* Created [test_bull_bear.py](file:///home/jackc/projects/homma-research/backend/tests/test_bull_bear.py).
+* Verified 371 tests pass successfully.
+
+
+## [2026-07-17] Phase 4: Threshold-Based Data Pre-Digestion (Idea 4)
+
+### Summary
+* Added `_digest_news()` and `_digest_sec()` fast model helpers to [llm_client.py](file:///home/jackc/projects/homma-research/backend/llm/llm_client.py).
+* Refactored `get_catalyst_analysis()`, `get_risk_analysis()`, and `get_deep_context()` to skip digestion (direct JSON stringification) if count <= 2, otherwise run pre-digestion.
+* Created [test_digest.py](file:///home/jackc/projects/homma-research/backend/tests/test_digest.py).
+* Verified 364 tests pass.
+
+
+## [2026-07-17] Phase 3: Selective Sentiment on Alerts (Idea 5)
+
+### Summary
+* Added `get_headline_sentiment(headlines)` fast model sentiment helper to [llm_client.py](file:///home/jackc/projects/homma-research/backend/llm/llm_client.py).
+* Updated `send_telegram_alert_task` in [alerts.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/tasks/alerts.py) to fetch headlines from last 6h; appends sentiment line if headlines exist, otherwise omits it.
+* Created [test_sentiment_alerts.py](file:///home/jackc/projects/homma-research/backend/tests/test_sentiment_alerts.py).
+* Verified 364 tests pass.
+
+
+## [2026-07-17] Phase 2: Database-Backed Reflection Loop (Idea 1)
+
+### Summary
+* Created `continuation_reflections` table in [schema.sql](file:///home/jackc/projects/homma-research/backend/models/schema.sql).
+* Added `init_reflections_table(conn)` in [watchlist.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/db/watchlist.py) and called it during lifespan startup in [main.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/main.py).
+* Added `get_reflection(date, picks_with_outcomes)` in [llm_client.py](file:///home/jackc/projects/homma-research/backend/llm/llm_client.py).
+* Created [reflect_picks.py](file:///home/jackc/projects/homma-research/backend/jobs/reflect_picks.py) nightly reflections job.
+* Updated [daily_analysis_report.py](file:///home/jackc/projects/homma-research/backend/jobs/daily_analysis_report.py) to prepend last 3 DB reflections to continuation prompt.
+* Created [test_reflection.py](file:///home/jackc/projects/homma-research/backend/tests/test_reflection.py).
+* Verified 4 tests pass (352 total).
+
+
+## [2026-07-17] Phase 1: State-Gated Pipeline (Idea 3)
+
+### Summary
+* Created `StockState` dataclass in [stock_state.py](file:///home/jackc/projects/homma-research/backend/services/stock_state.py).
+* Added `state` argument gating check to `enrich_watchlist_fundamentals` in [watchlist_service.py](file:///home/jackc/projects/homma-research/backend/services/watchlist_service.py).
+* Added unit and integration tests in [test_stock_state.py](file:///home/jackc/projects/homma-research/backend/tests/test_stock_state.py).
+* Verified all 354 tests pass.
+
+
+## [2026-07-17] GainerTable UI/UX Overhaul: 6-Column Layout & Badges
+
+### Summary
+* Overhauled GainerTable layout. Columns reduced to 6: Rank, Ticker, Price, Change(%), Trend, Float.
+* Shifted Volume, RVOL, Spr(%), Time to expandable middle row.
+* Rank always visible, bold (14px).
+* Ticker (13px monospace) includes suffixes [RR]/[FT] as badges + tooltips.
+* Price 16px font size.
+* Change(%) 14px bold.
+* Float 12px dot-badge + squeeze risk tooltip + expand chevron.
+* Trend uses color-coded emoji badge (Bullish/Bearish/Mixed) + tooltip.
+* Enabled SortKey trend sorting with custom trend score.
+* Ran vitest, 56/56 passing. Next.js build success.
+
 ## [2026-07-17] Visual Redesign & Layout Optimization: Dark-mode Trading Dashboard
 
 ### Summary

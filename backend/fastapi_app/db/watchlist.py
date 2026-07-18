@@ -299,3 +299,19 @@ async def insert_watchlist_group(conn: asyncpg.Connection, name: str) -> dict:
 async def delete_watchlist_group(conn: asyncpg.Connection, group_id: int) -> bool:
     result = await conn.execute("DELETE FROM watchlist_groups WHERE id = $1", group_id)
     return not result.endswith(" 0")
+
+
+async def init_reflections_table(conn: asyncpg.Connection) -> None:
+    """Create the continuation_reflections table if it does not already exist."""
+    await conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS continuation_reflections (
+            id SERIAL PRIMARY KEY,
+            date DATE UNIQUE NOT NULL,
+            reflection_text TEXT NOT NULL,
+            lessons_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+    )
+

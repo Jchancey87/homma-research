@@ -80,6 +80,79 @@ One paragraph summarizing the overall tape quality for the day based on these na
 Be direct and concise. No filler. No disclaimers. This is a private trading tool.
 """
 
+BULL_SYSTEM = """\
+You are a bullish momentum trading analyst. Given data for a stock, generate a compelling bull case for tomorrow's continuation.
+Focus on momentum patterns: float rotation, high relative volume (RVOL), fresh catalyst news, gaps that hold, and price action.
+Provide 2-3 bullet points outlining the bull thesis. No fluff or disclaimers.
+"""
+
+BEAR_SYSTEM = """\
+You are a bearish momentum trading analyst/short-seller. Given data for a stock, generate a compelling bear case and fade risks for tomorrow.
+Focus on risks: dilution, reverse split history, stale catalysts, gap-and-fade price action, overhead resistance, high float, or biotech binary risk.
+Provide 2-3 bullet points outlining the bear thesis. No fluff or disclaimers.
+"""
+
+SYNTHESIS_SYSTEM = """\
+You are a senior post-market analyst for a small-cap day trader.
+Your job is to synthesize a bull case and a bear case for a stock into a final continuation rating and playbook section.
+
+For the given ticker, you must output the following exact markdown structure:
+
+### [TICKER] — [Continuation Rating: 🟢 HIGH / 🟡 MEDIUM / 🔴 LOW / ⚫ AVOID]
+
+| Field | Value |
+|---|---|
+| Gap % | [Gap % from input] |
+| Float | [Float from input] |
+| RVOL | [RVOL from input] |
+| Sector | [Sector from input] |
+| Catalyst | [Fresh / Stale / Unknown] |
+
+**Thesis**: [2–3 sentences: why this rating, what to watch for, synthesizing the bull and bear arguments]
+**Key Risk**: [1 sentence]
+**Watch Level**: [price level to watch at open, or "N/A"]
+
+Do not include any other tickers, and do not include any introduction or summary/disclaimer. Output only this block.
+"""
+
+SINGLE_PASS_SYSTEM = """\
+You are a senior post-market analyst for a small-cap day trader.
+Given data for a stock, analyze its continuation potential and output the following exact markdown structure:
+
+### [TICKER] — [Continuation Rating: 🟢 HIGH / 🟡 MEDIUM / 🔴 LOW / ⚫ AVOID]
+
+| Field | Value |
+|---|---|
+| Gap % | [Gap % from input] |
+| Float | [Float from input] |
+| RVOL | [RVOL from input] |
+| Sector | [Sector from input] |
+| Catalyst | [Fresh / Stale / Unknown] |
+
+**Thesis**: [2–3 sentences: why this rating, what to watch for]
+**Key Risk**: [1 sentence]
+**Watch Level**: [price level to watch at open, or "N/A"]
+
+Do not include any other tickers, and do not include any introduction or summary/disclaimer. Output only this block.
+"""
+
+REPORT_COMPILER_SYSTEM = """\
+You are a senior post-market analyst for a small-cap day trader.
+You are given a list of individual ticker analyses. Your job is to analyze these reports and generate the final summary sections of the nightly report:
+
+## 🏆 Top Picks for Continuation Watch
+Ranked list of the top 3 tickers with the strongest case, and one sentence each.
+
+## ⚠️ Avoid List
+Any tickers that are likely to fade or have high risk, with one reason each.
+
+## Market Context
+One paragraph summarizing the overall tape quality for the day based on these names.
+
+Be direct and concise. No filler. No disclaimers. This is a private trading tool.
+"""
+
+
 SENTIMENT_SYSTEM = """\
 You are a trading journal analyst.
 You answer questions about market conditions and setup quality grounded in the user's own journal data.
@@ -118,28 +191,45 @@ STALE = recycled news, no new catalyst, general sector hype, price target update
 Reply with exactly one word: FRESH or STALE.\
 """
 
+HEADLINE_SENTIMENT_SYSTEM = """\
+You analyze a list of stock news headlines and determine the overall sentiment.
+Respond with exactly one word: BULLISH, BEARISH, NEUTRAL, or MIXED.
+Do not include any explanation, punctuation, or other text.\
+"""
+
+NEWS_DIGEST_SYSTEM = """\
+You are an expert financial analyst. Your job is to pre-digest a list of stock news headlines/descriptions
+into a concise, high-density summary for a momentum day trader.
+Identify the primary catalysts, key events, dates, and overall narrative.
+Be direct and quantitative. Avoid disclaimers, filler, and introductory text.
+"""
+
+SEC_DIGEST_SYSTEM = """\
+You are a forensic equity analyst. Your job is to pre-digest a list of SEC filings
+into a concise, high-density summary of dilution, financing terms, or corporate actions for a day trader.
+Highlight toxic financing terms, shelf amounts, offering proceeds, or 8-K catalyst items.
+Be direct and quantitative. Avoid disclaimers, filler, and introductory text.
+"""
+
+
 
 # ---------------------------------------------------------------------------
 # Public functions
 # ---------------------------------------------------------------------------
 
 def get_continuation_analysis(date: str, gainers: list[dict],
-                               archetype_stats: list[dict] | None = None) -> tuple[str, str]:
+                              archetype_stats: list[dict] | None = None,
+                              reflections: list[dict] | None = None) -> tuple[str, str]:
     """
     Given a date and list of top-10 gainer dicts, return a markdown continuation report.
-    Optionally grounds the report in historical archetype_stats from the journal.
+    Optionally grounds the report in historical archetype_stats from the journal
+    and incorporates recent post-market reflections.
+    For each ticker, if gap_pct >= 15.0, runs a target-ranked Bull/Bear debate loop.
+    Otherwise, runs a standard single-pass prompt.
     Returns (report_text, model_name).
     """
-    rows_md = "\n".join(
-        f"- **{g['ticker']}**: change={g.get('extended_change_pct', '?')}%, gap={g.get('gap_pct', '?')}%, "
-        f"float={_fmt_float(g.get('float_shares'))}, "
-        f"rvol={g.get('rvol_15m', '?')}x, "
-        f"sector={g.get('sector', '?')}, "
-        f"open=${g.get('open_price', '?')}, close=${g.get('close_price', '?')}, "
-        f"news_fresh={g.get('news_fresh', '?')}, "
-        f"headline: {g.get('news_headline') or 'N/A'}"
-        for g in gainers
-    )
+    if not gainers:
+        return "No gainers to analyze.", Config.DEEP_LLM_MODEL
 
     # Add historical grounding if we have archetype data
     history_context = ""
@@ -152,15 +242,89 @@ def get_continuation_analysis(date: str, gainers: list[dict],
             for s in (archetype_stats or [])
         )
 
-    user_msg = (
-        f"Date: {date}\n\n"
-        f"Today's top gainers (sorted by extended day change %):\n{rows_md}"
-        f"{history_context}\n\n"
-        "Produce the full nightly continuation report now."
-    )
+    # Add reflections context if present
+    reflections_context = ""
+    if reflections:
+        reflections_context = "### Recent Post-Market Reflections & Lessons Learned:\n"
+        for r in reflections:
+            lessons = r.get("lessons_json") or {}
+            avoid_sec = ", ".join(lessons.get("avoid_sectors", [])) or "None"
+            max_fl = lessons.get("max_float")
+            if max_fl:
+                fmt_max_fl = f"{max_fl / 1e6:.1f}M"
+            else:
+                fmt_max_fl = "None"
+            reflections_context += (
+                f"- **Date: {r['date']}**:\n"
+                f"  - Sectors to Avoid: {avoid_sec}\n"
+                f"  - Max Float Constraint: {fmt_max_fl}\n"
+                f"  - Details: {r['reflection_text']}\n"
+            )
+        reflections_context += "\nKeep these lessons and constraints in mind when rating today's picks.\n\n"
 
-    result = _chat(CONTINUATION_SYSTEM, user_msg, max_tokens=2048)
-    return result, Config.LLM_MODEL
+    ticker_reports = []
+
+    for g in gainers:
+        gainer_md = (
+            f"Ticker: {g['ticker']}\n"
+            f"Date: {date}\n"
+            f"Change: {g.get('extended_change_pct', '?')}%\n"
+            f"Gap: {g.get('gap_pct', '?')}%\n"
+            f"Float: {_fmt_float(g.get('float_shares'))}\n"
+            f"RVOL: {g.get('rvol_15m', '?')}x\n"
+            f"Sector: {g.get('sector', '?')}\n"
+            f"Open: ${g.get('open_price', '?')}\n"
+            f"Close: ${g.get('close_price', '?')}\n"
+            f"News Fresh: {g.get('news_fresh', '?')}\n"
+            f"News Headline: {g.get('news_headline') or 'N/A'}"
+        )
+
+        try:
+            gap_val = float(g.get('gap_pct') or 0)
+        except (ValueError, TypeError):
+            gap_val = 0.0
+
+        if gap_val >= 15.0:
+            # Bull pass (fast model)
+            bull_user_msg = f"{reflections_context}\n{gainer_md}\n{history_context}\nGenerate the bull case."
+            bull_case = _chat(BULL_SYSTEM, bull_user_msg, max_tokens=500, use_deep_client=False)
+
+            # Bear pass (fast model)
+            bear_user_msg = f"{reflections_context}\n{gainer_md}\n{history_context}\nGenerate the bear case."
+            bear_case = _chat(BEAR_SYSTEM, bear_user_msg, max_tokens=500, use_deep_client=False)
+
+            # Synthesis pass (deep model)
+            synthesis_user_msg = (
+                f"{reflections_context}\n"
+                f"{gainer_md}\n"
+                f"Bull Case:\n{bull_case}\n\n"
+                f"Bear Case:\n{bear_case}\n\n"
+                f"{history_context}\n"
+                f"Synthesize the bull and bear arguments and produce the structured report section."
+            )
+            ticker_report = _chat(SYNTHESIS_SYSTEM, synthesis_user_msg, max_tokens=1000, use_deep_client=True)
+            ticker_reports.append(ticker_report)
+        else:
+            # Run standard single-pass prompt (deep model)
+            single_user_msg = f"{reflections_context}\n{gainer_md}\n{history_context}\nProduce the structured report section."
+            ticker_report = _chat(SINGLE_PASS_SYSTEM, single_user_msg, max_tokens=1000, use_deep_client=True)
+            ticker_reports.append(ticker_report)
+
+    # Combine ticker reports
+    ticker_reports_combined = "\n\n---\n\n".join(ticker_reports)
+
+    # Generate final sections (Top Picks, Avoid List, Market Context) using deep model
+    compiler_user_msg = (
+        f"Date: {date}\n\n"
+        f"Individual Ticker Analyses:\n{ticker_reports_combined}\n\n"
+        f"{history_context}\n"
+        f"Generate the Top Picks, Avoid List, and Market Context sections."
+    )
+    final_sections = _chat(REPORT_COMPILER_SYSTEM, compiler_user_msg, max_tokens=1000, use_deep_client=True)
+
+    full_report = f"{ticker_reports_combined}\n\n---\n\n{final_sections}"
+    return full_report, Config.DEEP_LLM_MODEL
+
 
 
 
@@ -286,6 +450,29 @@ def classify_news_fresh(headline: str) -> bool:
         return False
 
 
+def get_headline_sentiment(headlines: list[str]) -> str:
+    """
+    Classify the overall sentiment of a list of news headlines.
+    Uses the fast model and returns one of: "BULLISH", "BEARISH", "NEUTRAL", "MIXED".
+    Falls back to "NEUTRAL" on errors.
+    """
+    if not headlines:
+        return "NEUTRAL"
+    if not Config.LLM_API_KEY:
+        return "NEUTRAL"
+    try:
+        user_msg = "\n".join(f"- {h}" for h in headlines)
+        result = _chat(HEADLINE_SENTIMENT_SYSTEM, user_msg, max_tokens=10)
+        sentiment = result.strip().upper()
+        for possible in ["BULLISH", "BEARISH", "NEUTRAL", "MIXED"]:
+            if possible in sentiment:
+                return possible
+        return "NEUTRAL"
+    except Exception:
+        return "NEUTRAL"
+
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -309,6 +496,104 @@ def _chat(system: str, user: str, max_tokens: int = 1024, use_deep_client: bool 
     )
     content = response.choices[0].message.content
     return content.strip() if content else ""
+
+
+def _digest_news(news: list) -> str:
+    """
+    Digest a list of news articles using the fast model.
+    """
+    if not news:
+        return "No news to digest."
+
+    formatted = []
+    for item in news:
+        if isinstance(item, dict):
+            title = item.get("title") or "N/A"
+            pub = item.get("published") or "N/A"
+            desc = item.get("description") or ""
+            source = item.get("source") or "N/A"
+            days = item.get("days_from_event")
+            days_str = f" ({days} days from event)" if days is not None else ""
+            desc_part = f"\n  Description: {desc[:200]}" if desc else ""
+            formatted.append(f"- [{source}] {pub}{days_str}: {title}{desc_part}")
+        else:
+            formatted.append(f"- {str(item)}")
+
+    user_msg = "News articles to digest:\n" + "\n".join(formatted)
+
+    try:
+        return _chat(NEWS_DIGEST_SYSTEM, user_msg, max_tokens=1000)
+    except Exception as e:
+        import logging
+        log = logging.getLogger(__name__)
+        log.warning(f"Failed to digest news: {e}")
+        return "Error digesting news."
+
+
+def _digest_sec(sec_filings: list) -> str:
+    """
+    Digest a list of SEC filings using the fast model.
+    """
+    if not sec_filings:
+        return "No SEC filings to digest."
+
+    formatted = []
+    for item in sec_filings:
+        if isinstance(item, dict):
+            form = item.get("form") or item.get("form_type") or "Filing"
+            filed = item.get("filed") or item.get("filing_date") or "N/A"
+            days = item.get("days_from_event")
+            days_str = f" ({days} days from event)" if days is not None else ""
+            doc = item.get("primary_doc") or item.get("description") or "N/A"
+            items = item.get("catalyst_items") or []
+            items_str = ", ".join(f"{it.get('code')}: {it.get('description')}" for it in items) if isinstance(items, list) else str(items)
+            hits = item.get("keyword_hits") or []
+            hits_str = ", ".join(hits) if isinstance(hits, list) else str(hits)
+            formatted.append(
+                f"- Form {form} filed on {filed}{days_str} (Doc: {doc}):\n"
+                f"  Catalyst Items: {items_str or 'None'}\n"
+                f"  Keyword Hits: {hits_str or 'None'}"
+            )
+        else:
+            formatted.append(f"- {str(item)}")
+
+    user_msg = "SEC Filings to digest:\n" + "\n".join(formatted)
+
+    try:
+        return _chat(SEC_DIGEST_SYSTEM, user_msg, max_tokens=1000)
+    except Exception as e:
+        import logging
+        log = logging.getLogger(__name__)
+        log.warning(f"Failed to digest SEC filings: {e}")
+        return "Error digesting SEC filings."
+
+
+def _process_data_digestion(data: dict) -> dict:
+    import copy
+    import json
+    data_copy = copy.deepcopy(data)
+
+    # news keys to check
+    for k in ('news_articles', 'news'):
+        news = data_copy.get(k)
+        if news is not None and isinstance(news, list):
+            if len(news) > 2:
+                data_copy[k] = _digest_news(news)
+            else:
+                data_copy[k] = json.dumps(news, default=str)
+
+    # sec filings keys to check
+    sec_keys = ('sec_8k_filings', 'sec_fulltext_hits', 'sec_dilution_filings', 'sec_toxic_search', 'sec_filings')
+    for k in sec_keys:
+        filings = data_copy.get(k)
+        if filings is not None and isinstance(filings, list):
+            if len(filings) > 2:
+                data_copy[k] = _digest_sec(filings)
+            else:
+                data_copy[k] = json.dumps(filings, default=str)
+
+    return data_copy
+
 
 
 def _fmt_float(shares) -> str:
@@ -394,12 +679,14 @@ Output EXACTLY this format:
 def get_risk_analysis(ticker: str, data: dict) -> tuple[str, str]:
     """Produce a structured Risk Detection report from gathered risk signals."""
     import json
+    digested_data = _process_data_digestion(data)
     user_msg = (
         f"Ticker: {ticker}\n\n"
-        f"Risk Signal Data:\n{json.dumps(data, indent=2, default=str)}"
+        f"Risk Signal Data:\n{json.dumps(digested_data, indent=2, default=str)}"
     )
     result = _chat(RISK_DETECTION_SYSTEM, user_msg, max_tokens=2000)
     return result, Config.LLM_MODEL
+
 
 
 # ---------------------------------------------------------------------------
@@ -476,16 +763,19 @@ def get_catalyst_analysis(ticker: str, data: dict) -> tuple[str, str]:
                 'keyword_hits':    f.get('keyword_hits', []),
             })
 
+    digested_data = _process_data_digestion(data)
+
     user_msg = (
         f"Ticker: {ticker}\n"
         f"Event Date: {event_date}\n"
         f"News freshness summary (relative to event date): {freshness_summary or 'no articles found'}\n"
         f"8-K filings with catalyst signals: {len(catalyst_8k_signals)} found\n\n"
-        f"Full Catalyst Signal Data:\n{json.dumps(data, indent=2, default=str)}"
+        f"Full Catalyst Signal Data:\n{json.dumps(digested_data, indent=2, default=str)}"
     )
 
     result = _chat(CATALYST_ANALYSIS_SYSTEM, user_msg, max_tokens=2000)
     return result, Config.LLM_MODEL
+
 
 
 
@@ -539,12 +829,14 @@ Output EXACTLY this format (ensure tables have proper newlines to render correct
 def get_deep_context(ticker: str, data: dict) -> tuple[str, str]:
     """Produce a structured Deep Context report from technical, structural, and historical data."""
     import json
+    digested_data = _process_data_digestion(data)
     user_msg = (
         f"Ticker: {ticker}\n\n"
-        f"Context Data:\n{json.dumps(data, indent=2, default=str)}"
+        f"Context Data:\n{json.dumps(digested_data, indent=2, default=str)}"
     )
     result = _chat(DEEP_CONTEXT_SYSTEM, user_msg, max_tokens=2500)
     return result, Config.LLM_MODEL
+
 
 
 # ---------------------------------------------------------------------------
@@ -687,4 +979,83 @@ def get_upcoming_catalyst(ticker: str, news: list[dict], sec_filings: list[dict]
         log = logging.getLogger(__name__)
         log.warning(f"Catalyst extraction failed for {ticker}: {e}")
         return {"upcoming_catalyst": None, "catalyst_date": None}
+
+
+REFLECTION_SYSTEM = """\
+You are an expert post-market day trading analyst.
+Yesterday, you made several stock picks for continuation. Today's outcome is now in.
+Review the performance of these picks (comparing D0 Close to D1 Open/High/Low/Close) and reflect on the outcome.
+
+Format your output in two parts:
+1. Markdown reflection text: Analyze what went well, what went poorly, and what patterns we can observe.
+2. A JSON block wrapped in ```json and ``` containing adjustments for tomorrow:
+   - "avoid_sectors": a JSON array of sectors that failed or faded heavily today (e.g., ["Healthcare", "Biotech"]) and should be avoided.
+   - "max_float": a number representing the maximum float in shares (e.g., 10000000 for 10M shares) of stocks we should pick, based on float-related failures today, or null if no restriction.
+
+Example JSON output:
+```json
+{
+  "avoid_sectors": ["Healthcare"],
+  "max_float": 10000000
+}
+```
+"""
+
+def get_reflection(date: str, picks_with_outcomes: list[dict]) -> tuple[str, dict]:
+    """
+    Review yesterday's picks and their outcomes, querying the fast LLM to generate a reflection.
+    Returns (reflection_text, lessons_dict).
+    lessons_dict has:
+      - avoid_sectors: list[str]
+      - max_float: float | int | None
+    """
+    import json
+    import re
+
+    picks_md = ""
+    for p in picks_with_outcomes:
+        shares = p.get('float_shares')
+        fmt_shares = _fmt_float(shares)
+        picks_md += (
+            f"- **{p['ticker']}**: rank={p.get('rank')}, sector={p.get('sector')}, float={fmt_shares}, "
+            f"gap={p.get('gap_pct') or '?'}%, reason='{p.get('reason')}'\n"
+            f"  - D0 Close: ${p.get('close_d0') or '?'}\n"
+            f"  - D1 Open: ${p.get('d1_open') or '?'}, High: ${p.get('d1_high') or '?'}, Low: ${p.get('d1_low') or '?'}, Close: ${p.get('d1_close') or '?'}\n"
+        )
+
+    user_msg = (
+        f"Reviewing picks for trading date: {date}\n\n"
+        f"Picks and outcomes:\n{picks_md}\n\n"
+        "Please provide the reflection analysis followed by the JSON block containing 'avoid_sectors' and 'max_float'."
+    )
+
+    raw = _chat(REFLECTION_SYSTEM, user_msg, max_tokens=1500)
+
+    # Extract JSON block
+    json_match = re.search(r"```json\s*(.*?)\s*```", raw, re.DOTALL)
+    if json_match:
+        json_str = json_match.group(1)
+        reflection_text = raw.replace(json_match.group(0), "").strip()
+    else:
+        start_idx = raw.find('{')
+        end_idx = raw.rfind('}')
+        if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+            json_str = raw[start_idx:end_idx+1]
+            reflection_text = (raw[:start_idx] + raw[end_idx+1:]).strip()
+        else:
+            json_str = "{}"
+            reflection_text = raw.strip()
+
+    try:
+        lessons = json.loads(json_str)
+    except Exception:
+        lessons = {}
+
+    lessons = {
+        "avoid_sectors": lessons.get("avoid_sectors") if isinstance(lessons.get("avoid_sectors"), list) else [],
+        "max_float": lessons.get("max_float") if isinstance(lessons.get("max_float"), (int, float)) else None
+    }
+
+    return reflection_text, lessons
+
 

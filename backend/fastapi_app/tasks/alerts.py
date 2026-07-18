@@ -238,7 +238,24 @@ def send_telegram_alert_task(alert_data: dict) -> dict:
         return {"status": "skipped", "reason": "not_configured"}
 
     symbol = alert_data.get("symbol", "UNKNOWN")
+
+    sentiment_line = ""
+    try:
+        from services.news_aggregator import get_default_aggregator
+        from llm.llm_client import get_headline_sentiment
+        aggregator = get_default_aggregator()
+        articles = aggregator.get_news(symbol, hours_back=6)
+        if articles:
+            headlines = [a["title"] for a in articles if a.get("title")]
+            if headlines:
+                sentiment = get_headline_sentiment(headlines)
+                sentiment_line = f"\n- *Sentiment:* {sentiment}"
+    except Exception as e:
+        logger.error("Failed to run sentiment for alert on %s: %s", symbol, e)
+
     message = _format_alert_message(alert_data)
+    if sentiment_line:
+        message += sentiment_line
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {
         "chat_id": chat_id,

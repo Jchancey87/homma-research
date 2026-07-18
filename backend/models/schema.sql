@@ -354,4 +354,12 @@ CREATE INDEX IF NOT EXISTS idx_curated_rss_pub ON curated_rss_items(published_at
 CREATE INDEX IF NOT EXISTS idx_curated_rss_tickers ON curated_rss_items USING GIN(associated_tickers);
 CREATE INDEX IF NOT EXISTS idx_curated_rss_tele ON curated_rss_items(telegram_sent);
 
+CREATE TABLE IF NOT EXISTS continuation_reflections (
+    id SERIAL PRIMARY KEY,
+    date DATE UNIQUE NOT NULL,
+    reflection_text TEXT NOT NULL,
+    lessons_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 

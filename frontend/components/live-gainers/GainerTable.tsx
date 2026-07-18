@@ -3,28 +3,25 @@
 import { useState, Fragment, useEffect, useRef } from 'react'
 import { LiveGainerRow } from '@/lib/api'
 import { Sparkline } from '@/components/Sparkline'
-import { getMomStyle } from '@/lib/momentum'
 import { fmtVol } from '@/lib/format'
 import { ChevronDown, ChevronUp, Maximize2, ExternalLink, Pin, Info } from 'lucide-react'
 import {
-  getRvolBadgeStyle, getRvolColor,
-  getFloatBadgeStyle, getSpreadBadgeStyle,
+  getRvolBadgeStyle, getSpreadBadgeStyle,
   getAtrSpreadStyle, getAtrVwapStyle, getZenVStyle,
-  getTimeAgoBadge,
+  getTimeAgoBadge, getTrendIndicator,
 } from './styles'
 import {
-  GapCell, PriceCell, MetricLabelWithTooltip, SkeletonRows,
+  GapCell, PriceCell, MetricLabelWithTooltip, SkeletonRows, FloatCellInline,
 } from './badges'
 
 // ── Sort header helper ──────────────────────────────────────────────────────
 
-type SortKey = 'rank' | 'ticker' | 'price' | 'change' | 'mom_2m' | 'atr_hod' | 'float' | 'rvol' | 'hod'
+type SortKey = 'rank' | 'ticker' | 'price' | 'change' | 'mom_2m' | 'atr_hod' | 'float' | 'rvol' | 'hod' | 'trend'
 
 interface GainerTableProps {
   gainers:         LiveGainerRow[]
   fullList:        LiveGainerRow[]
   title:           string
-  showRank?:       boolean
   emptyMessage:    string
   onOpenModal:     (g: LiveGainerRow) => void
   handleResearch:  (g: LiveGainerRow) => void
@@ -38,7 +35,6 @@ export function GainerTable({
   gainers,
   fullList,
   title,
-  showRank = true,
   emptyMessage,
   onOpenModal,
   handleResearch,
@@ -97,6 +93,19 @@ export function GainerTable({
     }
   }
 
+  // Helper to score trend for sorting
+  const getTrendScore = (g: LiveGainerRow) => {
+    const lastPrice = g.last_price
+    const prevClose = g.prev_close
+    const openPrice = g.open_price
+    if (lastPrice == null) return 2
+    const priceUp = openPrice != null ? lastPrice > openPrice : true
+    const changeUp = prevClose != null ? lastPrice > prevClose : true
+    if (priceUp && changeUp) return 3
+    if (!priceUp && !changeUp) return 1
+    return 2
+  }
+
   // Apply sorting
   const sortedGainers = [...gainers].sort((a, b) => {
     let valA: string | number = 0
@@ -113,6 +122,7 @@ export function GainerTable({
       case 'rvol':    valA = a.rvol_15m ?? 0; valB = b.rvol_15m ?? 0; break
       case 'hod':     valA = a.high_price ?? 0; valB = b.high_price ?? 0; break
       case 'float':   valA = a.float_shares ?? 0; valB = b.float_shares ?? 0; break
+      case 'trend':   valA = getTrendScore(a); valB = getTrendScore(b); break
     }
 
     if (valA < valB) return sortDir === 'asc' ? -1 : 1
@@ -158,7 +168,7 @@ export function GainerTable({
     )
   }
 
-  const colSpanCount = showRank ? 8 : 7
+  const colSpanCount = 6
 
   return (
     <div className="bg-panel border border-border-subtle p-4 shadow-sm space-y-4">
@@ -178,18 +188,12 @@ export function GainerTable({
         <table className="w-full text-sm table-fixed min-w-[500px]">
           <thead className="bg-raised border-b-2 border-border-strong">
             <tr className="text-left text-xs text-text-muted">
-              {showRank && <Th col="rank" label="Rank" width="w-[7%]" />}
-              <Th col="ticker" label="Ticker" width={showRank ? 'w-[15%]' : 'w-[20%]'} />
-              <Th col="price"  label="Price"   align="right" width={showRank ? 'w-[11%]' : 'w-[12%]'} />
-              <Th col="change" label="Change(%)" align="right" width={showRank ? 'w-[11%]' : 'w-[12%]'} />
-              <Th col="mom_2m" label="Mom %"   align="right" width={showRank ? 'w-[11%]' : 'w-[12%]'} />
-              <th className="py-3 pr-4 font-bold text-[10px] uppercase tracking-wider text-text-muted text-center select-none w-[20%]">Trend (1h)</th>
-              {title === 'All Live Gainers' ? (
-                <Th col="rvol" label="RVOL" align="right" width={showRank ? 'w-[11%]' : 'w-[12%]'} />
-              ) : (
-                <Th col="hod" label="HOD" align="right" width={showRank ? 'w-[11%]' : 'w-[12%]'} />
-              )}
-              <Th col="float" label="Float" align="right" width={showRank ? 'w-[14%]' : 'w-[12%]'} />
+              <Th col="rank" label="Rank" width="w-[8%]" />
+              <Th col="ticker" label="Ticker" width="w-[22%]" />
+              <Th col="price"  label="Price"   align="right" width="w-[15%]" />
+              <Th col="change" label="Change(%)" align="right" width="w-[15%]" />
+              <Th col="trend"  label="Trend"    align="center" width="w-[18%]" />
+              <Th col="float"  label="Float"   align="right" width="w-[22%]" />
             </tr>
           </thead>
           <tbody className="divide-y divide-border-subtle/50">
@@ -230,19 +234,17 @@ export function GainerTable({
                       onClick={() => handleRowClick(g.ticker)}
                     >
                       {/* 1. Rank */}
-                      {showRank && (
-                        <td className="py-2 pr-4 font-bold text-text-secondary text-xs w-12 pl-1 select-none tabular-nums text-right">
-                          {originalRank}
-                        </td>
-                      )}
+                      <td className="py-2 pr-4 font-bold text-text-secondary text-[14px] w-12 pl-1 select-none tabular-nums text-right">
+                        {originalRank}
+                      </td>
 
                       {/* 2. Ticker with badging */}
-                      <td className="py-2 pr-4">
+                      <td className="py-2 pr-4 font-mono text-[13px]">
                         <div className="flex items-center gap-2">
-                          <span className="font-bold text-text-primary group-hover:text-green-custom transition-colors font-mono flex items-center gap-1.5">
+                          <span className="font-bold text-text-primary group-hover:text-green-custom transition-colors flex items-center gap-1.5">
                             {g.ticker}
                           </span>
-                          <div className="flex items-center gap-1 shrink-0 select-none font-mono">
+                          <div className="flex items-center gap-1 shrink-0 select-none">
                             {lockedTicker === g.ticker && (
                               <span className="relative group/tooltip inline-flex items-center p-0.5 rounded-none text-[8px] font-black bg-info-custom/10 text-info-custom border border-info-custom/20">
                                 <Pin size={8} className="fill-current" />
@@ -264,6 +266,24 @@ export function GainerTable({
                                 {Math.abs(rankChange)}
                               </span>
                             )}
+                            {g.is_repeat_runner && (
+                              <span className="relative group/tooltip inline-flex items-center px-1 py-0.25 rounded-none text-[9px] font-bold bg-amber-custom/10 text-amber-custom border border-amber-custom/25">
+                                RR
+                                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/tooltip:block bg-panel border border-border-strong text-text-primary text-[10px] font-medium py-1 px-2 rounded-none shadow-2xl whitespace-nowrap z-50 normal-case font-sans">
+                                  RR = Recent Runner (24h)
+                                  <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-panel" />
+                                </span>
+                              </span>
+                            )}
+                            {g.is_follow_through && (
+                              <span className="relative group/tooltip inline-flex items-center px-1 py-0.25 rounded-none text-[9px] font-bold bg-info-custom/10 text-info-custom border border-info-custom/25">
+                                FT
+                                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/tooltip:block bg-panel border border-border-strong text-text-primary text-[10px] font-medium py-1 px-2 rounded-none shadow-2xl whitespace-nowrap z-50 normal-case font-sans">
+                                  FT = Fast Trade (24h)
+                                  <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-panel" />
+                                </span>
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -274,42 +294,32 @@ export function GainerTable({
                       {/* 4. Change (%) */}
                       <GapCell gap={g.gap_pct} />
 
-                      {/* 5. Mom % */}
-                      <td className="py-2 pr-4 text-right font-mono tabular-nums select-none">
-                        <span className={`font-bold text-xs transition-all duration-150 ${getMomStyle(g.mom_2m)}`}>
-                          {g.mom_2m != null ? (g.mom_2m >= 0 ? `+${g.mom_2m.toFixed(2)}%` : `${g.mom_2m.toFixed(2)}%`) : '—'}
-                        </span>
-                      </td>
-
-                      {/* Trend (1h) sparkline */}
+                      {/* 5. Trend */}
                       <td className="py-2 pr-4 text-center select-none">
-                        <div className="inline-flex justify-center bg-raised px-2 py-1 border border-border-subtle shadow-inner">
-                          {g.sparkline_1h && g.sparkline_1h.length > 0 ? (
-                            <Sparkline points={g.sparkline_1h} width={70} height={18} />
-                          ) : (
-                            <span className="text-[10px] text-text-muted font-mono">—</span>
-                          )}
+                        {(() => {
+                          const trend = getTrendIndicator(g.last_price, g.prev_close, g.open_price)
+                          return (
+                            <div className="inline-flex justify-center group/tooltip relative">
+                              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-none text-[11px] border font-bold ${trend.className}`}>
+                                {trend.emoji}
+                              </span>
+                              <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/tooltip:block bg-panel border border-border-strong text-text-primary text-[10px] font-medium py-1.5 px-2.5 shadow-2xl w-60 leading-relaxed z-50 normal-case font-sans text-left">
+                                {trend.tooltip}
+                                <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-panel" />
+                              </div>
+                            </div>
+                          )
+                        })()}
+                      </td>
+
+                      {/* 6. Float & Chevron */}
+                      <td className="py-2 pr-4 text-right select-none font-mono text-[12px]">
+                        <div className="flex items-center justify-end gap-2 w-full">
+                          <FloatCellInline float={g.float_shares} />
+                          <span className="text-text-muted group-hover:text-text-primary transition-colors shrink-0">
+                            {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                          </span>
                         </div>
-                      </td>
-
-                      {/* 6. RVOL or HOD Column */}
-                      <td className="py-2 pr-4 text-right font-mono tabular-nums select-none">
-                        {title === 'All Live Gainers' ? (
-                          <span className={`font-semibold text-xs ${getRvolColor(g.rvol_15m)}`}>
-                            {g.rvol_15m != null ? `${g.rvol_15m.toFixed(1)}x` : '—'}
-                          </span>
-                        ) : (
-                          <span className="font-semibold text-xs text-text-primary">
-                            {g.high_price != null && g.high_price > 0 ? `$${g.high_price.toFixed(2)}` : '—'}
-                          </span>
-                        )}
-                      </td>
-
-                      {/* 7. Float */}
-                      <td className="py-2 pr-4 text-right tabular-nums">
-                        <span className={`whitespace-nowrap text-[11px] font-mono font-bold ${getFloatBadgeStyle(g.float_shares).className}`}>
-                          {getFloatBadgeStyle(g.float_shares).label}
-                        </span>
                       </td>
                     </tr>
 

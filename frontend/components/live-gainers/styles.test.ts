@@ -3,7 +3,7 @@ import {
   getRvolBadgeStyle, getRvolColor,
   getFloatBadgeStyle, getSpreadBadgeStyle,
   getAtrHodColor, getAtrSpreadStyle, getAtrVwapStyle, getZenVStyle,
-  getTimeAgoBadge,
+  getTimeAgoBadge, getTrendIndicator,
 } from './styles'
 
 describe('getRvolBadgeStyle', () => {
@@ -174,3 +174,31 @@ describe('getTimeAgoBadge', () => {
     expect(getTimeAgoBadge(now - 90 * 60_000)!.label).toContain('Old')
   })
 })
+
+describe('getTrendIndicator', () => {
+  it('returns Mixed for null lastPrice', () => {
+    const res = getTrendIndicator(null, 10, 10)
+    expect(res.label).toBe('Mixed')
+    expect(res.emoji).toContain('🟡')
+  })
+
+  it('returns Strong Bullish when price and change are up', () => {
+    const res = getTrendIndicator(12, 10, 11) // last 12, prev 10, open 11
+    expect(res.label).toBe('Strong Bullish')
+    expect(res.emoji).toContain('🟢')
+  })
+
+  it('returns Strong Bearish when price and change are down', () => {
+    const res = getTrendIndicator(8, 10, 9) // last 8, prev 10, open 9
+    expect(res.label).toBe('Strong Bearish')
+    expect(res.emoji).toContain('🔴')
+  })
+
+  it('returns Mixed when signals conflict', () => {
+    // last 11, prev 12 (change down), open 10 (price up)
+    const res = getTrendIndicator(11, 12, 10)
+    expect(res.label).toBe('Mixed')
+    expect(res.emoji).toContain('🟡')
+  })
+})
+

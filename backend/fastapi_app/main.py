@@ -39,6 +39,14 @@ async def lifespan(app: FastAPI):
     """Startup → yield → shutdown."""
     log.info("[startup] Initialising asyncpg pool…")
     await create_pool()
+    log.info("[startup] Initialising reflections table…")
+    try:
+        from .db import get_pool
+        from .db.watchlist import init_reflections_table
+        async with get_pool().acquire() as conn:
+            await init_reflections_table(conn)
+    except Exception as e:
+        log.error(f"[startup] Failed to initialise reflections table: {e}")
     log.info("[startup] Starting APScheduler…")
     start_scheduler()
     log.info("[startup] Starting live screener background services…")

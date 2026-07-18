@@ -101,3 +101,43 @@ export function getTimeAgoBadge(tradeTimeMs: number | null) {
   if (seconds < 3600)  return { label: '🟡 Stale',  className: 'bg-amber-custom/10 text-amber-custom border border-amber-custom/25' }
   return { label: '🔵 Old', className: 'bg-raised text-text-muted border border-border-subtle' }
 }
+
+// ── Trend indicator (bullish/bearish/mixed) ──────────────────────────────────
+
+export function getTrendIndicator(lastPrice: number | null, prevClose: number | null, openPrice: number | null) {
+  if (lastPrice == null) {
+    return {
+      emoji: '🟡',
+      label: 'Mixed',
+      tooltip: 'Conflicting signals: Price data unavailable',
+      className: 'text-amber-custom bg-amber-custom/10 border-amber-custom/25'
+    }
+  }
+  
+  const priceUp = openPrice != null ? lastPrice > openPrice : true
+  const changeUp = prevClose != null ? lastPrice > prevClose : true
+  
+  if (priceUp && changeUp) {
+    return {
+      emoji: '🟢 ▲',
+      label: 'Strong Bullish',
+      tooltip: 'Strong Bullish: Price is up intraday and change is positive',
+      className: 'text-green-custom bg-green-custom/10 border-green-custom/25 font-bold'
+    }
+  } else if (!priceUp && !changeUp) {
+    return {
+      emoji: '🔴 ▼',
+      label: 'Strong Bearish',
+      tooltip: 'Strong Bearish: Price is down intraday and change is negative',
+      className: 'text-red-custom bg-red-custom/10 border-red-custom/25 font-bold'
+    }
+  } else {
+    return {
+      emoji: '🟡 ◀▶',
+      label: 'Mixed',
+      tooltip: 'Conflicting signals: Price and change direction are mixed',
+      className: 'text-amber-custom bg-amber-custom/10 border-amber-custom/25'
+    }
+  }
+}
+

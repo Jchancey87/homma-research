@@ -69,7 +69,8 @@ def main():
 
     # 2. Top 10 Continuation / Catalyst Analysis
     log.info("Generating Top 10 Continuation Report...")
-    continuation_md, _ = get_continuation_analysis(target_date, gainers)
+    reflections = fetch_last_reflections(limit=3)
+    continuation_md, _ = get_continuation_analysis(target_date, gainers, reflections=reflections)
 
     # 2a. Parse Top Picks from the report and persist to DB
     parse_and_save_top_picks(continuation_md, target_date, gainers)
@@ -398,6 +399,22 @@ def send_email(date_str: str, markdown_content: str):
         log.info("Email sent successfully!")
     except Exception as e:
         log.error(f"Failed to send email: {e}")
+
+
+def fetch_last_reflections(limit: int = 3) -> list[dict]:
+    query = """
+        SELECT date, reflection_text, lessons_json
+        FROM continuation_reflections
+        ORDER BY date DESC
+        LIMIT %s
+    """
+    try:
+        with get_connection() as conn:
+            rows = conn.execute(query, (limit,)).fetchall()
+        return [dict(r) for r in rows]
+    except Exception as e:
+        log.warning(f"Could not fetch reflections: {e}")
+        return []
 
 
 if __name__ == '__main__':

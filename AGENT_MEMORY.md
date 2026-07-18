@@ -48,6 +48,8 @@
 * **Audio/Charts:** Dynamic chimes via Web Audio API. Split chart hooks (init vs decorators) in `page.tsx`.
 * **TradeStation Style:** Redesigned visual system dark-mode dashboard. Preserve zero-round sharp edges. Map 4-level dark surface depth variables in `globals.css`: app background `#070A0D`, cards/panels `#0D1218`, nested/headers `#131B24`, hover states `#192431`. Unified colors via Tailwind config (`green-custom`, `red-custom`, `amber-custom`, `info-custom`). Applied `tabular-nums` universally for price, change, momentum, volume, float data columns. Added faint raised background containers to inline sparklines.
 * **Continuation Journal:** Card-based UI grouped by date. Left colored border reflects tracking outcomes (Runner, Win, Flat, Fade, Active). Custom SVG inline sparklines show 3-day closes. Details pane opens inline. Scorecard metrics rendered as visual stacked percentage edge bars instead of static tables.
+* **GainerTable Overhaul:** Columns reduced to 6: Rank, Ticker, Price, Change(%), Trend, Float. Rank always visible. Suffixes [RR]/[FT] as badges + tooltips in Ticker col. Price 16px, Rank 14px bold, Ticker 13px monospace, Change 14px bold, Float 12px. Float uses dot-badge + tooltip. Trend is emoji-badge + tooltip. Float cell includes expand chevron. Enabled SortKey trend sorting.
+
 
 ### 7. Testing & DevOps
 * **Venv Testing:** Execute backend tests using `/opt/trading-journal/backend/venv/bin/pytest`.
@@ -77,6 +79,24 @@
 ### 12. Watchlist Group & Enrichment
 * **Segmentation:** Groups table segments biotech etfs (e.g. FDA approved vs trials). Scopes queries/imports/exports.
 * **Enrichment:** Non-blocking `POST /enrich` runs in FastAPI `BackgroundTasks`. Fetches yfinance/SEC/LLM metrics in parallel (`asyncio.to_thread`, semaphore=4) to prevent loop starvation. Falls back to SEC facts for cash/operating cash flows. Safely alerts Telegram if runway < 6 months or dilution high. Retain existing database values on api fetch failure to prevent duplicate false risk alerts.
+
+### 13. State-Gated Pipeline (Idea 3)
+* **StockState Dataclass:** Defined in [stock_state.py](file:///home/jackc/projects/homma-research/backend/services/stock_state.py) with gating rules based on stock status (active, suspended, restricted, watchlist_only) and is_active flag.
+* **Gated Enrichment:** [watchlist_service.py](file:///home/jackc/projects/homma-research/backend/services/watchlist_service.py)'s `enrich_watchlist_fundamentals` accepts optional `state: StockState | None = None`. If state is provided and `should_enrich` returns False, skips enrichment and returns 0.
+
+### 14. Database-Backed Reflection Loop (Idea 1)
+* **Schema & Init:** `continuation_reflections` table stores reflections (id, date, text, lessons_json). Created via `init_reflections_table` in [watchlist.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/db/watchlist.py) on app startup.
+* **Reflection Loop:** `get_reflection` inside [llm_client.py](file:///home/jackc/projects/homma-research/backend/llm/llm_client.py) queries fast model. Nightly job [reflect_picks.py](file:///home/jackc/projects/homma-research/backend/jobs/reflect_picks.py) updates DB. [daily_analysis_report.py](file:///home/jackc/projects/homma-research/backend/jobs/daily_analysis_report.py) prepends last 3 DB reflections to continuation prompt.
+
+### 15. Selective Sentiment on Alerts (Idea 5)
+* **Selective Sentiment:** [alerts.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/tasks/alerts.py) appends sentiment if news headlines exist within last 6 hours, else omits it. Sentiment parsed by `get_headline_sentiment` in [llm_client.py](file:///home/jackc/projects/homma-research/backend/llm/llm_client.py).
+
+### 16. Threshold-Based Pre-Digestion (Idea 4)
+* **Pre-Digestion Gating:** [llm_client.py](file:///home/jackc/projects/homma-research/backend/llm/llm_client.py) digests news and filings using fast model if count > 2, otherwise passes raw JSON directly to deep model.
+
+### 17. Target-Ranked Debate (Idea 2)
+* **Debate Gating:** [llm_client.py](file:///home/jackc/projects/homma-research/backend/llm/llm_client.py)'s `get_continuation_analysis` runs Bull/Bear debate loop (fast model) + Synthesis (deep model) only for tickers with `gap_pct` >= 15.0. Tickers < 15.0 bypass debate using single-pass deep model.
+
 
 ## 🔱 Branch: session (Active Intent & Scope)
 * **Goal:** Remove VWAP_RECLAIM/HOD_BREAKOUT. Implement real-time NEAR_HOD_RADAR. Fix false watchlist risk alerts by retaining existing metrics on API fetch failure.
