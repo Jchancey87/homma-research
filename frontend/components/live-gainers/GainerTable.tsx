@@ -314,14 +314,14 @@ export function GainerTable({
                         {g.rvol_15m != null ? `${g.rvol_15m.toFixed(1)}x` : '—'}
                       </td>
 
-                      {/* 8. Sparkline (monochrome, structural style) */}
+                      {/* 8. Sparkline (colored dynamically by last 5m candle direction) */}
                       <td className="py-[3px] px-1.5 text-center select-none">
                         {((g.sparkline_intraday && g.sparkline_intraday.length > 0) || (g.sparkline_5d && g.sparkline_5d.length > 0)) ? (
                           <Sparkline
                             points={g.sparkline_intraday && g.sparkline_intraday.length > 0 ? g.sparkline_intraday : g.sparkline_5d}
                             width={38}
                             height={10}
-                            color="var(--text-muted)"
+                            colorByLast5m={true}
                           />
                         ) : (
                           <span className="text-[10px] text-text-muted">—</span>
@@ -485,6 +485,7 @@ export function GainerTable({
                                           points={g.sparkline_intraday && g.sparkline_intraday.length > 0 ? g.sparkline_intraday : g.sparkline_5d}
                                           width={80}
                                           height={20}
+                                          colorByLast5m={true}
                                         />
                                       </div>
                                     </div>
