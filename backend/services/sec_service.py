@@ -38,17 +38,65 @@ def get_cik_from_ticker(ticker: str) -> str | None:
     if ticker in _cik_cache:
         return _cik_cache[ticker]
 
+    import json
+    import os
+    import time
+
+    cache_path = os.path.join(Config.STORAGE_PATH, 'sec_cik_map.json')
+    cache_valid = False
+
+    if os.path.exists(cache_path):
+        mtime = os.path.getmtime(cache_path)
+        if time.time() - mtime < 86400:
+            try:
+                with open(cache_path, 'r') as f:
+                    loaded = json.load(f)
+                    if isinstance(loaded, dict) and loaded:
+                        _cik_cache.update(loaded)
+                        cache_valid = True
+            except Exception as e:
+                log.warning(f'[SEC] Failed to read CIK cache file: {e}')
+
+    if cache_valid and ticker in _cik_cache:
+        return _cik_cache[ticker]
+
+    if cache_valid:
+        return None
+
     try:
+        log.info(f'[SEC] Downloading fresh CIK mapping from SEC...')
         resp = requests.get(_TICKER_TO_CIK_URL, headers=_HEADERS, timeout=10)
         resp.raise_for_status()
         data = resp.json()
+
+        fresh_map = {}
         for entry in data.values():
-            if entry.get('ticker', '').upper() == ticker:
-                cik = str(entry['cik_str']).zfill(10)
-                _cik_cache[ticker] = cik
-                return cik
+            sym = entry.get('ticker', '').upper()
+            if sym:
+                fresh_map[sym] = str(entry['cik_str']).zfill(10)
+
+        if fresh_map:
+            _cik_cache.update(fresh_map)
+            try:
+                os.makedirs(Config.STORAGE_PATH, exist_ok=True)
+                with open(cache_path, 'w') as f:
+                    json.dump(fresh_map, f)
+            except Exception as e:
+                log.warning(f'[SEC] Failed to write CIK cache file: {e}')
+
+            return _cik_cache.get(ticker)
     except Exception as e:
         log.warning(f'[SEC] CIK lookup failed for {ticker}: {e}')
+        if os.path.exists(cache_path):
+            try:
+                with open(cache_path, 'r') as f:
+                    loaded = json.load(f)
+                    if isinstance(loaded, dict) and loaded:
+                        _cik_cache.update(loaded)
+                        return _cik_cache.get(ticker)
+            except Exception:
+                pass
+
     return None
 
 

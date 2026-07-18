@@ -78,7 +78,7 @@
 
 ### 12. Watchlist Group & Enrichment
 * **Segmentation:** Groups table segments biotech etfs (e.g. FDA approved vs trials). Scopes queries/imports/exports.
-* **Enrichment:** Non-blocking `POST /enrich` runs in FastAPI `BackgroundTasks`. Fetches yfinance/SEC/LLM metrics in parallel (`asyncio.to_thread`, semaphore=4) to prevent loop starvation. Falls back to SEC facts for cash/operating cash flows. Safely alerts Telegram if runway < 6 months or dilution high. Retain existing database values on api fetch failure to prevent duplicate false risk alerts.
+* **Enrichment:** Non-blocking `POST /enrich` runs in FastAPI `BackgroundTasks`. Fetches FMP/SEC/LLM metrics in parallel (`asyncio.to_thread`, semaphore=4) to prevent loop starvation. yfinance is completely removed. Dilution risk uses SEC XBRL shares history (`get_shares_history`) as primary. Falls back to SEC facts for cash/operating cash flows. Safely alerts Telegram if runway < 6 months or dilution high. Retains existing database values on api fetch failure.
 
 ### 13. State-Gated Pipeline (Idea 3)
 * **StockState Dataclass:** Defined in [stock_state.py](file:///home/jackc/projects/homma-research/backend/services/stock_state.py) with gating rules based on stock status (active, suspended, restricted, watchlist_only) and is_active flag.
@@ -97,11 +97,15 @@
 ### 17. Target-Ranked Debate (Idea 2)
 * **Debate Gating:** [llm_client.py](file:///home/jackc/projects/homma-research/backend/llm/llm_client.py)'s `get_continuation_analysis` runs Bull/Bear debate loop (fast model) + Synthesis (deep model) only for tickers with `gap_pct` >= 15.0. Tickers < 15.0 bypass debate using single-pass deep model.
 
+### 18. API & Caching Optimization
+* **Decoupling Massive/Polygon:** Completely decoupled from Massive/Polygon news APIs. Removed `MassiveNewsSource` from default news aggregator in [news_aggregator.py](file:///home/jackc/projects/homma-research/backend/services/news_aggregator.py) and replaced `_get_polygon_news` with `_get_fmp_news` inside [catalyst_service.py](file:///home/jackc/projects/homma-research/backend/services/catalyst_service.py).
+* **CIK Caching:** SEC CIK resolution (`get_cik_from_ticker`) caches mappings to `sec_cik_map.json` in `Config.STORAGE_PATH` with a 24-hour TTL, preventing redundant 4MB downloads.
+* **FMP News Source:** `FMPNewsSource` integrated in [news_aggregator.py](file:///home/jackc/projects/homma-research/backend/services/news_aggregator.py) as the primary news source before yfinance scraper.
+
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Remove VWAP_RECLAIM/HOD_BREAKOUT. Implement real-time NEAR_HOD_RADAR. Fix false watchlist risk alerts by retaining existing metrics on API fetch failure.
-* **Scope:** Modify [stream_client.py](file:///home/jackc/projects/homma-research/momentum_screener/schwab/stream_client.py), [alerts.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/tasks/alerts.py), [alert_config.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/db/alert_config.py), [watchlist_service.py](file:///home/jackc/projects/homma-research/backend/services/watchlist_service.py).
-* **Assumptions:** Tick price exceeding previous session high triggers NEAR_HOD_RADAR. Keeping old metrics during rate limits avoids resetting fields to null and re-triggering alerts on recovery.
+* **Goal:** Optimize webapp data source reliability by eliminating yfinance from watchlist enrichment, implementing 24h disk caching for SEC CIK mapping, and adding FMPNewsSource as official backup.
+* **Scope:** Modify [watchlist_service.py](file:///home/jackc/projects/homma-research/backend/services/watchlist_service.py), [sec_service.py](file:///home/jackc/projects/homma-research/backend/services/sec_service.py), [news_aggregator.py](file:///home/jackc/projects/homma-research/backend/services/news_aggregator.py). Add tests in [test_news_aggregator.py](file:///home/jackc/projects/homma-research/backend/tests/test_news_aggregator.py) and [test_sec_service.py](file:///home/jackc/projects/homma-research/backend/tests/test_sec_service.py).
 
 
 ## 🗑️ Rot & Pruning Log

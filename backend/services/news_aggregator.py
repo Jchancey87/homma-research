@@ -254,6 +254,56 @@ class BenzingaNewsSource(NewsSource):
 
 
 # ---------------------------------------------------------------------------
+# FMP News Source (financial modeling prep)
+# ---------------------------------------------------------------------------
+
+class FMPNewsSource(NewsSource):
+    """
+    Live news from Financial Modeling Prep (FMP) API.
+    Sourced via the standard get_stock_news function.
+    """
+
+    def get_news(self, ticker: str, hours_back: int = 24) -> list[dict]:
+        try:
+            from services.fmp_service import get_stock_news
+
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=hours_back)
+            articles = get_stock_news(ticker, limit=20)
+            if not articles:
+                return []
+
+            results = []
+            for a in articles:
+                pub_str = a.get('date', '')
+                pub_dt = None
+                if pub_str:
+                    try:
+                        pub_dt = datetime.strptime(pub_str, '%Y-%m-%d %H:%M:%S').replace(tzinfo=timezone.utc)
+                    except ValueError:
+                        try:
+                            pub_dt = datetime.fromisoformat(pub_str.replace('Z', '+00:00')).astimezone(timezone.utc)
+                        except ValueError:
+                            pass
+
+                if pub_dt and pub_dt < cutoff:
+                    continue
+
+                description = a.get('text', '') or ''
+                results.append(_make_article(
+                    title=a.get('title', '') or '',
+                    published=pub_dt.strftime('%Y-%m-%dT%H:%M:%SZ') if pub_dt else pub_str,
+                    source=f"fmp/{a.get('site', 'fmp')}",
+                    description=(description or '')[:400],
+                ))
+
+            log.debug(f'[FMPNewsSource] {ticker}: {len(results)} articles in last {hours_back}h')
+            return results
+        except Exception as e:
+            log.warning(f'[FMPNewsSource] {ticker}: fetch failed — {e}')
+            return []
+
+
+# ---------------------------------------------------------------------------
 # Aggregator — fan-out orchestrator
 # ---------------------------------------------------------------------------
 
@@ -312,16 +362,16 @@ class NewsAggregator:
 
 
 # ---------------------------------------------------------------------------
-# Default singleton — Massive primary, yfinance fallback
+# Default singleton — Massive primary, FMP secondary, yfinance fallback
 # ---------------------------------------------------------------------------
 
 def get_default_aggregator() -> NewsAggregator:
     """
     Returns the production NewsAggregator.
-    Massive is called first (real-time, no lag).
-    yfinance is called only if Massive returns nothing.
+    FMP is called first (reliable, official).
+    yfinance is called last as a fallback.
     """
     return NewsAggregator(sources=[
-        MassiveNewsSource(),
+        FMPNewsSource(),
         YFinanceNewsSource(),
     ])

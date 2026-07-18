@@ -56,17 +56,17 @@ def build_catalyst_payload(ticker: str, date: str | None = None) -> dict:
     if not date:
         date = datetime.now(EASTERN_TZ).strftime('%Y-%m-%d')
 
-    polygon_news = _get_polygon_news(ticker, date)
+    fmp_news = _get_fmp_news(ticker, date)
     yf_news      = _get_yfinance_news(ticker, date)
 
-    # Merge: polygon first, then yfinance, de-duplicate by title prefix
-    seen_titles = {a['title'][:40].lower() for a in polygon_news}
+    # Merge: fmp first, then yfinance, de-duplicate by title prefix
+    seen_titles = {a['title'][:40].lower() for a in fmp_news}
     for article in yf_news:
         if article['title'][:40].lower() not in seen_titles:
-            polygon_news.append(article)
+            fmp_news.append(article)
             seen_titles.add(article['title'][:40].lower())
 
-    all_news = polygon_news[:20]  # cap at 20 combined
+    all_news = fmp_news[:20]  # cap at 20 combined
 
     sec_8k      = _get_sec_8k_filings_parsed(ticker, date)
     sec_fts     = _get_sec_fulltext_catalyst(ticker, date)
@@ -88,54 +88,54 @@ def build_catalyst_payload(ticker: str, date: str | None = None) -> dict:
 # News collectors
 # ---------------------------------------------------------------------------
 
-def _get_polygon_news(ticker: str, anchor_date: str, n: int = 15) -> list[dict]:
+def _get_fmp_news(ticker: str, anchor_date: str, n: int = 15) -> list[dict]:
     """
-    Fetch news from Massive.com (fka Polygon.io) anchored ±14 days around anchor_date.
-    Returns list with 'title', 'published', 'publisher', 'description'.
-    Uses the official Massive SDK.
+    Fetch news from Financial Modeling Prep (FMP) anchored ±14 days around anchor_date.
+    Returns list with 'source', 'title', 'published', 'publisher', 'description', 'days_from_event'.
     """
     try:
-        dt        = datetime.strptime(anchor_date, '%Y-%m-%d')
-        from_date = (dt - timedelta(days=14)).strftime('%Y-%m-%d')
-        to_date   = (dt + timedelta(days=1)).strftime('%Y-%m-%d')
+        from services.fmp_service import get_stock_news
+        from datetime import datetime, timezone, timedelta
 
-        from massive import RESTClient
-        from config import Config
-        if not Config.POLYGON_API_KEY:
-            log.warning('[Catalyst] POLYGON_API_KEY not set, skipping news.')
+        anchor_dt = datetime.strptime(anchor_date, '%Y-%m-%d')
+        from_date = anchor_dt - timedelta(days=14)
+        to_date   = anchor_dt + timedelta(days=2)
+
+        articles = get_stock_news(ticker, limit=40)
+        if not articles:
             return []
-
-        client = RESTClient(api_key=Config.POLYGON_API_KEY, pagination=False)
-        articles = list(client.list_ticker_news(
-            ticker,
-            published_utc_gte=from_date,
-            published_utc_lte=to_date,
-            order='desc',
-            limit=n,
-        ))
 
         results = []
         for a in articles:
-            title       = getattr(a, 'title', '') or (a.get('title', '') if isinstance(a, dict) else '')
-            pub_utc     = getattr(a, 'published_utc', '') or (a.get('published_utc', '') if isinstance(a, dict) else '')
-            publisher   = ''
-            pub_obj     = getattr(a, 'publisher', None) or (a.get('publisher', {}) if isinstance(a, dict) else {})
-            if isinstance(pub_obj, dict):
-                publisher = pub_obj.get('name', '')
-            elif hasattr(pub_obj, 'name'):
-                publisher = pub_obj.name or ''
-            description = getattr(a, 'description', '') or (a.get('description', '') if isinstance(a, dict) else '')
+            pub_str = a.get('date', '')
+            pub_dt = None
+            if pub_str:
+                try:
+                    pub_dt = datetime.strptime(pub_str, '%Y-%m-%d %H:%M:%S')
+                except ValueError:
+                    try:
+                        pub_dt = datetime.fromisoformat(pub_str.replace('Z', '+00:00')).replace(tzinfo=None)
+                    except ValueError:
+                        pass
+
+            if pub_dt:
+                if pub_dt < from_date or pub_dt > to_date:
+                    continue
+
+            pub_date_str = pub_dt.strftime('%Y-%m-%d') if pub_dt else (pub_str[:10] if pub_str else '')
+            description = a.get('text', '') or ''
             results.append({
-                'source':          'massive',
-                'title':           title,
-                'published':       (pub_utc or '')[:10],
-                'publisher':       publisher,
-                'description':     (description or '')[:400],
-                'days_from_event': _days_from_event((pub_utc or '')[:10], anchor_date),
+                'source':          'fmp',
+                'title':           a.get('title', '') or '',
+                'published':       pub_date_str,
+                'publisher':       a.get('site', '') or 'FMP',
+                'description':     description[:400],
+                'days_from_event': _days_from_event(pub_date_str, anchor_date),
             })
-        return results
+
+        return results[:n]
     except Exception as e:
-        log.warning(f'[Catalyst] Massive news fetch failed: {e}')
+        log.warning(f'[Catalyst] FMP news fetch failed: {e}')
         return []
 
 

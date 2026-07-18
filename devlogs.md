@@ -2,6 +2,17 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-07-17] Data Source Reliability & Performance Optimizations
+
+### Summary
+* Decoupled webapp from Massive/Polygon APIs: removed `MassiveNewsSource` from default news aggregator in [news_aggregator.py](file:///home/jackc/projects/homma-research/backend/services/news_aggregator.py), and replaced `_get_polygon_news` with `_get_fmp_news` in [catalyst_service.py](file:///home/jackc/projects/homma-research/backend/services/catalyst_service.py).
+* Eliminated `yfinance` scraper from [watchlist_service.py](file:///home/jackc/projects/homma-research/backend/services/watchlist_service.py) metrics extraction path. Replaced with FMP `get_cash_position`/`get_income_statement`/`get_stock_news` and SEC `get_sec_financials`/`get_shares_history`.
+* Swapped dilution detection priority: SEC XBRL shares history now primary source, removed yfinance shares tracking.
+* Integrated `FMPNewsSource` in [news_aggregator.py](file:///home/jackc/projects/homma-research/backend/services/news_aggregator.py); registered as primary source in default aggregator.
+* Implemented CIK mapping local disk caching with 24-hour TTL in [sec_service.py](file:///home/jackc/projects/homma-research/backend/services/sec_service.py) (`sec_cik_map.json` in `Config.STORAGE_PATH`).
+* Created [test_news_aggregator.py](file:///home/jackc/projects/homma-research/backend/tests/test_news_aggregator.py) and [test_sec_service.py](file:///home/jackc/projects/homma-research/backend/tests/test_sec_service.py).
+* Verified 269 tests passing.
+
 
 ## [2026-07-17] Phase 5: Target-Ranked Bull/Bear Debate (Idea 2)
 
