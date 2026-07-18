@@ -43,13 +43,15 @@ const PRICE_FILTER_EVENT = 'price-filter-changed'
 const PRICE_MIN = 1.0
 const PRICE_MAX = 30.0
 
+const EMPTY_WATCHLIST: WatchlistItem[] = []
+
 interface LiveGainersProps {
   initialSnap?: LiveGainerSnapshot | null
   initialWatchlist?: WatchlistItem[]
   initialSummary?: { date: string | null; total: number } | null
 }
 
-export default function LiveGainers({ initialSnap = null, initialWatchlist = [], initialSummary = null }: LiveGainersProps) {
+export default function LiveGainers({ initialSnap = null, initialWatchlist = EMPTY_WATCHLIST, initialSummary = null }: LiveGainersProps) {
   const router = useRouter()
   const [snap,        setSnap]        = useState<LiveGainerSnapshot | null>(initialSnap)
   const [loading,     setLoading]     = useState(!initialSnap)
