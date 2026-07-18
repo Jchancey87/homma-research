@@ -99,7 +99,7 @@ async def test_send_telegram_alert_task_updates_sent_status(mock_get_connection,
     payload = {
         "symbol": "AAPL",
         "price": 150.25,
-        "alert_type": "HOD_BREAKOUT",
+        "alert_type": "NEAR_HOD_RADAR",
         "rvol": 3.5,
         "time": "2026-06-14T14:30:00.000000",
         "alert_db_id": 42,
@@ -173,7 +173,7 @@ async def test_save_alert_to_db_inserts_short_int_float():
         rvol=2.5,
         gap_pct=3.4,
         float_shares=50000000,
-        alert_type='HOD_BREAKOUT',
+        alert_type='NEAR_HOD_RADAR',
         short_int_float=12.5
     )
     
@@ -191,4 +191,4 @@ async def test_save_alert_to_db_inserts_short_int_float():
     assert params[4] == 3.4
     assert params[5] == 12.5
     assert params[6] == 50000000
-    assert params[7] == 'HOD_BREAKOUT'
+    assert params[7] == 'NEAR_HOD_RADAR'

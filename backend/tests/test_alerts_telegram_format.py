@@ -21,7 +21,7 @@ from fastapi_app.tasks.alerts import (
 BASE_PAYLOAD = {
     "symbol": "AAPL",
     "price": 150.25,
-    "alert_type": "HOD_BREAKOUT",
+    "alert_type": "NEAR_HOD_RADAR",
     "rvol": 3.5,
     "time": "2026-06-14T14:30:00.000000",
     "daily_pct": 5.2,
@@ -55,9 +55,9 @@ def test_volatility_resume_header_and_static_signal():
     assert "*RVOL:*" not in msg
 
 
-def test_hod_breakout_full_enrichment():
+def test_near_hod_radar_full_enrichment():
     msg = _format_alert_message(BASE_PAYLOAD)
-    assert "🏔️ *HOD BREAKOUT* 🏔️" in msg
+    assert "🏔️ *NEAR HOD RADAR* 🏔️" in msg
     assert "- *RVOL:* 3.5x" in msg
     # _fmt_volume uses 1 decimal for M, no decimal for K (250K not 250.0K)
     assert "- *Candle vol:* 250K (2.5x avg 100K)" in msg
@@ -155,7 +155,7 @@ def test_all_optional_fields_absent_renders_compact_body():
     payload = {
         "symbol": "X",
         "price": 1.0,
-        "alert_type": "HOD_BREAKOUT",
+        "alert_type": "NEAR_HOD_RADAR",
         "rvol": 2.0,
         "time": "2026-06-14T09:30:00",
         "daily_pct": 1.0,
@@ -173,7 +173,7 @@ def test_all_optional_fields_absent_renders_compact_body():
 def test_invalid_timestamp_falls_back_to_raw_string():
     """Bad ISO strings render as-is (no crash, no exception)."""
     msg = _format_alert_message(
-        {**BASE_PAYLOAD, "alert_type": "HOD_BREAKOUT", "time": "not-a-date"}
+        {**BASE_PAYLOAD, "alert_type": "NEAR_HOD_RADAR", "time": "not-a-date"}
     )
     assert "- *Time:* not-a-date" in msg
 
@@ -187,7 +187,7 @@ def test_tradingview_url_uses_raw_unscaped_symbol():
 def test_ticker_with_underscore_escaped_in_label_only():
     """Underscores in symbol get escaped in the visible label, not the URL."""
     msg = _format_alert_message(
-        {**BASE_PAYLOAD, "symbol": "BRK_A", "alert_type": "HOD_BREAKOUT"}
+        {**BASE_PAYLOAD, "symbol": "BRK_A", "alert_type": "NEAR_HOD_RADAR"}
     )
     assert "[$BRK\\_A]" in msg
     assert "https://www.tradingview.com/chart/?symbol=BRK_A" in msg
@@ -198,7 +198,7 @@ def test_float_only_category_no_shares():
     msg = _format_alert_message(
         {
             **BASE_PAYLOAD,
-            "alert_type": "HOD_BREAKOUT",
+            "alert_type": "NEAR_HOD_RADAR",
             "float_shares": 0,
             "market_cap": 0,
             "float_category": "Low",
@@ -212,7 +212,7 @@ def test_float_only_shares_no_category_no_cap():
     msg = _format_alert_message(
         {
             **BASE_PAYLOAD,
-            "alert_type": "HOD_BREAKOUT",
+            "alert_type": "NEAR_HOD_RADAR",
             "float_shares": 5_000_000,
             "market_cap": 0,
             "float_category": "",
@@ -227,9 +227,9 @@ def test_float_only_shares_no_category_no_cap():
 def test_meta_dict_covers_all_documented_types():
     expected = {
         "VOLATILITY_HALT", "VOLATILITY_RESUME",
-        "HOD_BREAKOUT", "VOLUME_SPIKE", "PREV_DAY_BREAKOUT",
+        "NEAR_HOD_RADAR", "VOLUME_SPIKE", "PREV_DAY_BREAKOUT",
         "VWAP_CROSSOVER", "VWAP_BOUNCE",
-        "RUNNING_UP", "BULL_FLAG", "VWAP_RECLAIM",
+        "RUNNING_UP", "BULL_FLAG",
         "MULTI_TF_CONFLUENCE", "HALT_RESUME_MOMENTUM",
     }
     assert set(ALERT_TYPE_META.keys()) == expected

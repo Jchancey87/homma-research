@@ -42,14 +42,13 @@ redis_url = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 redis_client = redis.Redis.from_url(redis_url)
 
 STRATEGY_LABELS = {
-    "HOD_BREAKOUT": "HOD Breakout",
+    "NEAR_HOD_RADAR": "Near HOD Radar",
     "VOLUME_SPIKE": "Volume Spike",
     "PREV_DAY_BREAKOUT": "Prev Day High Breakout",
     "VWAP_CROSSOVER": "VWAP Crossover",
     "VWAP_BOUNCE": "VWAP Bounce",
     "RUNNING_UP": "Running Up",
     "BULL_FLAG": "Bull Flag",
-    "VWAP_RECLAIM": "VWAP Reclaim",
     "MULTI_TF_CONFLUENCE": "Multi-TF Confluence",
     "HALT_RESUME_MOMENTUM": "Halt Resume Momentum",
     "VOLATILITY_HALT": "Volatility Halt",
@@ -100,6 +99,7 @@ class SchwabStreamer:
         self.watchlist_tags = {}
         self.catalyst_tags = {}
         self.last_hod_breakout_time = {}
+        self.prev_session_high = {}
         self.global_config = None
         self.configs = None
         self.config_service = "placeholder"
@@ -282,6 +282,7 @@ class SchwabStreamer:
         self.watchlist_tags = {}
         self.catalyst_tags = {}
         self.last_hod_breakout_time = {}
+        self.prev_session_high = {}
         
         # 1. Active Watchlist Tickers
         async with self.db_pool.acquire() as conn:
@@ -436,8 +437,8 @@ class SchwabStreamer:
             score += config.get("session_post_weight", 5)    # Post-market
 
         # 6. Alert type weight
-        if alert_type in ('HOD_BREAKOUT', 'VWAP_CROSSOVER', 'PREV_DAY_BREAKOUT',
-                          'RUNNING_UP', 'BULL_FLAG', 'VWAP_RECLAIM'):
+        if alert_type in ('NEAR_HOD_RADAR', 'VWAP_CROSSOVER', 'PREV_DAY_BREAKOUT',
+                          'RUNNING_UP', 'BULL_FLAG'):
             score += config.get("alert_high_weight", 15)
         elif alert_type in ('VOLUME_SPIKE', 'MULTI_TF_CONFLUENCE'):
             score += config.get("alert_mid_weight", 10)
@@ -533,7 +534,7 @@ class SchwabStreamer:
                     if price_diff_pct < 0.05:
                         suppressed_reason = "ALREADY_IN_PLAY"
 
-            if alert_type == "HOD_BREAKOUT":
+            if alert_type == "NEAR_HOD_RADAR":
                 self.last_hod_breakout_time[symbol] = now_ts
 
             v_state = self.vwap_state.get(symbol, {})
@@ -828,16 +829,19 @@ class SchwabStreamer:
             post_halt_suppressed = True
             logger.debug(f"Post-halt suppression active for {symbol} ({120 - (time.time() - resume_ts):.0f}s remaining)")
 
-        # Trigger 1: High of Day Breakout (requires completed candle BODY close above session HOD)
-        # A wick touching the HOD is not sufficient — we need a closed candle where close > high_price.
+        # Trigger 1: Near HOD Radar breakout (more responsive, live tick breakout)
         if not post_halt_suppressed:
-            if candle_history and rvol >= 1.5:
-                last_candle = candle_history[-1]
-                # Confirm close > open (bullish body) AND close broke above session high_price
-                if (last_candle['close'] > last_candle['open'] and
-                        last_candle['close'] >= high_price and
-                        last_candle['close'] > open_price):
-                    await self.check_and_fire_alert(symbol, last_candle['close'], total_volume, rvol, gap_pct, "HOD_BREAKOUT", high_price=high_price, low_price=low_price)
+            if symbol not in self.prev_session_high or self.prev_session_high[symbol] <= 0:
+                if high_price > 0:
+                    self.prev_session_high[symbol] = high_price
+                elif last_price > 0:
+                    self.prev_session_high[symbol] = last_price
+            
+            if self.prev_session_high.get(symbol, 0.0) > 0.0 and last_price > self.prev_session_high[symbol]:
+                old_high = self.prev_session_high[symbol]
+                self.prev_session_high[symbol] = last_price
+                if rvol >= 1.5:
+                    await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "NEAR_HOD_RADAR", high_price=old_high, low_price=low_price)
 
         # Trigger 2: VWAP Crossing (ATR-based dynamic hysteresis to prevent chatter)
         # Estimate ATR from last 10 completed candles (candle range = high - low, approximated here
@@ -901,14 +905,7 @@ class SchwabStreamer:
                     if last_price > consolidation_high and curr_vol >= 1.5 * avg_vol and avg_vol > 0:
                         await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "BULL_FLAG", high_price=high_price, low_price=low_price)
 
-        # Trigger: VWAP_RECLAIM
-        if vwap > 0 and not post_halt_suppressed:
-            prev_vwap = v_state.get('prev_vwap')
-            if prev_vwap is not None and vwap > prev_vwap:
-                if v_state.get('status') == 'below' and last_price >= vwap:
-                    if rvol >= 1.5:
-                        await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "VWAP_RECLAIM", high_price=high_price, low_price=low_price)
-            v_state['prev_vwap'] = vwap
+
 
         # Trigger: MULTI_TF_CONFLUENCE
         if len(candle_history) >= 5:

@@ -10,14 +10,14 @@ def test_calculate_confluence_score_watchlist_bonus():
     streamer.catalyst_tags = {}
     streamer.fundamentals_cache = {}
     
-    # Base: watchlist=20, regular session=15, HOD_BREAKOUT=15, rvol=0 -> 50 (Tier 2)
+    # Base: watchlist=20, regular session=15, NEAR_HOD_RADAR=15, rvol=0 -> 50 (Tier 2)
     now_et = datetime.now(EASTERN_TZ).replace(hour=10, minute=0, second=0, microsecond=0)
-    score_wl, tier_wl = streamer.calculate_confluence_score("AAPL", "HOD_BREAKOUT", rvol=0.0, now_et=now_et)
+    score_wl, tier_wl = streamer.calculate_confluence_score("AAPL", "NEAR_HOD_RADAR", rvol=0.0, now_et=now_et)
     assert score_wl == 50
     assert tier_wl == "Tier 2"
     
-    # Base without watchlist: watchlist=0, regular session=15, HOD_BREAKOUT=15, rvol=0 -> 30 (Tier 3)
-    score_no, tier_no = streamer.calculate_confluence_score("MSFT", "HOD_BREAKOUT", rvol=0.0, now_et=now_et)
+    # Base without watchlist: watchlist=0, regular session=15, NEAR_HOD_RADAR=15, rvol=0 -> 30 (Tier 3)
+    score_no, tier_no = streamer.calculate_confluence_score("MSFT", "NEAR_HOD_RADAR", rvol=0.0, now_et=now_et)
     assert score_no == 30
     assert tier_no == "Tier 3"
 
@@ -29,24 +29,24 @@ def test_calculate_confluence_score_catalyst_tags():
     streamer.fundamentals_cache = {}
     now_et = datetime.now(EASTERN_TZ).replace(hour=10, minute=0, second=0, microsecond=0)
     
-    # Confirmed Catalyst: catalyst=25, regular session=15, HOD_BREAKOUT=15 -> 55
+    # Confirmed Catalyst: catalyst=25, regular session=15, NEAR_HOD_RADAR=15 -> 55
     streamer.catalyst_tags = {"AAPL": "Confirmed Catalyst"}
-    score, _ = streamer.calculate_confluence_score("AAPL", "HOD_BREAKOUT", rvol=0.0, now_et=now_et)
+    score, _ = streamer.calculate_confluence_score("AAPL", "NEAR_HOD_RADAR", rvol=0.0, now_et=now_et)
     assert score == 55
     
-    # Speculative: catalyst=15, regular session=15, HOD_BREAKOUT=15 -> 45
+    # Speculative: catalyst=15, regular session=15, NEAR_HOD_RADAR=15 -> 45
     streamer.catalyst_tags = {"AAPL": "Speculative"}
-    score, _ = streamer.calculate_confluence_score("AAPL", "HOD_BREAKOUT", rvol=0.0, now_et=now_et)
+    score, _ = streamer.calculate_confluence_score("AAPL", "NEAR_HOD_RADAR", rvol=0.0, now_et=now_et)
     assert score == 45
     
-    # Technical / No News: catalyst=10, regular session=15, HOD_BREAKOUT=15 -> 40
+    # Technical / No News: catalyst=10, regular session=15, NEAR_HOD_RADAR=15 -> 40
     streamer.catalyst_tags = {"AAPL": "Technical / No News"}
-    score, _ = streamer.calculate_confluence_score("AAPL", "HOD_BREAKOUT", rvol=0.0, now_et=now_et)
+    score, _ = streamer.calculate_confluence_score("AAPL", "NEAR_HOD_RADAR", rvol=0.0, now_et=now_et)
     assert score == 40
     
-    # None: catalyst=0, regular session=15, HOD_BREAKOUT=15 -> 30
+    # None: catalyst=0, regular session=15, NEAR_HOD_RADAR=15 -> 30
     streamer.catalyst_tags = {}
-    score, _ = streamer.calculate_confluence_score("AAPL", "HOD_BREAKOUT", rvol=0.0, now_et=now_et)
+    score, _ = streamer.calculate_confluence_score("AAPL", "NEAR_HOD_RADAR", rvol=0.0, now_et=now_et)
     assert score == 30
 
 
@@ -57,24 +57,24 @@ def test_calculate_confluence_score_float_categories():
     streamer.catalyst_tags = {}
     now_et = datetime.now(EASTERN_TZ).replace(hour=10, minute=0, second=0, microsecond=0)
     
-    # Micro-Float: float=20, session=15, HOD_BREAKOUT=15 -> 50
+    # Micro-Float: float=20, session=15, NEAR_HOD_RADAR=15 -> 50
     streamer.fundamentals_cache = {"AAPL": {"float_category": "Micro-Float"}}
-    score, _ = streamer.calculate_confluence_score("AAPL", "HOD_BREAKOUT", rvol=0.0, now_et=now_et)
+    score, _ = streamer.calculate_confluence_score("AAPL", "NEAR_HOD_RADAR", rvol=0.0, now_et=now_et)
     assert score == 50
     
-    # Low-Float: float=15, session=15, HOD_BREAKOUT=15 -> 45
+    # Low-Float: float=15, session=15, NEAR_HOD_RADAR=15 -> 45
     streamer.fundamentals_cache = {"AAPL": {"float_category": "Low-Float"}}
-    score, _ = streamer.calculate_confluence_score("AAPL", "HOD_BREAKOUT", rvol=0.0, now_et=now_et)
+    score, _ = streamer.calculate_confluence_score("AAPL", "NEAR_HOD_RADAR", rvol=0.0, now_et=now_et)
     assert score == 45
     
-    # Mid-Float: float=10, session=15, HOD_BREAKOUT=15 -> 40
+    # Mid-Float: float=10, session=15, NEAR_HOD_RADAR=15 -> 40
     streamer.fundamentals_cache = {"AAPL": {"float_category": "Mid-Float"}}
-    score, _ = streamer.calculate_confluence_score("AAPL", "HOD_BREAKOUT", rvol=0.0, now_et=now_et)
+    score, _ = streamer.calculate_confluence_score("AAPL", "NEAR_HOD_RADAR", rvol=0.0, now_et=now_et)
     assert score == 40
     
-    # Unknown: float=0, session=15, HOD_BREAKOUT=15 -> 30
+    # Unknown: float=0, session=15, NEAR_HOD_RADAR=15 -> 30
     streamer.fundamentals_cache = {"AAPL": {"float_category": "Unknown"}}
-    score, _ = streamer.calculate_confluence_score("AAPL", "HOD_BREAKOUT", rvol=0.0, now_et=now_et)
+    score, _ = streamer.calculate_confluence_score("AAPL", "NEAR_HOD_RADAR", rvol=0.0, now_et=now_et)
     assert score == 30
 
 
@@ -85,19 +85,19 @@ def test_calculate_confluence_score_market_sessions():
     streamer.catalyst_tags = {}
     streamer.fundamentals_cache = {}
     
-    # Regular Session: 10:00 AM -> session=15, HOD_BREAKOUT=15 -> 30
+    # Regular Session: 10:00 AM -> session=15, NEAR_HOD_RADAR=15 -> 30
     now_et = datetime.now(EASTERN_TZ).replace(hour=10, minute=0, second=0, microsecond=0)
-    score, _ = streamer.calculate_confluence_score("AAPL", "HOD_BREAKOUT", rvol=0.0, now_et=now_et)
+    score, _ = streamer.calculate_confluence_score("AAPL", "NEAR_HOD_RADAR", rvol=0.0, now_et=now_et)
     assert score == 30
     
-    # Pre-market: 8:00 AM -> session=10, HOD_BREAKOUT=15 -> 25
+    # Pre-market: 8:00 AM -> session=10, NEAR_HOD_RADAR=15 -> 25
     now_et = datetime.now(EASTERN_TZ).replace(hour=8, minute=0, second=0, microsecond=0)
-    score, _ = streamer.calculate_confluence_score("AAPL", "HOD_BREAKOUT", rvol=0.0, now_et=now_et)
+    score, _ = streamer.calculate_confluence_score("AAPL", "NEAR_HOD_RADAR", rvol=0.0, now_et=now_et)
     assert score == 25
     
-    # Post-market: 5:00 PM -> session=5, HOD_BREAKOUT=15 -> 20
+    # Post-market: 5:00 PM -> session=5, NEAR_HOD_RADAR=15 -> 20
     now_et = datetime.now(EASTERN_TZ).replace(hour=17, minute=0, second=0, microsecond=0)
-    score, _ = streamer.calculate_confluence_score("AAPL", "HOD_BREAKOUT", rvol=0.0, now_et=now_et)
+    score, _ = streamer.calculate_confluence_score("AAPL", "NEAR_HOD_RADAR", rvol=0.0, now_et=now_et)
     assert score == 20
 
 
@@ -109,8 +109,8 @@ def test_calculate_confluence_score_alert_weights():
     streamer.fundamentals_cache = {}
     now_et = datetime.now(EASTERN_TZ).replace(hour=10, minute=0, second=0, microsecond=0)
     
-    # High: HOD_BREAKOUT, VWAP_CROSSOVER, PREV_DAY_BREAKOUT, RUNNING_UP, BULL_FLAG, VWAP_RECLAIM -> +15
-    for at in ('HOD_BREAKOUT', 'VWAP_CROSSOVER', 'PREV_DAY_BREAKOUT', 'RUNNING_UP', 'BULL_FLAG', 'VWAP_RECLAIM'):
+    # High: NEAR_HOD_RADAR, VWAP_CROSSOVER, PREV_DAY_BREAKOUT, RUNNING_UP, BULL_FLAG -> +15
+    for at in ('NEAR_HOD_RADAR', 'VWAP_CROSSOVER', 'PREV_DAY_BREAKOUT', 'RUNNING_UP', 'BULL_FLAG'):
         score, _ = streamer.calculate_confluence_score("AAPL", at, rvol=0.0, now_et=now_et)
         assert score == 30, f"Failed for {at}"
         
@@ -134,19 +134,19 @@ def test_calculate_confluence_score_rvol_levels():
     now_et = datetime.now(EASTERN_TZ).replace(hour=10, minute=0, second=0, microsecond=0)
     
     # rvol >= 5.0 -> +15 -> 45
-    score, _ = streamer.calculate_confluence_score("AAPL", "HOD_BREAKOUT", rvol=5.0, now_et=now_et)
+    score, _ = streamer.calculate_confluence_score("AAPL", "NEAR_HOD_RADAR", rvol=5.0, now_et=now_et)
     assert score == 45
     
     # rvol >= 3.0 -> +10 -> 40
-    score, _ = streamer.calculate_confluence_score("AAPL", "HOD_BREAKOUT", rvol=3.0, now_et=now_et)
+    score, _ = streamer.calculate_confluence_score("AAPL", "NEAR_HOD_RADAR", rvol=3.0, now_et=now_et)
     assert score == 40
     
     # rvol >= 1.5 -> +5 -> 35
-    score, _ = streamer.calculate_confluence_score("AAPL", "HOD_BREAKOUT", rvol=1.5, now_et=now_et)
+    score, _ = streamer.calculate_confluence_score("AAPL", "NEAR_HOD_RADAR", rvol=1.5, now_et=now_et)
     assert score == 35
     
     # rvol < 1.5 -> +0 -> 30
-    score, _ = streamer.calculate_confluence_score("AAPL", "HOD_BREAKOUT", rvol=1.0, now_et=now_et)
+    score, _ = streamer.calculate_confluence_score("AAPL", "NEAR_HOD_RADAR", rvol=1.0, now_et=now_et)
     assert score == 30
 
 
@@ -161,7 +161,7 @@ def test_calculate_confluence_score_tier_assignments():
     now_et = datetime.now(EASTERN_TZ).replace(hour=10, minute=0, second=0, microsecond=0) # Regular session (+15) -> 80
     
     # Tier 1 (score = 80 + 15 + 15 = 110)
-    score1, tier1 = streamer.calculate_confluence_score("AAPL", "HOD_BREAKOUT", rvol=5.0, now_et=now_et)
+    score1, tier1 = streamer.calculate_confluence_score("AAPL", "NEAR_HOD_RADAR", rvol=5.0, now_et=now_et)
     assert score1 >= 75
     assert tier1 == "Tier 1"
     
@@ -173,10 +173,10 @@ def test_calculate_confluence_score_tier_assignments():
     assert 45 <= score2 < 75
     assert tier2 == "Tier 2"
     
-    # Tier 3 (score = 0 + 0 + 0 + 15 [session] + 15 [hod] + 0 = 30)
+    # Tier 3 (score = 0 + 0 + 0 + 15 [session] + 15 [near_hod] + 0 = 30)
     streamer.watchlist_symbols = set()
     streamer.catalyst_tags = {}
     streamer.fundamentals_cache = {}
-    score3, tier3 = streamer.calculate_confluence_score("AAPL", "HOD_BREAKOUT", rvol=1.0, now_et=now_et)
+    score3, tier3 = streamer.calculate_confluence_score("AAPL", "NEAR_HOD_RADAR", rvol=1.0, now_et=now_et)
     assert score3 < 45
     assert tier3 == "Tier 3"

@@ -99,8 +99,8 @@ async def test_trigger_bull_flag():
 
 
 @pytest.mark.asyncio
-async def test_trigger_vwap_reclaim():
-    """VWAP_RECLAIM fires when price crosses above positive-sloped VWAP with RVOL >= 1.5."""
+async def test_trigger_near_hod_radar():
+    """NEAR_HOD_RADAR fires when price exceeds the previous high of day with RVOL >= 1.5."""
     streamer = SchwabStreamer()
     streamer.current_date = datetime.now(EASTERN_TZ).date()
     streamer.fundamentals_cache['AAPL'] = {
@@ -110,45 +110,24 @@ async def test_trigger_vwap_reclaim():
         'shares_outstanding': 50000000,
     }
     streamer.check_and_fire_alert = AsyncMock(return_value=True)
+    streamer.prev_session_high['AAPL'] = 105.0
     
-    # Setup VWAP state: was below, prev_vwap = 100.0, current vwap = 101.0 (positive slope)
-    streamer.vwap_state['AAPL'] = {
-        'cum_vp': 202000.0,
-        'cum_vol': 2000,
-        'last_total_vol': 2000,
-        'status': 'below',
-        'prev_vwap': 100.0,
-    }
-    
-    # Setup last candle close below VWAP
-    streamer.completed_bars_1m['AAPL'] = [{'volume': 1000, 'open': 99.5, 'close': 99.5}]
-    streamer.bars_1m['AAPL'] = {
-        'minute': int(time.time() / 60),
-        'open': 99.5,
-        'high': 101.5,
-        'low': 99.5,
-        'close': 101.5,
-        'start_volume': 1000,
-        'last_volume': 2000
-    }
-    
-    # rvol will be calculated >= 1.5 because total_volume = 2000 and vol_10d_avg = 1000
     await streamer.evaluate_and_fire_alert(
         symbol='AAPL',
-        last_price=101.5,
+        last_price=105.5,
         total_volume=2000,
-        high_price=102.0,
+        high_price=105.0,
         low_price=99.0,
         open_price=100.0
     )
     
     fired_alerts = [args[5] for args, kwargs in streamer.check_and_fire_alert.call_args_list]
-    assert "VWAP_RECLAIM" in fired_alerts
+    assert "NEAR_HOD_RADAR" in fired_alerts
 
 
 @pytest.mark.asyncio
 async def test_trigger_multi_tf_confluence():
-    """MULTI_TF_CONFLUENCE fires if 5-min candle is bullish >= 1% and 1-min HOD_BREAKOUT fired within past 60s."""
+    """MULTI_TF_CONFLUENCE fires if 5-min candle is bullish >= 1% and 1-min NEAR_HOD_RADAR fired within past 60s."""
     streamer = SchwabStreamer()
     streamer.current_date = datetime.now(EASTERN_TZ).date()
     streamer.fundamentals_cache['AAPL'] = {
@@ -276,7 +255,7 @@ async def test_tier_based_gating():
         mock_redis.publish.reset_mock()
         mock_celery.send_task.reset_mock()
         
-        res = await streamer.check_and_fire_alert("AAPL", 10.0, 1000, 1.0, 0.0, "HOD_BREAKOUT")
+        res = await streamer.check_and_fire_alert("AAPL", 10.0, 1000, 1.0, 0.0, "NEAR_HOD_RADAR")
         assert res is True
         assert streamer.save_alert_to_db.called
         assert mock_redis.publish.called
@@ -289,7 +268,7 @@ async def test_tier_based_gating():
         mock_redis.publish.reset_mock()
         mock_celery.send_task.reset_mock()
         
-        res = await streamer.check_and_fire_alert("AAPL", 10.0, 1000, 1.0, 0.0, "HOD_BREAKOUT")
+        res = await streamer.check_and_fire_alert("AAPL", 10.0, 1000, 1.0, 0.0, "NEAR_HOD_RADAR")
         assert res is True
         assert streamer.save_alert_to_db.called
         assert mock_redis.publish.called

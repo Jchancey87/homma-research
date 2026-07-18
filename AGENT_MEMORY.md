@@ -13,8 +13,8 @@
 
 ### 2. Alerts & Hysteresis State Machine
 * **Scope:** Evaluate symbols in `self.watchlist_symbols` only.
-* **Triggers:** VWAP crossover uses hysteresis state ('above'/'below') ±2.0 buffer. HOD breakouts require 1-min body-close. Suppress triggers for 2 mins post-halt. Cooldowns use `alerts.should_fire_alert`.
-* **Telegram format (RFC-004 QW-3):** `fastapi_app/tasks/alerts.py` builds messages via `_format_alert_message(alert_data)`. Header/signal/RVOL driven by `ALERT_TYPE_META: dict[str, dict]` at module top. Each value: `emoji`, `header`, `signal` (`None` | str | `"auto"` for dynamic-escape), `show_rvol` (bool). 7 known types + `FALLBACK_META` for unknown.
+* **Triggers:** VWAP crossover uses hysteresis state ('above'/'below') ±2.0 buffer. NEAR_HOD_RADAR breakout triggers on live price tick exceeding previous session high. VWAP_RECLAIM and HOD_BREAKOUT removed. Suppress triggers for 2 mins post-halt. Cooldowns use `alerts.should_fire_alert`.
+* **Telegram format (RFC-004 QW-3):** [alerts.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/tasks/alerts.py) builds messages via `_format_alert_message(alert_data)`. Header/signal/RVOL driven by `ALERT_TYPE_META: dict` at module top. Each value: `emoji`, `header`, `signal`, `show_rvol`.
 
 ### 3. Live Screener & Momentum
 * **Pipeline:** Two-tier refresh in `live_screener.py`. Fast path (2s): overlay WebSocket-streamed prices from `services/streaming_prices.py` (Redis `screener:quotes` channel) — zero REST calls. Slow path (60s): full 5-step pipeline (movers + quotes + enrichment). In `_fast_refresh()`, only overlays updates if streamed snapshot is strictly newer than the cached gainer row's last update (`_last_update_ts`), preventing stale websocket cache from reverting newer REST updates.
@@ -76,12 +76,12 @@
 
 ### 12. Watchlist Group & Enrichment
 * **Segmentation:** Groups table segments biotech etfs (e.g. FDA approved vs trials). Scopes queries/imports/exports.
-* **Enrichment:** Non-blocking `POST /enrich` runs in FastAPI `BackgroundTasks`. Fetches yfinance/SEC/LLM metrics in parallel (`asyncio.to_thread`, semaphore=4) to prevent loop starvation. Falls back to SEC facts for cash/operating cash flows. Safely alerts Telegram if runway < 6 months or dilution high.
+* **Enrichment:** Non-blocking `POST /enrich` runs in FastAPI `BackgroundTasks`. Fetches yfinance/SEC/LLM metrics in parallel (`asyncio.to_thread`, semaphore=4) to prevent loop starvation. Falls back to SEC facts for cash/operating cash flows. Safely alerts Telegram if runway < 6 months or dilution high. Retain existing database values on api fetch failure to prevent duplicate false risk alerts.
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Refactor dashboard header. Create reusable DashboardHeader component. Integrate with page.tsx. Wire with live market/date data. Ensure responsive terminal-like aesthetic.
-* **Scope:** Edit app/page.tsx, components/DashboardHeader.tsx. Preserve existing comment structures.
-* **Assumptions:** Data-driven session states. Timezone EDT/EST (America/New_York).
+* **Goal:** Remove VWAP_RECLAIM/HOD_BREAKOUT. Implement real-time NEAR_HOD_RADAR. Fix false watchlist risk alerts by retaining existing metrics on API fetch failure.
+* **Scope:** Modify [stream_client.py](file:///home/jackc/projects/homma-research/momentum_screener/schwab/stream_client.py), [alerts.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/tasks/alerts.py), [alert_config.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/db/alert_config.py), [watchlist_service.py](file:///home/jackc/projects/homma-research/backend/services/watchlist_service.py).
+* **Assumptions:** Tick price exceeding previous session high triggers NEAR_HOD_RADAR. Keeping old metrics during rate limits avoids resetting fields to null and re-triggering alerts on recovery.
 
 
 ## 🗑️ Rot & Pruning Log

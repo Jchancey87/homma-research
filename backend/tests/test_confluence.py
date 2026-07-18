@@ -15,7 +15,7 @@ async def test_calculate_confluence_score():
         client = SchwabStreamer()
         
         # Test Case 1: Max points (Tier 1)
-        # Watchlist (20) + Priority tag (20) + Confirmed Catalyst (25) + Micro-Float (20) + Regular Session (15) + HOD_BREAKOUT (15) = 115
+        # Watchlist (20) + Priority tag (20) + Confirmed Catalyst (25) + Micro-Float (20) + Regular Session (15) + NEAR_HOD_RADAR (15) = 115
         client.watchlist_symbols = {"AAPL"}
         client.watchlist_tags = {"AAPL": ["Priority 1"]}
         client.catalyst_tags = {"AAPL": "Confirmed Catalyst"}
@@ -24,7 +24,7 @@ async def test_calculate_confluence_score():
         # Mock regular session time (10:00 AM NY time)
         now_et = datetime.now(EASTERN_TZ).replace(hour=10, minute=0, second=0, microsecond=0)
         
-        score, tier = client.calculate_confluence_score("AAPL", "HOD_BREAKOUT", now_et=now_et)
+        score, tier = client.calculate_confluence_score("AAPL", "NEAR_HOD_RADAR", now_et=now_et)
         assert score == 115
         assert tier == "Tier 1"
 
@@ -100,7 +100,7 @@ async def test_gate_bypass_and_db_save():
             total_volume=150000,
             rvol=3.5,
             gap_pct=12.0,
-            alert_type="HOD_BREAKOUT"
+            alert_type="NEAR_HOD_RADAR"
         )
         
         # Watchlist gate is bypassed! Should process alert
@@ -139,7 +139,7 @@ async def test_real_db_save_confluence():
                 rel_vol, gap_pct, float_shares, alert_type, sent,
                 priority_score, priority_tier
             ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, FALSE, $8, $9)
-        """, 'TCON', 12.34, 100000, 2.5, 5.0, 50000000, 'HOD_BREAKOUT', 75, 'Tier 1')
+        """, 'TCON', 12.34, 100000, 2.5, 5.0, 50000000, 'NEAR_HOD_RADAR', 75, 'Tier 1')
         
         # Query back and verify
         row = await conn.fetchrow("""
@@ -212,7 +212,7 @@ async def test_alert_grouping_and_already_in_play_suppression():
             total_volume=12000,
             rvol=3.5,
             gap_pct=5.0,
-            alert_type="HOD_BREAKOUT"
+            alert_type="NEAR_HOD_RADAR"
         )
         assert res2 is True
         # Verify it did not add to fired_alerts_session (it was suppressed)
@@ -232,7 +232,7 @@ async def test_alert_grouping_and_already_in_play_suppression():
             total_volume=15000,
             rvol=4.0,
             gap_pct=5.0,
-            alert_type="HOD_BREAKOUT"
+            alert_type="NEAR_HOD_RADAR"
         )
         assert res3 is True
         assert len(streamer.fired_alerts_session[symbol]) == 2

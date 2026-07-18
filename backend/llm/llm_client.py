@@ -208,12 +208,76 @@ def get_deep_analysis_report(date: str, deep_data: list[dict]) -> tuple[str, str
     return result, Config.DEEP_LLM_MODEL
 
 
+# ---------------------------------------------------------------------------
+# News freshness keyword shortcut — avoids LLM call for unambiguous headlines
+# ---------------------------------------------------------------------------
+
+_FRESH_KEYWORDS = {
+    # FDA / regulatory
+    "fda", "pdufa", "nda", "bla", "anda", "sba", "510k", "510(k)",
+    "approval", "approved", "approv", "cleared", "clearance",
+    "rejection", "rejected", "complete response letter", "crl",
+    "breakthrough therapy", "fast track", "priority review",
+    "accelerated approval", "orphan drug",
+    # Clinical
+    "phase 1", "phase 2", "phase 3", "phase i", "phase ii", "phase iii",
+    "clinical trial", "trial results", "primary endpoint", "endpoint met",
+    "endpoint missed", "data readout", "interim data", "topline",
+    "top-line", "positive data", "negative data",
+    # Corporate events
+    "earnings", "eps", "revenue beat", "revenue miss", "guidance",
+    "merger", "acquisition", "acquired", "buyout", "takeover",
+    "tender offer", "going private", "strategic review",
+    "licensing deal", "partnership", "collaboration agreement",
+    "contract award", "government contract",
+    # Capital markets
+    "offering", "public offering", "private placement", "dilution",
+    "share repurchase", "buyback", "dividend", "spinoff", "spin-off",
+    # Legal / regulatory
+    "sec investigation", "doj", "subpoena", "settlement", "lawsuit",
+    "indictment", "delisting", "nasdaq notice",
+}
+
+_STALE_KEYWORDS = {
+    "price target", "pt raised", "pt lowered", "analyst upgrade",
+    "analyst downgrade", "maintains", "reiterates", "overweight",
+    "underweight", "neutral", "buy rating", "sell rating",
+    "sector perform", "market perform", "initiates coverage",
+    "sees upside", "top pick",
+}
+
+
+def _keyword_classify(headline: str) -> bool | None:
+    """
+    Fast keyword scan. Returns True (FRESH), False (STALE), or None (ambiguous → call LLM).
+    Case-insensitive substring match.
+    """
+    h = headline.lower()
+    for kw in _FRESH_KEYWORDS:
+        if kw in h:
+            return True
+    for kw in _STALE_KEYWORDS:
+        if kw in h:
+            return False
+    return None  # ambiguous — escalate to LLM
+
+
 def classify_news_fresh(headline: str) -> bool:
     """
     Returns True if the headline is classified as FRESH catalyst.
+    First tries a zero-cost keyword scan; only calls the LLM for ambiguous headlines.
     Falls back to False on API error.
     """
-    if not headline or not Config.LLM_API_KEY:
+    if not headline:
+        return False
+
+    # Fast path — no API cost
+    shortcut = _keyword_classify(headline)
+    if shortcut is not None:
+        return shortcut
+
+    # Slow path — LLM for genuinely ambiguous headlines
+    if not Config.LLM_API_KEY:
         return False
     try:
         result = _chat(NEWS_FRESH_SYSTEM, f"Headline: {headline}", max_tokens=5)

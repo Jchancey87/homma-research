@@ -43,8 +43,8 @@ function getMarkerConfig(type: string): { shape: 'arrowUp' | 'arrowDown' | 'circ
       return { shape: 'arrowUp', color: '#10b981' } // green
     case 'BULL_FLAG':
       return { shape: 'arrowUp', color: '#ec4899' } // pink
-    case 'VWAP_RECLAIM':
-      return { shape: 'arrowUp', color: '#14b8a6' } // teal
+    case 'NEAR_HOD_RADAR':
+      return { shape: 'arrowUp', color: '#ec4899' } // pink
     case 'MULTI_TF_CONFLUENCE':
       return { shape: 'arrowUp', color: '#a855f7' } // purple
     case 'HALT_RESUME_MOMENTUM':

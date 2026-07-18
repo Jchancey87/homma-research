@@ -1521,6 +1521,19 @@ Optimized `/health` to use pool connection health check. Created `/api/market/da
 * **Dashboard Page ([page.tsx](file:///home/jackc/projects/homma-research/frontend/app/page.tsx))**: Removed deprecated `MorningHeader`. Integrated `<DashboardHeader />` wired to server-loaded `overviewData.live_gainers` session details.
 * **Verification**: Completed compiler check with zero TypeScript/lint errors.
 
+---
 
+## [2026-07-17] Alert System Refactoring & Watchlist Risk Alerts Fix
 
+### Summary
+* Removed VWAP_RECLAIM, HOD_BREAKOUT. Added live-tick breakout alert NEAR_HOD_RADAR.
+* Fixed false duplicate Watchlist Risk alerts by retaining valid database metrics on API fetch failures.
+
+### What Changed
+* **Schwab Stream Client ([stream_client.py](file:///home/jackc/projects/homma-research/momentum_screener/schwab/stream_client.py))**: Initialize, clear, track `self.prev_session_high`. Trigger NEAR_HOD_RADAR breakout on tick price exceeding previous high. Delete VWAP_RECLAIM. Add NEAR_HOD_RADAR to STRATEGY_LABELS and confluence weight calculations.
+* **Celery Tasks ([alerts.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/tasks/alerts.py))**: Replace HOD_BREAKOUT and VWAP_RECLAIM with NEAR_HOD_RADAR configuration in ALERT_TYPE_META.
+* **Alert Config DB ([alert_config.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/db/alert_config.py))**: Update alert types and cooldown check to use NEAR_HOD_RADAR.
+* **Watchlist Service ([watchlist_service.py](file:///home/jackc/projects/homma-research/backend/services/watchlist_service.py))**: Fall back to previous database values for `runway_months`, `dilution_risk`, `upcoming_catalyst`, and `catalyst_date` on fetch failure, preventing resetting metrics to null/low and firing duplicate risk alerts on next successful check.
+* **Frontend Alerts ([page.tsx](file:///home/jackc/projects/homma-research/frontend/app/alerts/page.tsx))**: Add NEAR_HOD_RADAR case to chart marker config.
+* **Tests**: Refactored [test_alert_config.py](file:///home/jackc/projects/homma-research/backend/tests/test_alert_config.py), [test_alerts_telegram_format.py](file:///home/jackc/projects/homma-research/backend/tests/test_alerts_telegram_format.py), [test_confluence.py](file:///home/jackc/projects/homma-research/backend/tests/test_confluence.py), [test_confluence_engine.py](file:///home/jackc/projects/homma-research/backend/tests/test_confluence_engine.py), [test_new_alert_types.py](file:///home/jackc/projects/homma-research/backend/tests/test_new_alert_types.py), [test_bugs_fixes.py](file:///home/jackc/projects/homma-research/backend/tests/test_bugs_fixes.py). All 321 tests passed.
 

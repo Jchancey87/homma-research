@@ -3,6 +3,18 @@ from unittest.mock import patch, MagicMock
 from datetime import date
 
 
+@pytest.fixture(autouse=True)
+def mock_enrichment_dependencies():
+    with patch("services.watchlist_service._fetch_single_ticker_metrics") as mock_fetch:
+        mock_fetch.return_value = {
+            "runway_months": 5.0,
+            "dilution": "🔴 HIGH",
+            "upcoming_catalyst": "Phase 3 test",
+            "catalyst_date": date(2026, 12, 31),
+        }
+        yield mock_fetch
+
+
 @pytest.mark.asyncio(loop_scope="session")
 async def test_watchlist_enrichment_columns_db(client):
     # 1. Clean up first
@@ -37,25 +49,9 @@ async def test_watchlist_enrich_endpoint(client):
         json={"ticker": "TESTENR2", "sector": "Biotech", "notes": "Init", "tags": ["test"]},
     )
     
-    # Mock yfinance and other dependencies during enrich endpoint call
-    with patch("yfinance.Ticker") as mock_ticker, \
-         patch("services.sec_service.search_filings_text") as mock_sec, \
-         patch("llm.llm_client.get_upcoming_catalyst") as mock_llm:
-         
-        # Mock yfinance balance sheet / financials / cashflow
-        mock_instance = MagicMock()
-        mock_instance.quarterly_balance_sheet = MagicMock()
-        mock_instance.quarterly_financials = MagicMock()
-        mock_instance.quarterly_cashflow = MagicMock()
-        mock_instance.news = []
-        mock_ticker.return_value = mock_instance
-        
-        mock_sec.return_value = []
-        mock_llm.return_value = {"upcoming_catalyst": "Phase 3 test", "catalyst_date": "2026-12-31"}
-        
-        resp = await client.post("/api/watchlist/enrich")
-        assert resp.status_code == 202
-        assert resp.json()["success"] is True
+    resp = await client.post("/api/watchlist/enrich")
+    assert resp.status_code == 202
+    assert resp.json()["success"] is True
 
     # Clean up
     await client.delete("/api/watchlist/TESTENR2")

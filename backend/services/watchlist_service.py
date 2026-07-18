@@ -230,6 +230,7 @@ def _fetch_single_ticker_metrics(
     runway_months = None
     dilution = "Low"
     shares_history = {}
+    fetched_shares = False
     
     # Try FMP if available
     try:
@@ -261,6 +262,8 @@ def _fetch_single_ticker_metrics(
                     row = bs.loc[k].dropna()
                     for d_idx, val in row.items():
                         shares_history[str(d_idx).split()[0]] = float(val)
+                    if shares_history:
+                        fetched_shares = True
                     break
 
         if fin is not None and not fin.empty:
@@ -303,6 +306,11 @@ def _fetch_single_ticker_metrics(
     if cash_val is not None and burn:
         runway_months = round(float((cash_val / burn) * 3), 1)
         
+    if runway_months is None:
+        is_profitable = (ocf_val is not None and ocf_val >= 0) or (net_income_val is not None and net_income_val >= 0)
+        if not is_profitable and prev_runway is not None:
+            runway_months = prev_runway
+        
     # Dilution Risk
     if runway_months and runway_months < 6:
         dilution = '🔴 HIGH'
@@ -320,6 +328,8 @@ def _fetch_single_ticker_metrics(
         try:
             from services.sec_service import get_shares_history
             sec_shares = get_shares_history(ticker, n_periods=4)
+            if sec_shares:
+                fetched_shares = True
             if len(sec_shares) > 1:
                 sec_shares.sort(key=lambda x: x["end_date"])
                 first_shares = sec_shares[0]["shares"]
@@ -330,6 +340,10 @@ def _fetch_single_ticker_metrics(
                     dilution = '🟡 MODERATE'
         except Exception:
             pass
+            
+    if dilution == 'Low' and not fetched_shares:
+        if prev_dilution is not None:
+            dilution = prev_dilution
 
     # 2. Extract milestone from SEC / news / LLM
     upcoming_catalyst = None
@@ -428,8 +442,8 @@ async def enrich_watchlist_fundamentals(
         
         runway_months = res["runway_months"]
         dilution = res["dilution"]
-        upcoming_catalyst = res["upcoming_catalyst"]
-        catalyst_date = res["catalyst_date"]
+        upcoming_catalyst = res["upcoming_catalyst"] or r.get("upcoming_catalyst")
+        catalyst_date = res["catalyst_date"] or r.get("catalyst_date")
         
         # 3. Update DB
         await db_watchlist.update_watchlist_metrics(

@@ -68,19 +68,19 @@ async def test_db_retrieval_and_update():
         
         # Verify default rows exist
         alert_types = [c['alert_type'] for c in configs]
-        assert "HOD_BREAKOUT" in alert_types
+        assert "NEAR_HOD_RADAR" in alert_types
         
         # 2. Update config parameters
         success = await update_alert_config(
             conn, 
-            alert_type="HOD_BREAKOUT", 
+            alert_type="NEAR_HOD_RADAR", 
             data={"enabled": False, "rvol_min": 4.5, "cooldown_mins": 5}
         )
         assert success is True
         
         # Re-fetch and check
         updated_configs = await fetch_alert_configs(conn)
-        hod_config = next(c for c in updated_configs if c['alert_type'] == "HOD_BREAKOUT")
+        hod_config = next(c for c in updated_configs if c['alert_type'] == "NEAR_HOD_RADAR")
         assert hod_config['enabled'] is False
         assert float(hod_config['rvol_min']) == 4.5
         assert hod_config['cooldown_mins'] == 5
@@ -88,7 +88,7 @@ async def test_db_retrieval_and_update():
         # Restore to default
         await update_alert_config(
             conn, 
-            alert_type="HOD_BREAKOUT", 
+            alert_type="NEAR_HOD_RADAR", 
             data={"enabled": True, "rvol_min": 3.0, "cooldown_mins": 2}
         )
 
@@ -127,10 +127,10 @@ async def test_api_crud_endpoints(client):
     assert isinstance(configs, list)
     
     # 2. PUT /api/alert-config
-    # Update HOD_BREAKOUT rvol_min
+    # Update NEAR_HOD_RADAR rvol_min
     put_resp = await client.put(
         "/api/alert-config",
-        json={"alert_type": "HOD_BREAKOUT", "rvol_min": 5.5, "cooldown_mins": 3}
+        json={"alert_type": "NEAR_HOD_RADAR", "rvol_min": 5.5, "cooldown_mins": 3}
     )
     assert put_resp.status_code == 200
     assert put_resp.json().get("status") == "success"
@@ -138,14 +138,14 @@ async def test_api_crud_endpoints(client):
     # Re-verify
     get_resp2 = await client.get("/api/alert-config")
     configs2 = get_resp2.json()
-    hod_cfg = next(c for c in configs2 if c["alert_type"] == "HOD_BREAKOUT")
+    hod_cfg = next(c for c in configs2 if c["alert_type"] == "NEAR_HOD_RADAR")
     assert float(hod_cfg["rvol_min"]) == 5.5
     assert hod_cfg["cooldown_mins"] == 3
     
     # Restore defaults
     await client.put(
         "/api/alert-config",
-        json={"alert_type": "HOD_BREAKOUT", "rvol_min": 3.0, "cooldown_mins": 2}
+        json={"alert_type": "NEAR_HOD_RADAR", "rvol_min": 3.0, "cooldown_mins": 2}
     )
 
     # 3. GET /api/alert-config/scoring
@@ -238,7 +238,7 @@ async def test_stream_client_config_reloading():
         
     # Mock config service values
     mock_configs = [
-        {"alert_type": "HOD_BREAKOUT", "enabled": True, "rvol_min": 4.0, "cooldown_mins": 5}
+        {"alert_type": "NEAR_HOD_RADAR", "enabled": True, "rvol_min": 4.0, "cooldown_mins": 5}
     ]
     mock_scoring = {"tier1_threshold": 80.0, "watchlist_boost": 25.0}
     
@@ -269,4 +269,4 @@ async def test_stream_client_config_reloading():
     # E.g. check if HOD_BREAKOUT cooldown or thresholds are updated
     # This assertion will depend on the exact implementation details, but we check common variables:
     if hasattr(streamer, "configs"):
-        assert streamer.configs.get("HOD_BREAKOUT", {}).get("rvol_min") == 4.0
+        assert streamer.configs.get("NEAR_HOD_RADAR", {}).get("rvol_min") == 4.0

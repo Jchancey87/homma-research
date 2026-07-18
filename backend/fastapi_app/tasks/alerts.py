@@ -64,14 +64,13 @@ def send_telegram_message_task(message: str) -> dict:
 ALERT_TYPE_META: dict[str, dict] = {
     "VOLATILITY_HALT":     {"emoji": "⏸️",  "header": "VOLATILITY HALT",          "signal": "Volatility Halt (Status H)",        "show_rvol": False},
     "VOLATILITY_RESUME":   {"emoji": "▶️",  "header": "VOLATILITY RESUME",        "signal": "Volatility Resume (Status Active)", "show_rvol": False},
-    "HOD_BREAKOUT":        {"emoji": "🏔️",  "header": "HOD BREAKOUT",             "signal": None,                               "show_rvol": True},
+    "NEAR_HOD_RADAR":      {"emoji": "🏔️",  "header": "NEAR HOD RADAR",           "signal": None,                               "show_rvol": True},
     "VOLUME_SPIKE":        {"emoji": "🔊",  "header": "VOLUME SPIKE",             "signal": None,                               "show_rvol": True},
     "PREV_DAY_BREAKOUT":   {"emoji": "🚀",  "header": "PREV DAY HIGH BREAKOUT",   "signal": None,                               "show_rvol": True},
     "VWAP_CROSSOVER":      {"emoji": "🌊",  "header": "VWAP CROSSOVER",           "signal": None,                               "show_rvol": True},
     "VWAP_BOUNCE":         {"emoji": "📈",  "header": "VWAP SUPPORT BOUNCE",      "signal": None,                               "show_rvol": True},
     "RUNNING_UP":          {"emoji": "📈",  "header": "RUNNING UP",               "signal": None,                               "show_rvol": True},
     "BULL_FLAG":           {"emoji": "🚩",  "header": "BULL FLAG",                "signal": None,                               "show_rvol": True},
-    "VWAP_RECLAIM":        {"emoji": "🌊",  "header": "VWAP RECLAIM",             "signal": None,                               "show_rvol": True},
     "MULTI_TF_CONFLUENCE": {"emoji": "🎯",  "header": "MULTI-TF CONFLUENCE",      "signal": None,                               "show_rvol": True},
     "HALT_RESUME_MOMENTUM": {"emoji": "⚡",  "header": "HALT RESUME MOMENTUM",     "signal": None,                               "show_rvol": True},
 }

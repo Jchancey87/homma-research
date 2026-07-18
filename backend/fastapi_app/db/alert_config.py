@@ -23,9 +23,9 @@ async def fetch_alert_configs(conn: asyncpg.Connection) -> list[dict]:
     
     # We build a list of configuration objects for all alert types
     alert_types = [
-        "VOLATILITY_HALT", "VOLATILITY_RESUME", "HOD_BREAKOUT", "VOLUME_SPIKE", 
+        "VOLATILITY_HALT", "VOLATILITY_RESUME", "NEAR_HOD_RADAR", "VOLUME_SPIKE", 
         "PREV_DAY_BREAKOUT", "VWAP_CROSSOVER", "VWAP_BOUNCE", "RUNNING_UP", 
-        "BULL_FLAG", "VWAP_RECLAIM", "MULTI_TF_CONFLUENCE", "HALT_RESUME_MOMENTUM"
+        "BULL_FLAG", "MULTI_TF_CONFLUENCE", "HALT_RESUME_MOMENTUM"
     ]
     
     configs = []
@@ -54,7 +54,7 @@ async def update_alert_config(conn: asyncpg.Connection, alert_type: str, data: d
         val[f"rvol_min_{alert_type}"] = float(data["rvol_min"])
     if "cooldown_mins" in data:
         val[f"cooldown_mins_{alert_type}"] = int(data["cooldown_mins"])
-        if alert_type == "HOD_BREAKOUT":
+        if alert_type == "NEAR_HOD_RADAR":
             val["alert_min_time_cooldown_mins"] = int(data["cooldown_mins"])
             
     status = await conn.execute(
