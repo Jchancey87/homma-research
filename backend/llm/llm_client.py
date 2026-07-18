@@ -923,7 +923,7 @@ def get_ticker_enrichment(ticker: str, sector: str, description: str) -> dict:
     )
     try:
         # Use OpenRouter (deep client) to avoid Groq rate limits on quick tasks
-        raw = _chat(WATCHLIST_ENRICHMENT_SYSTEM, user_msg, max_tokens=150, use_deep_client=True)
+        raw = _chat(WATCHLIST_ENRICHMENT_SYSTEM, user_msg, max_tokens=150, use_deep_client=False)
         # Strip potential markdown fences
         clean = raw.strip().replace('```json', '').replace('```', '').strip()
         return json.loads(clean)
@@ -956,29 +956,37 @@ Respond ONLY with valid JSON in this format:
 
 def get_upcoming_catalyst(ticker: str, news: list[dict], sec_filings: list[dict]) -> dict:
     """Extract biotech upcoming trials/milestones using LLM."""
-    import json
+    import json, re
+    # Slim news down to titles only to reduce token count
+    news_titles = [a.get("title", "") for a in (news or []) if a.get("title")][:10]
+    # Early exit: nothing to analyse
+    if not news_titles and not sec_filings:
+        return {"upcoming_catalyst": None, "catalyst_date": None}
     data_payload = {
-        "news": news,
-        "sec_filings": sec_filings
+        "news_titles": news_titles,
+        "sec_filings": sec_filings,
     }
     user_msg = (
         f"Ticker: {ticker}\n"
         f"Data: {json.dumps(data_payload, default=str)}\n"
     )
     try:
-        raw = _chat(BIOTECH_CATALYST_SYSTEM, user_msg, max_tokens=250, use_deep_client=True)
-        clean = raw.strip().replace('```json', '').replace('```', '').strip()
-        parsed = json.loads(clean)
-        # Ensure correct keys and defaults
+        raw = _chat(BIOTECH_CATALYST_SYSTEM, user_msg, max_tokens=250, use_deep_client=False)
+        # Extract first JSON block (handles markdown fences or extra prose)
+        match = re.search(r'\{[^{}]+\}', raw, re.DOTALL)
+        if not match:
+            return {"upcoming_catalyst": None, "catalyst_date": None}
+        parsed = json.loads(match.group())
         return {
             "upcoming_catalyst": parsed.get("upcoming_catalyst") or None,
-            "catalyst_date": parsed.get("catalyst_date") or None
+            "catalyst_date": parsed.get("catalyst_date") or None,
         }
     except Exception as e:
         import logging
         log = logging.getLogger(__name__)
         log.warning(f"Catalyst extraction failed for {ticker}: {e}")
         return {"upcoming_catalyst": None, "catalyst_date": None}
+
 
 
 REFLECTION_SYSTEM = """\
