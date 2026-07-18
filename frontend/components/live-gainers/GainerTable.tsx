@@ -186,7 +186,7 @@ export function GainerTable({
         )}
       </h3>
 
-      <div className="overflow-x-auto overflow-y-hidden">
+      <div className="overflow-x-auto overflow-y-auto h-[320px] scrollbar-thin">
         <table className="w-full text-xs table-fixed min-w-[580px]">
           <thead className="bg-[#12161c] border-b border-[#2b323e]">
             <tr className="text-left text-xs text-text-muted">

@@ -67,11 +67,11 @@ export function MetricLabelWithTooltip({ label, tooltip }: { label: string; tool
 export function SkeletonRows({ cols = 9 }: { cols?: number }) {
   return (
     <>
-      {Array.from({ length: 10 }).map((_, i) => (
-        <tr key={i} className="animate-pulse border-b border-border-subtle/20 bg-panel/30">
+      {Array.from({ length: 12 }).map((_, i) => (
+        <tr key={i} className="animate-pulse border-b border-border-subtle/20 bg-panel/30 h-[24px]">
           {Array.from({ length: cols }).map((_, j) => (
               <td key={j} className="py-[3px] px-1.5">
-                <div className={`h-2.5 bg-hover rounded-none ${j === 0 ? 'w-4' : j === 1 ? 'w-14' : 'w-10'}`} />
+                <div className={`h-3.5 bg-hover rounded-none ${j === 0 ? 'w-4' : j === 1 ? 'w-14' : 'w-10'}`} />
               </td>
           ))}
         </tr>

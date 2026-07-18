@@ -228,40 +228,32 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = [],
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between border border-[#2b3547]/50 bg-[#0E1116] text-[11px] font-mono select-none w-full min-h-[30px]">
         {/* Left Side: Terminal Status Metrics */}
         <div className="flex items-center gap-3 px-2.5 py-1 flex-wrap">
-          {snap && (
-            <SessionBadge session={session} label={snap.session_label} />
-          )}
-          {ageStr && (
-            <span className="flex items-center gap-1 text-text-muted">
-              <Clock size={10} />
-              {ageStr}
-            </span>
-          )}
-          {isActive && !error && (
-            <span className="flex items-center gap-1 text-green-custom font-bold">
-              <Wifi size={10} />
-              LIVE 3S
-            </span>
-          )}
-          {snap?.fast_mode_active && (
-            <span className="flex items-center gap-1 font-bold text-amber-custom">
-              <Zap size={10} className="animate-pulse fill-amber-custom" />
-              FAST ({snap.streaming_symbols_count} SYM)
-            </span>
-          )}
+          <SessionBadge session={session} label={snap?.session_label ?? (session === 'closed' ? 'Closed' : 'Active')} />
+          <span className={`flex items-center gap-1 text-text-muted shrink-0 transition-opacity duration-150 ${ageStr ? 'opacity-100' : 'opacity-0'}`}>
+            <Clock size={10} />
+            <span>{ageStr || '--s ago'}</span>
+          </span>
+          <span className={`flex items-center gap-1 font-bold shrink-0 transition-opacity duration-150 ${isActive && !error ? 'text-green-custom opacity-100' : 'text-text-muted/10 opacity-0 pointer-events-none'}`}>
+            <Wifi size={10} />
+            LIVE 3S
+          </span>
+          <span className={`flex items-center gap-1 font-bold shrink-0 transition-opacity duration-150 ${snap?.fast_mode_active ? 'text-amber-custom opacity-100' : 'text-text-muted/10 opacity-0 pointer-events-none'}`}>
+            <Zap size={10} className="animate-pulse fill-amber-custom" />
+            FAST ({snap?.streaming_symbols_count ?? 0} SYM)
+          </span>
           {snap?.redis_connected ? (
-            <span className="flex items-center gap-1 text-green-custom font-bold">
+            <span className="flex items-center gap-1 text-green-custom font-bold w-[75px] shrink-0 select-none">
               <Database size={10} />
               REDIS: OK
             </span>
           ) : (
-            <span className="flex items-center gap-1 text-red-custom font-bold animate-pulse">
+            <span className="flex items-center gap-1 text-red-custom font-bold animate-pulse w-[75px] shrink-0 select-none">
               <Database size={10} />
-              REDIS: DISCONNECT
+              REDIS: ERR
             </span>
           )}
           {error && (
-            <span className="flex items-center gap-1 text-red-custom font-bold">
+            <span className="flex items-center gap-1 text-red-custom font-bold shrink-0">
               <WifiOff size={10} />
               {error}
             </span>

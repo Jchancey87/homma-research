@@ -65,8 +65,20 @@ export default function DashboardHeader({
   onRefresh,
 }: DashboardHeaderProps) {
   const router = useRouter()
-  const [timeDetails, setTimeDetails] = useState({ dayName: '', dateStr: '' })
-  const [currentTimeET, setCurrentTimeET] = useState('')
+  const [timeDetails, setTimeDetails] = useState(() => getHeaderDateDetails())
+  const [currentTimeET, setCurrentTimeET] = useState(() => {
+    try {
+      return new Date().toLocaleTimeString('en-US', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZone: 'America/New_York',
+      })
+    } catch {
+      return '--:--:--'
+    }
+  })
   const [sessionState, setSessionState] = useState<MarketSessionState>(initialSessionState)
   const [fetchedAt, setFetchedAt] = useState<string | null>(initialFetchedAt)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -173,8 +185,8 @@ export default function DashboardHeader({
         </p>
       </div>
 
-      {/* CENTER: Live session strip */}
-      <div className="flex items-center bg-raised/50 border border-border-subtle/50 px-3 py-1.5 font-mono text-[11px] text-text-secondary self-start lg:self-center overflow-x-auto max-w-full whitespace-nowrap scrollbar-none">
+      {/* CENTER: Live session strip (fixed size on desktop to prevent horizontal shift) */}
+      <div className="flex items-center bg-raised/50 border border-border-subtle/50 px-3 py-1.5 font-mono text-[11px] text-text-secondary self-start lg:self-center overflow-x-auto max-w-full whitespace-nowrap scrollbar-none lg:w-[480px] lg:justify-center lg:shrink-0">
         <span className="font-bold text-text-primary tracking-wider">{timeDetails.dayName}</span>
         <span className="mx-2 text-text-muted">·</span>
         <span className="tabular-nums">{timeDetails.dateStr}</span>
