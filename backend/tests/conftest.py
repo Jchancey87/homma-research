@@ -20,6 +20,7 @@ import os
 import sys
 import logging
 
+import pytest
 import pytest_asyncio
 import httpx
 
@@ -114,3 +115,55 @@ async def client(app):
         timeout=30.0,
     ) as ac:
         yield ac
+
+
+# ---------------------------------------------------------------------------
+# Hermetic Test Mocks (Autouse to prevent external network calls)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True, scope="function")
+def mock_external_apis():
+    """
+    Global autouse fixture to patch external network/API targets:
+    - Telegram alerts
+    - OpenRouter/LLM completions
+    - Financial Modeling Prep (FMP) API
+    - yfinance Ticker data
+    """
+    from unittest.mock import patch, MagicMock
+    import pandas as pd
+
+    # Mock Telegram calls
+    with patch("fastapi_app.tasks.alerts.send_telegram_message", return_value=True), \
+         patch("fastapi_app.tasks.alerts.httpx.post") as mock_tg_post:
+        
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"ok": True}
+        mock_tg_post.return_value = mock_response
+
+        # Mock FMP HTTP layer
+        with patch("services.fmp_service._get", return_value=None):
+            
+            # Mock yfinance Ticker methods
+            mock_yf_instance = MagicMock()
+            mock_yf_instance.quarterly_balance_sheet = pd.DataFrame()
+            mock_yf_instance.quarterly_financials = pd.DataFrame()
+            mock_yf_instance.quarterly_cashflow = pd.DataFrame()
+            mock_yf_instance.news = []
+            
+            with patch("yfinance.Ticker", return_value=mock_yf_instance):
+                
+                # Mock LLM chat engine
+                def smart_chat(system, user, max_tokens=1024, use_deep_client=False):
+                    system_lower = system.lower()
+                    if "biotech_catalyst" in system_lower or "milestone" in system_lower or "upcoming_catalyst" in system_lower:
+                        return '{"upcoming_catalyst": "Mocked trial readout", "catalyst_date": "2026-12-31"}'
+                    if "watchlist_enrichment" in system_lower or "notes" in system_lower:
+                        return '{"notes": "Mocked notes", "tags": ["mock", "test"]}'
+                    if "sentiment" in system_lower:
+                        return "BULLISH"
+                    return "Mocked LLM Response"
+                
+                with patch("llm.llm_client._chat", side_effect=smart_chat):
+                    yield

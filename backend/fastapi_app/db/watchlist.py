@@ -252,21 +252,21 @@ async def update_watchlist_metrics(
         if group_id == 0:
             result = await conn.execute(
                 "UPDATE watchlist SET runway_months = $1, dilution_risk = $2, "
-                "upcoming_catalyst = $3, catalyst_date = $4 "
+                "upcoming_catalyst = $3, catalyst_date = $4, last_enriched_at = NOW() "
                 "WHERE ticker = $5 AND group_id IS NULL",
                 runway_months, dilution_risk, upcoming_catalyst, catalyst_date, ticker
             )
         else:
             result = await conn.execute(
                 "UPDATE watchlist SET runway_months = $1, dilution_risk = $2, "
-                "upcoming_catalyst = $3, catalyst_date = $4 "
+                "upcoming_catalyst = $3, catalyst_date = $4, last_enriched_at = NOW() "
                 "WHERE ticker = $5 AND group_id = $6",
                 runway_months, dilution_risk, upcoming_catalyst, catalyst_date, ticker, group_id
             )
     else:
         result = await conn.execute(
             "UPDATE watchlist SET runway_months = $1, dilution_risk = $2, "
-            "upcoming_catalyst = $3, catalyst_date = $4 "
+            "upcoming_catalyst = $3, catalyst_date = $4, last_enriched_at = NOW() "
             "WHERE ticker = $5",
             runway_months, dilution_risk, upcoming_catalyst, catalyst_date, ticker
         )

@@ -201,13 +201,13 @@ async def remove_from_watchlist(
     return {"success": True}
 
 
-async def _run_enrichment_in_background(group_id: Optional[int]):
+async def _run_enrichment_in_background(group_id: Optional[int], force: bool = False):
     from ..db import get_pool
     from services.watchlist_service import enrich_watchlist_fundamentals
     pool = get_pool()
     async with pool.acquire() as conn:
         try:
-            await enrich_watchlist_fundamentals(conn, group_id=group_id)
+            await enrich_watchlist_fundamentals(conn, group_id=group_id, force=force)
             log.info("Background watchlist enrichment completed successfully.")
         except Exception as e:
             log.error(f"Error running background watchlist enrichment: {e}")
@@ -217,9 +217,10 @@ async def _run_enrichment_in_background(group_id: Optional[int]):
 async def enrich_watchlist(
     background_tasks: BackgroundTasks,
     group_id: Optional[int] = None,
+    force: bool = False,
 ):
     """Enrich watchlist items with fundamental metrics in the background."""
-    background_tasks.add_task(_run_enrichment_in_background, group_id)
+    background_tasks.add_task(_run_enrichment_in_background, group_id, force)
     return {"success": True, "message": "Enrichment started in background."}
 
 

@@ -384,17 +384,22 @@ async def enrich_watchlist_fundamentals(
     conn: asyncpg.Connection,
     group_id: Optional[int] = None,
     ticker: Optional[str] = None,
-    state: StockState | None = None
+    state: StockState | None = None,
+    force: bool = False
 ) -> int:
     """
     Enrich watchlist tickers with fundamental metrics and extract milestones.
     Returns the number of tickers processed.
     """
     import asyncio
-    from datetime import datetime
+    from datetime import datetime, timezone, timedelta
     from fastapi_app.db import watchlist as db_watchlist
     from fastapi_app.tasks.alerts import send_telegram_message
-    
+
+    if ticker:
+        # Default force to True if a single ticker is explicitly targeted
+        force = True
+
     if state is not None:
         ticker_to_check = ticker or state.ticker
         if ticker_to_check:
@@ -434,6 +439,27 @@ async def enrich_watchlist_fundamentals(
     else:
         rows = await db_watchlist.list_watchlist(conn, group_id=group_id)
         
+    if not rows:
+        return 0
+
+    # If force is False, filter out tickers that were enriched recently (within past 24 hours)
+    if not force:
+        original_len = len(rows)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+        
+        def is_stale(r: dict) -> bool:
+            le = r.get("last_enriched_at")
+            if le is None:
+                return True
+            if le.tzinfo is None:
+                return le < datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=24)
+            return le < cutoff
+            
+        rows = [r for r in rows if is_stale(r)]
+        skipped = original_len - len(rows)
+        if skipped > 0:
+            log.info(f"Skipping enrichment for {skipped} tickers already enriched within past 24h (force=False)")
+
     if not rows:
         return 0
         
