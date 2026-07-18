@@ -1,57 +1,64 @@
 # Trading Pattern Journal 📈
 
-A sophisticated, self-hosted trade journal and research platform designed for technical traders focused on small-cap breakouts, gap-and-go trades, and momentum archetypes.
+A sophisticated, self-hosted trade journal and research platform designed for technical traders focused on small-cap breakouts, gap-and-go trades, and momentum archetypes. It is built to mimic high-density Bloomberg or Lightspeed trading terminals.
 
 ## 🚀 Overview
 
-This platform automates the process of identifying, analyzing, and journaling market gainers. It combines high-performance interactive charting with a multi-module AI research engine that provides forensic-level analysis of any ticker on demand.
+This platform automates the process of identifying, analyzing, and journaling market gainers. It combines high-performance interactive charting with a multi-module AI research engine and real-time streaming data pipelines to evaluate stock setups and calculate advanced momentum metrics in milliseconds.
 
 ## 🛠️ Technology Stack
 
-- **Backend**: Python 3.12, FastAPI (Asynchronous lifespan), PostgreSQL, Celery, Redis
+- **Backend**: Python 3.12, FastAPI (Asynchronous lifespan), PostgreSQL (TimescaleDB), Celery, Redis
 - **Frontend**: Next.js 14 (App Router), Tailwind CSS, [Lightweight Charts](https://tradingview.github.io/lightweight-charts/)
 - **AI/LLM**:
   - **Text**: Groq (Llama 3) for rapid structured analysis reports.
   - **Vision**: Gemini 1.5 Pro/Flash for automated chart annotation and pattern recognition.
 - **Data Pipeline**: Schwab Trader API (Market data & Level 1 WebSocket), Financial Modeling Prep (FMP - Primary Fundamental/Earnings), SEC EDGAR (Filings & PIPE detection), finviz, yfinance
-- **Deployment**: Manual (Ubuntu/Proxmox LXC), Docker Compose (PostgreSQL & Redis), PM2 (Process Management), Nginx Proxy Manager
+- **Deployment**: PM2 (Process Management), Nginx Proxy Manager, Docker Compose (PostgreSQL & Redis)
+
+---
 
 ## ✨ Core Features
 
-- **Morning Briefing Interface**:
-  - **Tier 1 Intelligence**: Live market breadth (SPY/QQQ/IWM) with derived risk bias, auto-refreshing every 15 minutes.
-  - **Repeat Runner Alerts**: Real-time cross-referencing of today's gainers against historical database appearances.
-  - **Momentum Context**: Yesterday's follow-through tracker, float tier analysis (Nano/Micro/Small), and sector rotation trends.
-  - **Watchlist Wake-Up**: Live Schwab pricing with "Flame" alerts for tickers moving >5%.
-  - **Impeccable Design**: High-density, restrained aesthetic optimized for 4:00 AM dark-room analysis.
-- **Command Center**:
-  - **Unified Hub**: Combines real-time gainers, historical ticker tracking, and heatmaps into a single, filterable interface.
-  - **Advanced Filtering**: Filter the entire history by Gap %, Float, RVOL, Sector, or specific date.
-  - **Multi-View Heatmap**: Interactive "Float vs. RVOL" and "Avg Gap by Sector" visualizations to identify high-conviction momentum pockets.
-- **Interactive Deep Research** (4 parallel analysis modules orchestrated out-of-thread via Celery):
-  - **Full Report**: AI-generated analyst report with fundamental health, ownership, catalysts, and technical context.
-  - **🚨 Risk Detection**: Scans SEC EDGAR for reverse splits, S-3 shelf registrations, 424B ATM offerings, toxic financing language, and short interest traps.
-  - **⚡ Catalyst Analysis**: Event-date-aware rating — Tier 1 (binary), Tier 2 (soft), or Tier 3 (none) — with SEC 8-K item code parsing and FMP earnings integration.
-  - **📊 Deep Context**: Produces a Setup Score (1–10) by combining SMA levels, RS vs SPY, float rotation, and historical appearance density.
-- **Ticker History & Tracking**:
-  - **Historical Lookup**: Searchable archive of every ticker that has ever appeared as a gainer.
-  - **Repeat Appearance Tracking**: Automatically flags "repeat runners" with multi-period filtering (Week/Month/Year).
-  - **Expanded Context**: Deep dive into every historical date a ticker ran — see its old news headlines, float, and catalyst freshness.
-- **Asset Management**:
-  - Local storage for trade screenshots with AI-assisted annotation and pattern tagging.
-- **📋 Watchlist & Notes**: Quick-access tracking with bullish/bearish sentiment tagging and historical observation feeds.
+### 📊 Ross Cameron Momentum Scanners & Data Audit
+- **All Live Gainers Scanner**:
+  - Calculates daily overhead space to major EMAs (50, 200 EMA) and 20D resistance levels, displaying `"Blue Sky"` for breakout rooms.
+  - Identifies catalyst tags (`NEWS`, `NO NEWS`, `SPEC`) based on live Schwab news headline parsing.
+- **Near HOD Radar**:
+  - `Pullbacks (PB)`: Counts consecutive red 1-minute candles to scan for coiling bull flags.
+  - `EMA9 Dist`: Shows percentage distance from the 1-minute 9 EMA (highlights green when nestled, warning red when overextended).
+  - `Psych Dist`: Shows the distance in cents to the next psychological whole or half dollar interval breakout wall (e.g., `+$3.00 (+8c)`).
+- **High RVOL Radar**:
+  - `Vol Ratio`: Calculates percentage of regular session volume generated during the opening 30-minute rush (9:30 AM–10:00 AM ET).
+  - `1m RVOL`: Measures micro-candle tape acceleration against the 20-period average.
+- **Risk Audit Badging**:
+  - Highlights prices in the **$2.00–$10.00** momentum sweet spot, and pulses red for compliance/dilution risk under **$2.00**.
+  - Warns of **"Float Blindness"** by displaying flashing red `UNVERIFIED` badges if the float metric fails to resolve, and colors micro-floats (<5M) fuchsia.
+  - **Stop-Loss Calibration**: Displays absolute **ATR (1m)** and **Spread (Cents)** in the details drawer to verify if a tight 20-cent risk profile is structurally viable.
 
-## ⚙️ Setup & Installation (Manual — Proxmox/Ubuntu LXC)
+### ⏱️ Real-Time Breakout Alerts & SSE Stream
+- **Visual Highlights**: Out-of-bounds breakouts flash neon amber rows on the dashboard with a 3.5s slow decay fade.
+- **Audio Chimes**: Dynamic browser-synthesized audio chimes trigger on breakouts without requiring external assets.
+- **Toast Notifications**: Stackable notifications with clickable actions that direct traders instantly to research screens.
+- **Telegram Bot**: Broadcasts breakout alerts dynamically formatted with TradingView hyperlinks.
 
-This app runs manually on an Ubuntu LXC container on Proxmox with a shared PostgreSQL database.
+### 🔬 Interactive Deep Research
+- **Full Report**: AI-generated reports reviewing fundamental health, ownership structures, and technical setups.
+- **SEC Forensic Audits**: Scans SEC filings for reverse splits, shelf offerings (S-3), ATM distributions (424B), and toxic warrants.
+- **Catalyst Ratings**: Automatically scores news events as Tier 1 (binary), Tier 2 (soft), or Tier 3 (none) with 8-K parsing.
+- **Confluence Engine**: Computes setup scores (1–10) based on moving average structures, RS vs. SPY, and historical runners.
 
-### Infrastructure
+---
 
-| Component  | Address              | Notes                          |
-|------------|----------------------|--------------------------------|
-| App Server | `192.168.0.202`      | Ubuntu LXC — FastAPI + Next.js |
-| Database & Redis | `192.168.0.201` | Proxmox — PostgreSQL + Redis   |
-| Proxy      | Nginx Proxy Manager  | Separate LXC — handles routing |
+## ⚙️ Setup & Installation (Proxmox/Ubuntu LXC)
+
+### Infrastructure Mapping
+
+| Component | Target Address | Role / Description |
+|---|---|---|
+| **App Server** | `192.168.0.202` | Ubuntu LXC — Runs Next.js, FastAPI, Celery, and Streamer |
+| **Database & Cache** | `192.168.0.201` | Proxmox VM — Runs PostgreSQL (TimescaleDB) and Redis |
+| **Proxy** | Nginx Proxy Manager | Handles SSL certificates and public routing |
 
 ### 1. Prerequisites (Ubuntu LXC)
 ```bash
@@ -65,110 +72,106 @@ git clone https://github.com/Jchancey87/Analysis-App.git /opt/trading-journal
 cd /opt/trading-journal
 ```
 
-### 3. Spin Up Infrastructure (PostgreSQL & Redis)
-Ensure Docker Compose is installed on your database server, then run:
+### 3. Start Database & Redis (Host `192.168.0.201`)
+Ensure Docker Compose is installed on the database server, then launch services:
 ```bash
 docker-compose up -d
 ```
 
-### 4. Configure Environment
+### 4. Configure Environment Files
+Configure environment variables in `/opt/trading-journal/backend/.env`:
 ```bash
 cp backend/.env.example backend/.env
 nano backend/.env
 ```
 
-**Required variables:**
+Key environment properties:
+- `DATABASE_URL`: `postgresql://journal:journal@192.168.0.201:5432/trading_journal`
+- `CELERY_BROKER_URL`: `redis://192.168.0.201:6379/0`
+- `CELERY_RESULT_BACKEND`: `redis://192.168.0.201:6379/1`
+- `SCHWAB_API_KEY` & `SCHWAB_API_SECRET`: Developer client credentials
+- `SCHWAB_TOKEN_PATH`: `/home/jackc/.config/schwab/token.json` (allows shared OAuth token access)
+- `LLM_API_KEY` (Groq), `GEMINI_API_KEY`, and `FMP_API_KEY`
 
-| Variable | Purpose | Default / Example |
-|---|---|---|
-| `DATABASE_URL` | PostgreSQL DSN | `postgresql://journal:journal@192.168.0.201:5432/trading_journal` |
-| `CELERY_BROKER_URL` | Redis broker connection | `redis://192.168.0.201:6379/0` |
-| `CELERY_RESULT_BACKEND` | Redis result store | `redis://192.168.0.201:6379/1` |
-| `SCHWAB_API_KEY` | Schwab developer API key | `your_api_key` |
-| `SCHWAB_API_SECRET` | Schwab developer API secret | `your_api_secret` |
-| `FMP_API_KEY` | Financial Modeling Prep key | `your_fmp_key` |
-| `LLM_API_KEY` | Groq API key for text reports | `your_groq_key` |
-| `GEMINI_API_KEY` | Gemini API key for charts | `your_gemini_key` |
-| `SEC_USER_AGENT` | User-agent for free SEC pulls | `Name email@domain.com` |
-
-### 5. Backend Setup
+### 5. Backend Environment Setup
 ```bash
 cd /opt/trading-journal/backend
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-
-# Start the uvicorn server manually to test (FastAPI handles DB setup automatically on startup)
-uvicorn fastapi_app.main:app --port 5000 --host 0.0.0.0
 ```
 
-### 6. Frontend Setup
+### 6. Schwab API One-Time Auth Setup
+To generate the required OAuth token, execute the interactive helper script:
+```bash
+python3 scripts/schwab_auth_setup.py
+```
+This utility walks through entering the Schwab authentication URL and capturing the response payload to write `token.json` into the configured path.
+
+### 7. Frontend Build & Install
 ```bash
 cd /opt/trading-journal/frontend
 npx pnpm@9 install
-export NEXT_PUBLIC_API_URL=https://homma-research.homma.casa
-npx pnpm@9 run dev -- -H 0.0.0.0
+npx pnpm@9 run build
 ```
-
-### 7. Start Everything with Tmux (Recommended for Dev)
-```bash
-cd /opt/trading-journal
-chmod +x start_journal.sh
-./start_journal.sh
-```
-
-| Tmux Window | Purpose | Shortcut |
-|---|---|---|
-| `0: backend` | FastAPI server (Port 5000) | `Ctrl+b`, `0` |
-| `1: frontend` | Next.js server (Port 3000) | `Ctrl+b`, `1` |
-| `2: scripts` | Ingestion / Enrichment | `Ctrl+b`, `2` |
-| `3: celery` | Celery Worker process | `Ctrl+b`, `3` |
-| `4: streamer` | Schwab WebSocket Streamer Daemon | `Ctrl+b`, `4` |
-
-**Detach** (keep running in background): `Ctrl+b`, then `d`  
-**Re-attach**: `./start_journal.sh`
 
 ---
 
-## 🗄️ TimescaleDB Optimization
+## 🚀 Running the Application in Production
 
-The database is built on **TimescaleDB** (PostgreSQL 18 compatible) to support high-frequency market data ingestion.
+Process management is handled by **PM2** via the [ecosystem.config.js](file:///home/jackc/projects/homma-research/ecosystem.config.js) configuration:
 
-### Hypertables & Compression
-* **Hypertables**: `price_history_1min`, `options_snapshot`, and `screener_alerts` are structured as hypertables partitioned into **7-day chunks**.
-* **Compression**: Automaterialized compression is configured for data older than **7 days** (segmentby = `symbol`), reducing disk footprints by ~90%.
-* **Data Retention**:
-  - `price_history_1min`: Automatically dropped after **90 days**.
-  - `options_snapshot`: Automatically dropped after **30 days**.
-  - `screener_alerts`: Automatically dropped after **365 days**.
+### 1. Launching All Services
+```bash
+cd /opt/trading-journal
+pm2 start ecosystem.config.js
+```
 
-### Continuous Aggregates (OHLCV)
-* **`price_history_5min`**: Real-time 5-minute candles automatically rolled up from 1-minute data.
-* **`price_history_15min`**: Real-time 15-minute candles automatically rolled up from 1-minute data.
-* *Aggregates automatically update in the background every 5 and 15 minutes.*
+This starts 5 decoupled services:
+1. `fastapi-backend` (FastAPI web server running on port 5000)
+2. `celery-worker` (Background task engine executing deep research modules)
+3. `celery-beat` (Schedules daily gainer ingestion and nightly database cleanups)
+4. `nextjs-frontend` (Next.js server running on port 3000)
+5. `schwab-streamer` (WebSocket stream daemon piping ticker ticks into Redis)
+
+### 2. PM2 Commands
+- **Check Status**: `pm2 status`
+- **View Logs**: `pm2 logs` or specific service logs: `pm2 logs fastapi-backend`
+- **Restart All**: `pm2 restart ecosystem.config.js`
+- **Stop All**: `pm2 stop ecosystem.config.js`
+
+---
+
+## 🗄️ TimescaleDB Time-Series Optimization
+
+The database leverages TimescaleDB hypertables, retention policies, and continuous aggregates to process high-frequency ticks efficiently.
+
+### 1. Hypertables & Compression
+- **Hypertables**: `price_history_1min`, `options_snapshot`, `indicators`, and `screener_alerts` are chunked dynamically into 7-day intervals.
+- **Compression**: Automatic compression runs on chunks older than **7 days** (segmentby = `symbol`), reducing disk footprint by up to 90%.
+- **Retention Policies**:
+  - `price_history_1min`: Automatically pruned after **90 days**.
+  - `options_snapshot`: Automatically pruned after **30 days**.
+  - `screener_alerts`: Automatically pruned after **365 days**.
+
+### 2. Continuous Aggregates
+- **`price_history_5min`**: Real-time 5-minute candles automatically rolled up in the background.
+- **`price_history_15min`**: Real-time 15-minute candles automatically rolled up in the background.
 
 ---
 
 ## 📊 Historical Data Management
 
-### Step 1: Pull the raw gainer list
+### Pull Raw Daily Gainers
 ```bash
 source backend/venv/bin/activate
 python3 scripts/pull_historical.py
 ```
 
-### Step 2: Enrich with Yahoo Finance data
+### Enrich Historical Runs with Yahoo Finance Data
 ```bash
 python3 scripts/enrich_historical.py --limit 500
 ```
-
----
-
-## 🔒 Security
-
-- This app is intended for **local network use only**.
-- Do **not** forward ports 3000 or 5000 to the public internet.
-- For remote access, use **[Tailscale](https://tailscale.com/)** — it creates a private encrypted tunnel and is free for personal use.
 
 ---
 
@@ -178,21 +181,22 @@ python3 scripts/enrich_historical.py --limit 500
 trading-journal/
 ├── backend/
 │   ├── fastapi_app/
+│   │   ├── db/           # OHLCV, indicator, and strategy database access layers
 │   │   ├── routers/      # FastAPI endpoints (Gainers, Watchlist, Charts, etc.)
-│   │   ├── tasks/        # Celery background tasks
+│   │   ├── tasks/        # Celery background task scripts
 │   │   ├── celery_app.py # Celery app configuration
-│   │   ├── db.py         # Asyncpg database connection pool
-│   │   ├── scheduler.py  # APScheduler daily job manager
+│   │   ├── scheduler.py  # APScheduler cron job manager
 │   │   └── main.py       # FastAPI application entrypoint
-│   ├── database.py       # Sync PG fallback connection for scripts
-│   ├── config.py         # Shared base configuration
-│   ├── requirements.txt  # Python requirements (no legacy Flask)
-│   └── Dockerfile        # Production FastAPI image config
+│   ├── config.py         # Base configuration schemas
+│   └── requirements.txt  # Python requirements
 ├── frontend/
 │   ├── app/              # Next.js page components
-│   └── components/       # Custom React widgets
-├── scripts/              # Historical import / enrichment tools
-├── docker-compose.yml    # Database + Cache configuration
-├── ecosystem.config.js   # Production PM2 processes config
-└── start_journal.sh      # Development TMUX launcher
+│   ├── components/       # Custom React widgets & badges
+│   └── lib/              # API interfaces and fetch hooks
+├── momentum_screener/
+│   └── schwab/
+│       └── stream_client.py # Live Level 1 WebSocket Streamer
+├── scripts/              # Auth utilities and historical backfills
+├── docker-compose.yml    # Database + Redis configuration
+└── ecosystem.config.js   # Production PM2 processes config
 ```
