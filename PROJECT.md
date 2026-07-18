@@ -39,7 +39,7 @@ This project modifies the momentum screener alert logic, Telegram notification l
     "time": "2026-06-05T21:48:29.000Z"
   }
   ```
-- Active alert types: `HOD_BREAKOUT`, `VWAP_CROSSOVER`, `PREV_DAY_BREAKOUT`, `VOLUME_SPIKE`, `VOLATILITY_HALT`, `VOLATILITY_RESUME`. Note: `VWAP_BOUNCE` is disabled.
+- Active alert types: `NEAR_HOD_RADAR`, `PREV_DAY_BREAKOUT`, `VOLUME_SPIKE`, `VOLATILITY_HALT`, `VOLATILITY_RESUME`. Note: `VWAP_BOUNCE` and `VWAP_CROSSOVER` are disabled.
 
 ### Backend `/api/alerts/daily-summary` -> Frontend
 - Returns array of objects with additional properties:

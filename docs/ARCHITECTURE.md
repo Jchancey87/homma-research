@@ -1,6 +1,6 @@
 # System Architecture 🏗️
 
-The Trading Pattern Journal is a self-hosted, distributed local application consisting of a Python/Flask backend and a Next.js frontend with a multi-source data pipeline and a multi-module AI research engine.
+The Trading Pattern Journal is a self-hosted, distributed local application consisting of a Python/FastAPI backend and a Next.js frontend with a multi-source data pipeline and a multi-module AI research engine.
 
 ## 🧱 Component Overview
 

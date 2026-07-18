@@ -10,7 +10,7 @@ For web applications, it is standard practice to separate your code into two dis
 
 | Environment | Directory Path | Purpose | How it runs |
 | :--- | :--- | :--- | :--- |
-| **Local (Development)** | `/home/jackc/projects/homma-research` | Where you modify, debug, and test code. | Development servers (`npm run dev` / `flask run`). |
+| **Local (Development)** | `/home/jackc/projects/homma-research` | Where you modify, debug, and test code. | Development servers (`npm run dev` / `uvicorn fastapi_app.main:app`). |
 | **Production (Live)** | `/opt/trading-journal` | Where the live site runs (`http://192.168.0.202:3000`). | Built production bundle managed by PM2. |
 
 > [!IMPORTANT]
@@ -71,7 +71,7 @@ Run these commands in your **local terminal** (in `/home/jackc/projects/homma-re
 5. **Push to GitHub:**
    This sends your saved commits to the remote repository so the production server can access them:
    ```bash
-   git push origin main
+   git push origin master
    ```
 
 6. **Deploy to production:**
@@ -130,7 +130,7 @@ pm2 list
 pm2 logs
 
 # View logs for a specific app (e.g., frontend)
-pm2 logs frontend
+pm2 logs nextjs-frontend
 
 # View only the last 100 lines of logs
 pm2 logs --lines 100
@@ -144,13 +144,13 @@ If you need to force a restart manually without redeploying:
 pm2 restart all
 
 # Restart just the frontend
-pm2 restart frontend
+pm2 restart nextjs-frontend
 ```
 
 ### Stop/Start processes
 ```bash
-pm2 stop frontend
-pm2 start frontend
+pm2 stop nextjs-frontend
+pm2 start nextjs-frontend
 ```
 
 ---

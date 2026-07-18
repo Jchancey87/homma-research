@@ -24,7 +24,7 @@ Solo day traders who need to filter 500+ daily gainers into a "Watchlist of 3" i
 - **Economic Calendar**: High-impact events (CPI, FOMC) with countdown.
 - **Watchlist with Live Prices**: Real-time monitoring of saved tickers with "Wake Up" alerts.
 - **AI Continuation Picks**: Advanced screening for multi-day runners.
-- **No-News Pump Classifier**: Automatically tags every live gainer with a three-tier catalyst label (`Confirmed Catalyst` / `Technical / No News` / `Speculative`). Orange ⚠️ NNP badge in the screener table row + styled Headline drawer section. Two-phase: instant in-memory stamp every 60s, async yfinance verification every 3 min.
+- **No-News Pump Classifier**: Automatically tags every live gainer with a three-tier catalyst label (`NEWS`, `NO NEWS`, or `SPEC`). These are displayed as color-coded badges in the screener table rows. The `NEWS` badge displays the confirmed catalyst headline in a hover tooltip. Two-phase: instant in-memory stamp every 60s, async yfinance verification every 3 min.
 - **Pluggable News Aggregator**: Abstract `NewsSource` interface in `services/news_aggregator.py` with `YFinanceNewsSource` live and `BenzingaNewsSource` stub. Designed for easy swap-in of a future in-house aggregator by updating `get_default_aggregator()` only.
 
 ## Tone & Brand
