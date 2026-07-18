@@ -4,9 +4,10 @@ interface SparklineProps {
   points?: number[]
   width?: number
   height?: number
+  color?: string
 }
 
-export function Sparkline({ points, width = 64, height = 20 }: SparklineProps) {
+export function Sparkline({ points, width = 64, height = 20, color }: SparklineProps) {
   if (!points || points.length < 2) return <div style={{ width, height }} />
   
   const min = Math.min(...points)
@@ -28,7 +29,7 @@ export function Sparkline({ points, width = 64, height = 20 }: SparklineProps) {
   }, '')
   
   const lastPoint = coords[coords.length - 1]
-  const strokeColor = points[points.length - 1] >= points[0] ? 'var(--green)' : 'var(--red)'
+  const strokeColor = color || (points[points.length - 1] >= points[0] ? 'var(--green)' : 'var(--red)')
   
   return (
     <svg width={width} height={height} className="overflow-visible inline-block">

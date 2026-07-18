@@ -9,19 +9,19 @@
   --panel-border: #e2e8f0;
 
   /* Redesign Dark Theme Tokens */
-  --bg-app: #070A0D;
-  --bg-panel: #0D1218;
-  --bg-raised: #131B24;
-  --bg-hover: #192431;
-  --border-subtle: #22303D;
-  --border-strong: #344454;
-  --text-primary: #E7EEF5;
-  --text-secondary: #AAB8C5;
-  --text-muted: #708090;
-  --green: #36D98A;
-  --red: #FF5C70;
-  --amber: #F4B84A;
-  --info: #58A6FF;
+  --bg-app: #080A0E;
+  --bg-panel: #0B0E13;
+  --bg-raised: #13171F;
+  --bg-hover: #19202A;
+  --border-subtle: #1C2330;
+  --border-strong: #2B3547;
+  --text-primary: #E2E8F0;
+  --text-secondary: #94A3B8;
+  --text-muted: #475569;
+  --green: #00E676;
+  --red: #FF1744;
+  --amber: #FF9100;
+  --info: #2979FF;
 }
 
 html.dark {

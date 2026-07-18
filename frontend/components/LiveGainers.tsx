@@ -19,10 +19,6 @@ import {
   Clock,
   Wifi,
   WifiOff,
-  Volume2,
-  VolumeX,
-  Bell,
-  BellOff,
   Database,
   Zap,
 } from 'lucide-react'
@@ -227,80 +223,76 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = [],
   }, [snap, priceFilterEnabled])
 
   return (
-    <div className="space-y-4">
-      {/* Header row */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 flex-wrap">
+    <div className="space-y-2.5">
+      {/* Bloomberg-style Functional Toolbar */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between border border-[#2b3547]/50 bg-[#0E1116] text-[11px] font-mono select-none w-full min-h-[30px]">
+        {/* Left Side: Terminal Status Metrics */}
+        <div className="flex items-center gap-3 px-2.5 py-1 flex-wrap">
           {snap && (
             <SessionBadge session={session} label={snap.session_label} />
           )}
           {ageStr && (
-            <span className="flex items-center gap-1 text-[11px] text-gray-600">
+            <span className="flex items-center gap-1 text-text-muted">
               <Clock size={10} />
               {ageStr}
             </span>
           )}
           {isActive && !error && (
-            <span className="flex items-center gap-1 text-[11px] text-gray-500">
-              <Wifi size={10} className="text-emerald-500" />
-              live 3s
+            <span className="flex items-center gap-1 text-green-custom font-bold">
+              <Wifi size={10} />
+              LIVE 3S
             </span>
           )}
           {snap?.fast_mode_active && (
-            <span className="flex items-center gap-1 text-[11px] font-bold text-amber-500">
-              <Zap size={10} className="animate-pulse fill-amber-500" />
-              Fast Mode ({snap.streaming_symbols_count} symbols)
+            <span className="flex items-center gap-1 font-bold text-amber-custom">
+              <Zap size={10} className="animate-pulse fill-amber-custom" />
+              FAST ({snap.streaming_symbols_count} SYM)
             </span>
           )}
-          {snap?.redis_connected && (
-            <span className="flex items-center gap-1 text-[11px] text-emerald-600">
+          {snap?.redis_connected ? (
+            <span className="flex items-center gap-1 text-green-custom font-bold">
               <Database size={10} />
-              Redis Connected
+              REDIS: OK
             </span>
-          )}
-          {snap && !snap.redis_connected && (
-            <span className="flex items-center gap-1 text-[11px] text-red-500 animate-pulse">
+          ) : (
+            <span className="flex items-center gap-1 text-red-custom font-bold animate-pulse">
               <Database size={10} />
-              Redis Disconnected
+              REDIS: DISCONNECT
             </span>
           )}
           {error && (
-            <span className="flex items-center gap-1 text-[11px] text-red-500">
+            <span className="flex items-center gap-1 text-red-custom font-bold">
               <WifiOff size={10} />
               {error}
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-3 select-none">
-          {/* Audio Chime Toggle */}
+        {/* Right Side: Function Keys Control Strip */}
+        <div className="flex items-stretch border-t sm:border-t-0 sm:border-l border-[#2b3547]/50 h-full">
+          {/* Audio Chime F1 */}
           <button
             onClick={() => setAudioChimesEnabled(!audioChimesEnabled)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-              audioChimesEnabled
-                ? 'bg-emerald-600/15 border-emerald-500/35 text-emerald-400 hover:bg-emerald-600/25'
-                : 'bg-gray-900/40 border-gray-800/60 text-gray-450 hover:text-gray-300 hover:bg-gray-900/60'
+            className={`px-3 py-1.5 sm:py-0 flex items-center gap-1 hover:bg-[#1C2330] border-r border-[#2b3547]/50 transition-colors ${
+              audioChimesEnabled ? 'text-green-custom font-bold bg-green-custom/5' : 'text-text-muted hover:text-text-primary'
             }`}
-            title="Toggle Audio Chimes on Breakouts"
+            title="Toggle Audio Chimes on Breakouts [F1]"
           >
-            {audioChimesEnabled ? <Volume2 size={12} /> : <VolumeX size={12} />}
-            <span>Audio</span>
+            <span>[F1] AUDIO: {audioChimesEnabled ? 'ON' : 'OFF'}</span>
           </button>
 
-          {/* Toast Stack Toggle */}
+          {/* Toasts Toggle F2 */}
           <button
             onClick={() => setToastStackEnabled(!toastStackEnabled)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-              toastStackEnabled
-                ? 'bg-emerald-600/15 border-emerald-500/35 text-emerald-400 hover:bg-emerald-600/25'
-                : 'bg-gray-900/40 border-gray-800/60 text-gray-450 hover:text-gray-300 hover:bg-gray-900/60'
+            className={`px-3 py-1.5 sm:py-0 flex items-center gap-1 hover:bg-[#1C2330] border-r border-[#2b3547]/50 transition-colors ${
+              toastStackEnabled ? 'text-green-custom font-bold bg-green-custom/5' : 'text-text-muted hover:text-text-primary'
             }`}
-            title="Toggle Toast Stack Notifications"
+            title="Toggle Toast Notifications [F2]"
           >
-            {toastStackEnabled ? <Bell size={12} /> : <BellOff size={12} />}
-            <span>Toasts</span>
+            <span>[F2] TOASTS: {toastStackEnabled ? 'ON' : 'OFF'}</span>
           </button>
 
+          {/* Price Filter F3 */}
           <button
             onClick={() => {
               const newValue = !priceFilterEnabled
@@ -308,42 +300,38 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = [],
               localStorage.setItem(PRICE_FILTER_KEY, String(newValue))
               window.dispatchEvent(new Event(PRICE_FILTER_EVENT))
             }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-              priceFilterEnabled
-                ? 'bg-emerald-600/15 border-emerald-500/35 text-emerald-400 hover:bg-emerald-600/25'
-                : 'bg-gray-900/40 border-gray-800/60 text-gray-450 hover:text-gray-300 hover:bg-gray-900/60'
+            className={`px-3 py-1.5 sm:py-0 flex items-center gap-1 hover:bg-[#1C2330] border-r border-[#2b3547]/50 transition-colors ${
+              priceFilterEnabled ? 'text-info-custom font-bold bg-info-custom/5' : 'text-text-muted hover:text-text-primary'
             }`}
+            title="Toggle $1-$30 Price Filter [F3]"
           >
-            <span>$1-$30 Filter</span>
-            {priceFilterEnabled ? (
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            ) : (
-              <span className="w-1.5 h-1.5 rounded-full bg-gray-600" />
-            )}
+            <span>[F3] FILTER $1-$30: {priceFilterEnabled ? 'ON' : 'OFF'}</span>
           </button>
 
+          {/* Refresh F5 */}
           <button
             id="live-gainers-refresh"
             onClick={() => fetchData(true)}
             disabled={refreshing}
-            className="flex items-center gap-1 text-xs text-gray-500 hover:text-emerald-400 transition-colors disabled:opacity-40"
+            className="px-3 py-1.5 sm:py-0 flex items-center gap-1 text-text-muted hover:text-green-custom hover:bg-[#1C2330] transition-colors disabled:opacity-40"
+            title="Manual Database Poll [F5]"
           >
-            <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
-            Refresh
+            <RefreshCw size={10} className={refreshing ? 'animate-spin' : ''} />
+            <span>[F5] REFRESH</span>
           </button>
         </div>
       </div>
 
       {/* EOD persist notice */}
       {session === 'after_hours' && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-500/10 border border-violet-500/20 text-xs text-violet-300">
-          <TrendingUp size={12} className="shrink-0" />
+        <div className="flex items-center gap-2 px-3 py-1 bg-violet-500/5 border border-violet-500/10 text-xs text-violet-300">
+          <TrendingUp size={11} className="shrink-0" />
           These gainers will be automatically saved to your database at 8:00 PM ET.
         </div>
       )}
 
-      {/* Side-by-Side Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* 3-Column Terminal Panel Grid */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-2.5">
         <GainerTable
           gainers={loading ? [] : filteredGainers}
           fullList={loading ? [] : filteredGainers}
@@ -368,6 +356,18 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = [],
           loading={loading}
           defaultSortKey="atr_hod"
           defaultSortDir="asc"
+          flashingTickers={flashingTickers}
+        />
+        <GainerTable
+          gainers={loading ? [] : filteredGainers.filter(g => g.rvol_15m != null && g.rvol_15m >= 2.0)}
+          fullList={loading ? [] : filteredGainers}
+          title="High RVOL Radar"
+          emptyMessage="No high relative volume setups active right now (RVOL >= 2.0)."
+          onOpenModal={setModalGainer}
+          handleResearch={handleResearch}
+          loading={loading}
+          defaultSortKey="rvol"
+          defaultSortDir="desc"
           flashingTickers={flashingTickers}
         />
       </div>

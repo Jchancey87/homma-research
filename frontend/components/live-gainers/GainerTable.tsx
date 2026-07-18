@@ -6,9 +6,9 @@ import { Sparkline } from '@/components/Sparkline'
 import { fmtVol } from '@/lib/format'
 import { ChevronDown, ChevronUp, Maximize2, ExternalLink, Pin, Info } from 'lucide-react'
 import {
-  getRvolBadgeStyle, getSpreadBadgeStyle,
+  getRvolBadgeStyle, getRvolColor, getSpreadBadgeStyle,
   getAtrSpreadStyle, getAtrVwapStyle, getZenVStyle,
-  getTimeAgoBadge, getTrendIndicator,
+  getTrendIndicator,
 } from './styles'
 import {
   GapCell, PriceCell, MetricLabelWithTooltip, SkeletonRows, FloatCellInline,
@@ -16,7 +16,7 @@ import {
 
 // ── Sort header helper ──────────────────────────────────────────────────────
 
-type SortKey = 'rank' | 'ticker' | 'price' | 'change' | 'mom_2m' | 'atr_hod' | 'float' | 'rvol' | 'hod' | 'trend'
+type SortKey = 'rank' | 'ticker' | 'price' | 'change' | 'mom_2m' | 'atr_hod' | 'float' | 'rvol' | 'hod' | 'trend' | 'spark' | 'signal'
 
 interface GainerTableProps {
   gainers:         LiveGainerRow[]
@@ -123,6 +123,8 @@ export function GainerTable({
       case 'hod':     valA = a.high_price ?? 0; valB = b.high_price ?? 0; break
       case 'float':   valA = a.float_shares ?? 0; valB = b.float_shares ?? 0; break
       case 'trend':   valA = getTrendScore(a); valB = getTrendScore(b); break
+      case 'spark':   valA = a.gap_pct ?? 0; valB = b.gap_pct ?? 0; break
+      case 'signal':  valA = a.rvol_15m ?? 0; valB = b.rvol_15m ?? 0; break
     }
 
     if (valA < valB) return sortDir === 'asc' ? -1 : 1
@@ -138,12 +140,12 @@ export function GainerTable({
     const renderHeaderContent = () => {
       if (col === 'mom_2m' && showSchwabTooltip) {
         return (
-          <div className="relative group/tooltip inline-flex items-center gap-1">
+          <div className="relative group/tooltip inline-flex items-center gap-0.5">
             <span>{label}</span>
-            <Info size={11} className="text-amber-custom hover:text-amber-300 cursor-help shrink-0" />
-            <div className="pointer-events-none absolute top-full right-0 mt-2 hidden group-hover/tooltip:block bg-panel border border-border-strong text-text-primary text-[10px] font-medium py-2 px-3 shadow-2xl w-64 leading-relaxed z-50 normal-case font-sans text-left">
+            <Info size={9} className="text-amber-custom hover:text-amber-300 cursor-help shrink-0" />
+            <div className="pointer-events-none absolute top-full right-0 mt-1 hidden group-hover/tooltip:block bg-panel border border-border-strong text-text-primary text-[10px] font-medium py-1 px-2 shadow-2xl w-56 leading-normal z-50 normal-case font-sans text-left">
               Schwab API does not return today&apos;s pre-market minute bars between 4:00 AM and 7:00 AM ET. Momentum calculations will start updating after 7:00 AM ET.
-              <span className="absolute bottom-full right-3 border-4 border-transparent border-b-panel" />
+              <span className="absolute bottom-full right-2 border-4 border-transparent border-b-panel" />
             </div>
           </div>
         )
@@ -153,55 +155,58 @@ export function GainerTable({
 
     return (
       <th
-        className={`py-3 pr-4 font-bold text-[10px] uppercase tracking-wider text-text-muted cursor-pointer select-none hover:text-text-primary transition-colors group/th ${width || ''} ${
+        className={`py-[4px] px-1.5 font-bold text-[10px] uppercase tracking-normal text-text-muted cursor-pointer select-none hover:text-text-primary transition-colors group/th ${width || ''} ${
           align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left'
-        }`}
+        } ${isSorted ? 'text-text-primary' : ''}`}
         onClick={() => handleSort(col)}
       >
-        <div className={`inline-flex items-center gap-1 ${align === 'right' ? 'justify-end w-full' : align === 'center' ? 'justify-center w-full' : ''}`}>
+        <div className={`inline-flex items-center gap-0.5 ${align === 'right' ? 'justify-end w-full' : align === 'center' ? 'justify-center w-full' : ''}`}>
           {renderHeaderContent()}
           <span className={`text-[10px] transition-opacity ${isSorted ? 'opacity-100 text-info-custom' : 'opacity-0 group-hover/th:opacity-50'}`}>
-            {isSorted ? (sortDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />) : <ChevronDown size={12} />}
+            {isSorted ? (sortDir === 'asc' ? <ChevronUp size={10} /> : <ChevronDown size={10} />) : <ChevronDown size={10} />}
           </span>
         </div>
       </th>
     )
   }
 
-  const colSpanCount = 6
+  const colSpanCount = 9
 
   return (
-    <div className="bg-panel border border-border-subtle p-4 shadow-sm space-y-4">
-      <h3 className="text-xs font-bold text-text-secondary tracking-wider uppercase border-b border-border-subtle pb-3 flex items-center justify-between select-none">
-        <div className="flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-custom animate-pulse" />
-          {title}
+    <div className="bg-panel border border-border-subtle/30 p-2.5 space-y-2.5">
+      <h3 className="text-[11px] font-bold text-text-secondary tracking-wide uppercase border-b border-border-subtle/30 pb-1.5 flex items-center justify-between select-none h-[24px]">
+        <div className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 bg-green-custom animate-pulse shrink-0" />
+          <span>{title}</span>
         </div>
         {!loading && (
-          <span className="text-[10px] text-text-muted font-mono font-semibold normal-case bg-raised border border-border-subtle px-2 py-0.5">
-            {gainers.length} Runners
+          <span className="text-[9px] text-text-muted font-mono font-medium lowercase">
+            {gainers.length} runners
           </span>
         )}
       </h3>
 
       <div className="overflow-x-auto overflow-y-hidden">
-        <table className="w-full text-sm table-fixed min-w-[500px]">
-          <thead className="bg-raised border-b-2 border-border-strong">
+        <table className="w-full text-xs table-fixed min-w-[580px]">
+          <thead className="bg-[#12161c] border-b border-[#2b323e]">
             <tr className="text-left text-xs text-text-muted">
-              <Th col="rank" label="Rank" width="w-[8%]" />
-              <Th col="ticker" label="Ticker" width="w-[22%]" />
-              <Th col="price"  label="Price"   align="right" width="w-[15%]" />
-              <Th col="change" label="Change(%)" align="right" width="w-[15%]" />
-              <Th col="trend"  label="Trend"    align="center" width="w-[18%]" />
-              <Th col="float"  label="Float"   align="right" width="w-[22%]" />
+              <Th col="rank" label="Rk" align="right" width="w-[5%]" />
+              <Th col="ticker" label="Ticker" width="w-[14%]" />
+              <Th col="price"  label="Price"   align="right" width="w-[11%]" />
+              <Th col="change" label="Chg(%)" align="right" width="w-[11%]" />
+              <Th col="trend"  label="Tr"    align="center" width="w-[6%]" />
+              <Th col="float"  label="Float"   align="right" width="w-[13%]" />
+              <Th col="rvol"   label="RVOL"    align="right" width="w-[10%]" />
+              <Th col="spark"  label="Spark"   align="center" width="w-[14%]" />
+              <Th col="signal" label="Signals" align="left" width="w-[16%]" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-border-subtle/50">
+          <tbody className="divide-y divide-[#1e222a]/50">
             {loading ? (
               <SkeletonRows cols={colSpanCount} />
             ) : sortedGainers.length === 0 ? (
               <tr>
-                <td colSpan={colSpanCount} className="py-10 text-center text-text-muted text-xs">
+                <td colSpan={colSpanCount} className="py-8 text-center text-text-muted text-xs">
                   {emptyMessage}
                 </td>
               </tr>
@@ -225,63 +230,49 @@ export function GainerTable({
                     <tr
                       style={
                         isFlashing
-                          ? { backgroundColor: 'rgba(244, 184, 74, 0.2)', transition: 'none' }
-                          : { transition: 'background-color 1.5s cubic-bezier(0.25, 1, 0.5, 1)' }
+                          ? { backgroundColor: 'rgba(244, 184, 74, 0.15)', transition: 'none' }
+                          : { transition: 'background-color 1s ease-out' }
                       }
-                      className={`hover:bg-hover transition-all duration-150 border-b border-border-subtle group cursor-pointer ${
-                        isExpanded ? 'bg-hover border-l-2 border-l-info-custom font-semibold' : 'even:bg-raised/20'
+                      className={`hover:bg-hover transition-all duration-75 border-b border-[#1A202C]/20 cursor-pointer ${
+                        isExpanded ? 'bg-hover/80 border-l-2 border-l-info-custom font-semibold' : 'even:bg-[#0A0B0D]/30'
                       }`}
                       onClick={() => handleRowClick(g.ticker)}
                     >
                       {/* 1. Rank */}
-                      <td className="py-2 pr-4 font-bold text-text-secondary text-[14px] w-12 pl-1 select-none tabular-nums text-right">
+                      <td className="py-[3px] pr-2 font-bold text-text-secondary text-[12px] tabular-nums select-none text-right">
                         {originalRank}
                       </td>
 
-                      {/* 2. Ticker with badging */}
-                      <td className="py-2 pr-4 font-mono text-[13px]">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-text-primary group-hover:text-green-custom transition-colors flex items-center gap-1.5">
+                      {/* 2. Ticker with inline badging */}
+                      <td className="py-[3px] px-1.5 font-mono text-[12px]">
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-text-primary group-hover:text-green-custom transition-colors">
                             {g.ticker}
                           </span>
-                          <div className="flex items-center gap-1 shrink-0 select-none">
+                          <div className="flex items-center gap-0.5 shrink-0 select-none">
                             {lockedTicker === g.ticker && (
-                              <span className="relative group/tooltip inline-flex items-center p-0.5 rounded-none text-[8px] font-black bg-info-custom/10 text-info-custom border border-info-custom/20">
-                                <Pin size={8} className="fill-current" />
-                                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/tooltip:block bg-panel border border-border-strong text-text-primary text-[10px] font-medium py-1 px-2 rounded-none shadow-2xl whitespace-nowrap z-50">
-                                  Pinned open (Click to toggle)
-                                  <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-panel" />
-                                </span>
+                              <span className="text-[8px] text-info-custom font-black shrink-0">
+                                <Pin size={7} className="fill-current" />
                               </span>
                             )}
                             {rankChange > 0 && (
-                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-none text-[9px] font-bold bg-green-custom/10 text-green-custom border border-green-custom/25">
-                                <ChevronUp size={10} className="stroke-[3]" />
-                                {rankChange}
+                              <span className="text-[9px] font-bold text-green-custom shrink-0" title={`Rank up by ${rankChange}`}>
+                                ▲{rankChange}
                               </span>
                             )}
                             {rankChange < 0 && (
-                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-none text-[9px] font-bold bg-red-custom/10 text-red-custom border border-red-custom/25">
-                                <ChevronDown size={10} className="stroke-[3]" />
-                                {Math.abs(rankChange)}
+                              <span className="text-[9px] font-bold text-red-custom shrink-0" title={`Rank down by ${Math.abs(rankChange)}`}>
+                                ▼{Math.abs(rankChange)}
                               </span>
                             )}
                             {g.is_repeat_runner && (
-                              <span className="relative group/tooltip inline-flex items-center px-1 py-0.25 rounded-none text-[9px] font-bold bg-amber-custom/10 text-amber-custom border border-amber-custom/25">
+                              <span className="text-[9px] font-bold text-amber-custom bg-amber-custom/5 px-0.5 border border-amber-custom/10 shrink-0" title="Recent Runner (24h)">
                                 RR
-                                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/tooltip:block bg-panel border border-border-strong text-text-primary text-[10px] font-medium py-1 px-2 rounded-none shadow-2xl whitespace-nowrap z-50 normal-case font-sans">
-                                  RR = Recent Runner (24h)
-                                  <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-panel" />
-                                </span>
                               </span>
                             )}
                             {g.is_follow_through && (
-                              <span className="relative group/tooltip inline-flex items-center px-1 py-0.25 rounded-none text-[9px] font-bold bg-info-custom/10 text-info-custom border border-info-custom/25">
+                              <span className="text-[9px] font-bold text-info-custom bg-info-custom/5 px-0.5 border border-info-custom/10 shrink-0" title="Fast Trade (24h)">
                                 FT
-                                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/tooltip:block bg-panel border border-border-strong text-text-primary text-[10px] font-medium py-1 px-2 rounded-none shadow-2xl whitespace-nowrap z-50 normal-case font-sans">
-                                  FT = Fast Trade (24h)
-                                  <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-panel" />
-                                </span>
                               </span>
                             )}
                           </div>
@@ -294,74 +285,118 @@ export function GainerTable({
                       {/* 4. Change (%) */}
                       <GapCell gap={g.gap_pct} />
 
-                      {/* 5. Trend */}
-                      <td className="py-2 pr-4 text-center select-none">
-                        {(() => {
-                          const trend = getTrendIndicator(g.last_price, g.prev_close, g.open_price)
-                          return (
-                            <div className="inline-flex justify-center group/tooltip relative">
-                              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-none text-[11px] border font-bold ${trend.className}`}>
-                                {trend.emoji}
-                              </span>
-                              <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover/tooltip:block bg-panel border border-border-strong text-text-primary text-[10px] font-medium py-1.5 px-2.5 shadow-2xl w-60 leading-relaxed z-50 normal-case font-sans text-left">
-                                {trend.tooltip}
-                                <span className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-panel" />
-                              </div>
-                            </div>
-                          )
-                        })()}
+                      {/* 5. Trend (simplified to minimal arrow/dash glyph) */}
+                      {(() => {
+                        const trend = getTrendIndicator(g.last_price, g.prev_close, g.open_price)
+                        let glyph = '■'
+                        let colorClass = 'text-text-muted'
+                        if (trend.label === 'Strong Bullish') {
+                          glyph = '▲'
+                          colorClass = 'text-green-custom'
+                        } else if (trend.label === 'Strong Bearish') {
+                          glyph = '▼'
+                          colorClass = 'text-red-custom'
+                        }
+                        return (
+                          <td className="py-[3px] px-1.5 text-center select-none font-mono text-[11px] font-bold" title={trend.tooltip}>
+                            <span className={colorClass}>{glyph}</span>
+                          </td>
+                        )
+                      })()}
+
+                      {/* 6. Float */}
+                      <td className="py-[3px] px-1.5 text-right select-none font-mono text-[11px]">
+                        <FloatCellInline float={g.float_shares} />
                       </td>
 
-                      {/* 6. Float & Chevron */}
-                      <td className="py-2 pr-4 text-right select-none font-mono text-[12px]">
-                        <div className="flex items-center justify-end gap-2 w-full">
-                          <FloatCellInline float={g.float_shares} />
-                          <span className="text-text-muted group-hover:text-text-primary transition-colors shrink-0">
-                            {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                          </span>
-                        </div>
+                      {/* 7. RVOL */}
+                      <td className={`py-[3px] px-1.5 text-right select-none font-mono text-[11px] font-bold ${getRvolColor(g.rvol_15m)}`}>
+                        {g.rvol_15m != null ? `${g.rvol_15m.toFixed(1)}x` : '—'}
                       </td>
+
+                      {/* 8. Sparkline (monochrome, structural style) */}
+                      <td className="py-[3px] px-1.5 text-center select-none">
+                        {((g.sparkline_intraday && g.sparkline_intraday.length > 0) || (g.sparkline_5d && g.sparkline_5d.length > 0)) ? (
+                          <Sparkline
+                            points={g.sparkline_intraday && g.sparkline_intraday.length > 0 ? g.sparkline_intraday : g.sparkline_5d}
+                            width={38}
+                            height={10}
+                            color="var(--text-muted)"
+                          />
+                        ) : (
+                          <span className="text-[10px] text-text-muted">—</span>
+                        )}
+                      </td>
+
+                      {/* 9. Signals */}
+                      {(() => {
+                        const signals = []
+                        if (g.mom_2m != null && g.mom_2m > 0.5) {
+                          signals.push({ code: 'MOM', className: 'text-green-custom' })
+                        }
+                        if (g.atr_hod != null && g.atr_hod <= 1.0) {
+                          signals.push({ code: 'HOD', className: 'text-amber-custom' })
+                        }
+                        if (g.atr_vwap != null && g.atr_vwap >= 0) {
+                          signals.push({ code: 'VWP', className: 'text-info-custom' })
+                        }
+                        if (g.rvol_15m != null && g.rvol_15m >= 5.0) {
+                          signals.push({ code: 'VOL', className: 'text-emerald-500 font-bold' })
+                        }
+                        return (
+                          <td className="py-[3px] px-1.5 text-left select-none font-mono text-[9px] font-bold">
+                            <div className="flex items-center gap-1">
+                              {signals.map(s => (
+                                <span key={s.code} className={`${s.className} tracking-tighter`} title={s.code}>
+                                  {s.code}
+                                </span>
+                              ))}
+                              {signals.length === 0 && <span className="text-text-muted/40">—</span>}
+                            </div>
+                          </td>
+                        )
+                      })()}
                     </tr>
 
                     {/* Expandable details row */}
-                    <tr className="bg-raised/30">
+                    <tr className="bg-raised/15">
                       <td colSpan={colSpanCount} className="p-0 border-0">
                         <div
-                          className={`grid transition-all duration-350 ease-in-out ${
+                          className={`grid transition-all duration-300 ease-in-out ${
                             isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
                           }`}
                         >
                           <div className="overflow-hidden">
-                            <div className="py-4 px-6 border-t border-border-subtle bg-raised/20 space-y-4">
-                              {/* ⚡ Actionability & Technical Status Dashboard */}
-                              <div className="flex flex-wrap gap-2 select-none border-b border-border-subtle/50 pb-3">
+                            <div className="py-2.5 px-4 border-t border-border-subtle/30 bg-[#0E1116] space-y-2.5">
+                              {/* Actionability & Technical Status Dashboard */}
+                              <div className="flex flex-wrap gap-2 select-none border-b border-border-subtle/20 pb-2">
                                 {playStatus && (
-                                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-none text-[11px] font-bold border ${playStatus.className}`}>
+                                  <span className={`inline-flex items-center px-1.5 py-0.25 text-[10px] font-mono font-bold border border-current bg-transparent ${playStatus.className}`}>
                                     {playStatus.label}
                                   </span>
                                 )}
                                 {consolStatus && (
-                                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-none text-[11px] font-bold border ${consolStatus.className}`}>
+                                  <span className={`inline-flex items-center px-1.5 py-0.25 text-[10px] font-mono font-bold border border-current bg-transparent ${consolStatus.className}`}>
                                     {consolStatus.label}
                                   </span>
                                 )}
                                 {vwapStatus && (
-                                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-none text-[11px] font-bold border ${vwapStatus.className}`}>
+                                  <span className={`inline-flex items-center px-1.5 py-0.25 text-[10px] font-mono font-bold border border-current bg-transparent ${vwapStatus.className}`}>
                                     {vwapStatus.label}
                                   </span>
                                 )}
                                 {hodStatus && (
-                                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-none text-[11px] font-bold border ${hodStatus.className}`}>
+                                  <span className={`inline-flex items-center px-1.5 py-0.25 text-[10px] font-mono font-bold border border-current bg-transparent ${hodStatus.className}`}>
                                     {hodStatus.label}
                                   </span>
                                 )}
                               </div>
 
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm text-text-secondary">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-text-secondary">
                                 {/* Left Column: Detailed Metrics */}
-                                <div className="space-y-3">
-                                  <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider select-none">Secondary Metrics</h4>
-                                  <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 font-mono text-xs">
+                                <div className="space-y-2">
+                                  <h4 className="text-[10px] font-bold text-text-muted uppercase tracking-wider select-none border-b border-border-subtle/25 pb-0.5">Secondary Metrics</h4>
+                                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 font-mono text-[11px]">
                                     <span className="text-text-muted">Volume:</span>
                                     <span className="text-text-primary font-bold">{fmtVol(g.volume)}</span>
 
@@ -370,7 +405,7 @@ export function GainerTable({
                                       tooltip="Relative Volume over the last 15 minutes compared to historical average. Higher values indicate unusual/strong activity."
                                     />
                                     <div>
-                                      <span className={`inline-flex px-1.5 py-0.5 rounded-none text-[10px] ${getRvolBadgeStyle(g.rvol_15m).className}`}>
+                                      <span className={`inline-flex font-bold ${getRvolBadgeStyle(g.rvol_15m).className}`}>
                                         {getRvolBadgeStyle(g.rvol_15m).label}
                                       </span>
                                     </div>
@@ -395,21 +430,14 @@ export function GainerTable({
                                             })
                                           : '—'} EST
                                       </span>
-                                      {g.trade_time && (
-                                        <div>
-                                          <span className={`inline-flex px-1 py-0.25 rounded-none text-[9px] ${getTimeAgoBadge(g.trade_time)?.className}`}>
-                                            {getTimeAgoBadge(g.trade_time)?.label}
-                                          </span>
-                                        </div>
-                                      )}
                                     </div>
                                   </div>
                                 </div>
 
                                 {/* Middle Column: Volatility & Relative Level */}
-                                <div className="space-y-3">
-                                  <h4 className="text-xs font-bold text-text-muted uppercase tracking-wider select-none">Volatility & Relative Level</h4>
-                                  <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 font-mono text-xs">
+                                <div className="space-y-2">
+                                  <h4 className="text-[10px] font-bold text-text-muted uppercase tracking-wider select-none border-b border-border-subtle/25 pb-0.5">Volatility & Relative Level</h4>
+                                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 font-mono text-[11px]">
                                     <MetricLabelWithTooltip
                                       label="ATR Spread:"
                                       tooltip="The current bid-ask spread divided by the 14-period Average True Range. Measures relative cost to cross the spread."
@@ -441,47 +469,47 @@ export function GainerTable({
                                     </div>
 
                                     <span className="text-text-muted">Sector:</span>
-                                    <span className="text-text-primary font-bold font-sans">{g.sector ?? '—'}</span>
+                                    <span className="text-text-primary font-bold font-sans truncate">{g.sector ?? '—'}</span>
                                   </div>
                                 </div>
 
                                 {/* Right Column: Trend Sparkline & Actions */}
-                                <div className="flex flex-col justify-between gap-4">
+                                <div className="flex flex-col justify-between gap-2.5">
                                   {(g.sparkline_intraday && g.sparkline_intraday.length > 0) || (g.sparkline_5d && g.sparkline_5d.length > 0) ? (
-                                    <div className="space-y-1.5">
-                                      <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider select-none block">
-                                        {g.sparkline_intraday && g.sparkline_intraday.length > 0 ? 'Intraday Trend:' : '5d Trend Sparkline:'}
+                                    <div className="space-y-0.5">
+                                      <span className="text-[9px] font-bold text-text-muted uppercase tracking-wider select-none block">
+                                        Trend Sparkline:
                                       </span>
-                                      <div className="bg-raised p-2 rounded-none border border-border-subtle inline-block shadow-inner">
+                                      <div className="bg-[#12161c] p-1.5 border border-border-subtle/30 inline-block">
                                         <Sparkline
                                           points={g.sparkline_intraday && g.sparkline_intraday.length > 0 ? g.sparkline_intraday : g.sparkline_5d}
-                                          width={100}
-                                          height={28}
+                                          width={80}
+                                          height={20}
                                         />
                                       </div>
                                     </div>
                                   ) : (
                                     <div />
                                   )}
-                                  <div className="flex flex-row md:flex-col justify-end gap-3 select-none w-full">
+                                  <div className="flex flex-row md:flex-col justify-end gap-1.5 select-none w-full">
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation()
                                         onOpenModal(g)
                                       }}
-                                      className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-green-custom hover:bg-green-custom/80 border border-green-custom/20 rounded-none shadow transition-all duration-150 active:translate-y-[1px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-green-custom"
+                                      className="flex-1 md:flex-initial flex items-center justify-center gap-1 px-2.5 py-1 text-[11px] font-bold text-white bg-green-custom/80 hover:bg-green-custom border border-green-custom/20 transition-all"
                                     >
-                                      <Maximize2 size={12} />
-                                      Open Detailed View
+                                      <Maximize2 size={11} />
+                                      Detailed View
                                     </button>
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation()
                                         handleResearch(g)
                                       }}
-                                      className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-text-secondary hover:text-text-primary bg-raised hover:bg-hover border border-border-strong rounded-none transition-all duration-150 active:translate-y-[1px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-border-strong"
+                                      className="flex-1 md:flex-initial flex items-center justify-center gap-1 px-2.5 py-1 text-[11px] font-bold text-text-secondary hover:text-text-primary bg-[#12161c] hover:bg-[#1b222d] border border-border-subtle/45 transition-all"
                                     >
-                                      <ExternalLink size={12} />
+                                      <ExternalLink size={11} />
                                       Research Ticker
                                     </button>
                                   </div>
@@ -489,24 +517,24 @@ export function GainerTable({
                               </div>
 
                               {/* Headline Footer */}
-                              <div className="mt-4 pt-3 border-t border-border-subtle/50 flex items-start gap-2 text-xs">
-                                <span className="text-text-muted font-bold uppercase select-none shrink-0 mt-0.5">Headline:</span>
+                              <div className="mt-2 pt-2 border-t border-border-subtle/20 flex items-start gap-1.5 text-[11px]">
+                                <span className="text-text-muted font-bold uppercase select-none shrink-0">Headline:</span>
                                 {g.catalyst === 'Technical / No News' ? (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-bold bg-amber-custom/10 text-amber-custom border border-amber-custom/25">
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-custom">
                                     ⚠️ Speculative Volatility / No News
-                                    <span className="text-text-muted font-normal text-[10px]">
-                                      — High RVOL, no fundamental catalyst detected in last 24h
+                                    <span className="text-text-muted font-normal">
+                                      — High RVOL, no news catalyst in 24h
                                     </span>
                                   </span>
                                 ) : g.catalyst === 'Speculative' ? (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-none text-[11px] font-semibold bg-raised text-text-secondary border border-border-subtle">
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-text-secondary">
                                     ? Unconfirmed Momentum
-                                    <span className="text-text-muted font-normal text-[10px]">
-                                      — Low or unknown RVOL, no news confirmed
+                                    <span className="text-text-muted font-normal">
+                                      — Low RVOL, no news confirmed
                                     </span>
                                   </span>
                                 ) : g.catalyst === 'Confirmed Catalyst' && g.news_headline ? (
-                                  <span className="text-text-primary italic leading-relaxed block max-w-2xl">{g.news_headline}</span>
+                                  <span className="text-text-primary leading-normal block max-w-2xl font-medium">{g.news_headline}</span>
                                 ) : (
                                   <span className="text-text-muted italic">No recent news</span>
                                 )}
@@ -531,33 +559,34 @@ export function GainerTable({
 
 function computePlayStatus(rvol: number | null | undefined, mom: number | null | undefined) {
   if (rvol == null || mom == null) return null
-  if (rvol >= 2.0 && mom >= 1.0)   return { label: '🔥 Active In-Play', className: 'bg-amber-custom/20 text-amber-custom border border-amber-custom/35 animate-pulse' }
-  if (rvol >= 1.5 || mom >= 0.5)   return { label: '⚡ Actionable',     className: 'bg-amber-custom/10 text-amber-custom border border-amber-custom/20' }
-  if (mom < -1.5)                  return { label: '❄️ Fading',         className: 'bg-red-custom/10 text-red-custom border border-red-custom/25' }
-  return { label: '💤 Drifting / Cold', className: 'bg-raised text-text-muted border border-border-subtle' }
+  if (rvol >= 2.0 && mom >= 1.0)   return { label: '🔥 Active In-Play', className: 'text-amber-custom animate-pulse' }
+  if (rvol >= 1.5 || mom >= 0.5)   return { label: '⚡ Actionable',     className: 'text-amber-custom' }
+  if (mom < -1.5)                  return { label: '❄️ Fading',         className: 'text-red-custom' }
+  return { label: '💤 Drifting / Cold', className: 'text-text-muted' }
 }
 
 function computeHodStatus(last: number | null | undefined, high: number | null | undefined) {
   if (last == null || high == null || high <= 0) return null
   const pctOff = ((high - last) / high) * 100
-  if (pctOff <= 0.2) return { label: '🎯 At HOD', className: 'bg-green-custom/20 text-green-custom border border-green-custom/35' }
-  if (pctOff <= 1.5) return { label: `🎯 Near HOD (${pctOff.toFixed(1)}% off)`, className: 'bg-green-custom/10 text-green-custom border border-green-custom/20' }
-  if (pctOff <= 5.0) return { label: `📈 Pullback (${pctOff.toFixed(1)}% off)`, className: 'bg-amber-custom/10 text-amber-custom border border-amber-custom/20' }
-  return { label: `⚠️ Off HOD (${pctOff.toFixed(1)}% off)`, className: 'bg-red-custom/10 text-red-custom border border-red-custom/25' }
+  if (pctOff <= 0.2) return { label: '🎯 At HOD', className: 'text-green-custom font-bold' }
+  if (pctOff <= 1.5) return { label: `🎯 Near HOD (${pctOff.toFixed(1)}% off)`, className: 'text-green-custom' }
+  if (pctOff <= 5.0) return { label: `📈 Pullback (${pctOff.toFixed(1)}% off)`, className: 'text-amber-custom' }
+  return { label: `⚠️ Off HOD (${pctOff.toFixed(1)}% off)`, className: 'text-red-custom' }
 }
 
+// Keep parameter name 'atrVwap' to preserve exact implementation logic
 function computeVwapStatus(atrVwap: number | null | undefined) {
   if (atrVwap == null) return null
   const absAtr = Math.abs(atrVwap)
-  if (absAtr <= 0.4) return { label: '⚡ Nearing VWAP Cross', className: 'bg-green-custom/20 text-green-custom border border-green-custom/35 animate-pulse' }
-  if (atrVwap > 0)    return { label: `📈 Above VWAP (+${atrVwap.toFixed(1)} ATR)`, className: 'bg-green-custom/10 text-green-custom border border-green-custom/20' }
-  return { label: `📉 Below VWAP (${atrVwap.toFixed(1)} ATR)`, className: 'bg-red-custom/10 text-red-custom border border-red-custom/25' }
+  if (absAtr <= 0.4) return { label: '⚡ Nearing VWAP Cross', className: 'text-green-custom font-bold animate-pulse' }
+  if (atrVwap > 0)    return { label: `📈 Above VWAP (+${atrVwap.toFixed(1)} ATR)`, className: 'text-green-custom' }
+  return { label: `📉 Below VWAP (${atrVwap.toFixed(1)} ATR)`, className: 'text-red-custom' }
 }
 
 function computeConsolStatus(zen: number | null | undefined, mom: number | null | undefined) {
   if (zen == null || mom == null) return null
-  if (Math.abs(zen) <= 0.25 && Math.abs(mom) <= 0.5) return { label: '⏳ Consolidating',  className: 'bg-info-custom/15 text-info-custom border border-info-custom/30' }
-  if (zen > 0.25  && mom > 0.5)  return { label: '🚀 Breaking Out',   className: 'bg-green-custom/20 text-green-custom border border-green-custom/35' }
-  if (zen < -0.25 && mom < -0.5) return { label: '📉 Breaking Down',  className: 'bg-red-custom/10 text-red-custom border border-red-custom/25' }
-  return { label: '📊 Trending', className: 'bg-raised text-text-secondary border border-border-subtle' }
+  if (Math.abs(zen) <= 0.25 && Math.abs(mom) <= 0.5) return { label: '⏳ Consolidating',  className: 'text-info-custom' }
+  if (zen > 0.25  && mom > 0.5)  return { label: '🚀 Breaking Out',   className: 'text-green-custom font-bold' }
+  if (zen < -0.25 && mom < -0.5) return { label: '📉 Breaking Down',  className: 'text-red-custom' }
+  return { label: '📊 Trending', className: 'text-text-secondary' }
 }

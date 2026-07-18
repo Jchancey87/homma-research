@@ -1610,3 +1610,19 @@ Optimized `/health` to use pool connection health check. Created `/api/market/da
 * **Frontend Alerts ([page.tsx](file:///home/jackc/projects/homma-research/frontend/app/alerts/page.tsx))**: Add NEAR_HOD_RADAR case to chart marker config.
 * **Tests**: Refactored [test_alert_config.py](file:///home/jackc/projects/homma-research/backend/tests/test_alert_config.py), [test_alerts_telegram_format.py](file:///home/jackc/projects/homma-research/backend/tests/test_alerts_telegram_format.py), [test_confluence.py](file:///home/jackc/projects/homma-research/backend/tests/test_confluence.py), [test_confluence_engine.py](file:///home/jackc/projects/homma-research/backend/tests/test_confluence_engine.py), [test_new_alert_types.py](file:///home/jackc/projects/homma-research/backend/tests/test_new_alert_types.py), [test_bugs_fixes.py](file:///home/jackc/projects/homma-research/backend/tests/test_bugs_fixes.py). All 321 tests passed.
 
+---
+
+## [2026-07-18] Dashboard & Scanner UI Terminal Redesign
+
+### Summary
+* Redesigned dashboard/scanner UI to feel like a Bloomberg/Lightspeed trading terminal: high information density, tabular figures, monochrome structural sparklines, and stacked micro-signals.
+
+### What Changed
+* **Frontend CSS ([globals.css](file:///home/jackc/projects/homma-research/frontend/app/globals.css))**: Refined color variables for dark terminal background, low-saturation flat red/green/amber metrics, and hairline dividers. Applied global zero rounded-corner rule.
+* **Badges Component ([badges.tsx](file:///home/jackc/projects/homma-research/frontend/components/live-gainers/badges.tsx))**: Tightened cell padding to `py-[3px] px-1.5` (~4-6px top/bottom) and reduced font size to `text-[12px]` / `text-[11px]`. Converted Float cells into compact color-coded labels without descriptive text words. Simplified session badge borders.
+* **Styles Helper ([styles.ts](file:///home/jackc/projects/homma-research/frontend/components/live-gainers/styles.ts))**: Stripped card background colors and outline borders, leaving flat low-saturation colors for a terminal visual look while maintaining 100% test compatibility.
+* **Gainer Table ([GainerTable.tsx](file:///home/jackc/projects/homma-research/frontend/components/live-gainers/GainerTable.tsx))**: Redesigned table layout with fixed synchronized column percentages across the screen. Expanded columns to 9: Rank (Rk), Ticker (with inline tiny RR/FT pills), Price, Change (Chg%), Trend (Tr: minimal up/down glyph), Float, RVOL, Spark (very small monochrome sparkline), and Signals (compact letter codes e.g. MOM, HOD, VWP).
+* **Live Gainers Main Container ([LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx))**: Redesigned filter/audio/toast buttons into a compact 30px tall terminal toolbar resembling keyboard function keys `[F1]`, `[F2]`, `[F3]`, `[F5]`. Added a third scanner panel (`High RVOL Radar`) so 3 tables are visible at once in a grid layout.
+* **Panel Wrapper ([Panel.tsx](file:///home/jackc/projects/homma-research/frontend/components/Panel.tsx))**: Flattened panel borders, removed box shadow decorations, and compressed padding for utilitarian styling.
+* **Sparkline ([Sparkline.tsx](file:///home/jackc/projects/homma-research/frontend/components/Sparkline.tsx))**: Added optional `color` property to render monochrome sparklines within the table row cells.
+

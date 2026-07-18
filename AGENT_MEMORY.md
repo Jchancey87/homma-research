@@ -104,8 +104,8 @@
 
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Optimize webapp data source reliability by eliminating yfinance from watchlist enrichment, implementing 24h disk caching for SEC CIK mapping, and adding FMPNewsSource as official backup.
-* **Scope:** Modify [watchlist_service.py](file:///home/jackc/projects/homma-research/backend/services/watchlist_service.py), [sec_service.py](file:///home/jackc/projects/homma-research/backend/services/sec_service.py), [news_aggregator.py](file:///home/jackc/projects/homma-research/backend/services/news_aggregator.py). Add tests in [test_news_aggregator.py](file:///home/jackc/projects/homma-research/backend/tests/test_news_aggregator.py) and [test_sec_service.py](file:///home/jackc/projects/homma-research/backend/tests/test_sec_service.py).
+* **Goal:** Redesign dashboard and scanner UI for Bloomberg/terminal look: high density, utilitarian, subtle separators, compact typography.
+* **Scope:** Edit [GainerTable.tsx](file:///home/jackc/projects/homma-research/frontend/components/live-gainers/GainerTable.tsx), [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx), [badges.tsx](file:///home/jackc/projects/homma-research/frontend/components/live-gainers/badges.tsx), [globals.css](file:///home/jackc/projects/homma-research/frontend/app/globals.css), [Panel.tsx](file:///home/jackc/projects/homma-research/frontend/components/Panel.tsx). Add third scanner table, implement dense layout, inline tokens, shared column alignment, tabular figures, and micro-signals.
 
 
 ## 🗑️ Rot & Pruning Log
