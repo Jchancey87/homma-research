@@ -10,7 +10,7 @@ import EconomicCalendar from '@/components/EconomicCalendar'
 import HelpGuide from '@/components/HelpGuide'
 import DashboardHeader from '@/components/DashboardHeader'
 import { Panel, PanelLabel } from '@/components/Panel'
-import { getContinuationPicks, ContinuationPick, getDashboardOverview, DashboardOverviewData } from '@/lib/api'
+import { getContinuationPicks, ContinuationPick } from '@/lib/api'
 import {
   TrendingUp, RotateCcw,
   BarChart2, ArrowRight, CalendarDays,
@@ -90,38 +90,12 @@ async function ContinuationPicksPanel() {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default async function DashboardPage() {
-  let overviewData: DashboardOverviewData = {
-    live_gainers: {
-      session: 'closed',
-      session_label: 'Closed',
-      fetched_at: null,
-      gainers: [],
-      top_n: 0,
-      cache_ttl_s: 0
-    },
-    watchlist: [],
-    watchlist_prices: {},
-    gainers_summary: {
-      date: null,
-      total: 0,
-      gainers: []
-    }
-  }
-  try {
-    overviewData = await getDashboardOverview()
-  } catch (e) {
-    console.error('Failed to fetch dashboard overview data', e)
-  }
-
+export default function DashboardPage() {
   return (
     <div className="space-y-2 max-w-[1920px] mx-auto">
 
       {/* ── Dashboard Header ── */}
-      <DashboardHeader
-        initialSessionState={overviewData.live_gainers.session}
-        initialFetchedAt={overviewData.live_gainers.fetched_at}
-      />
+      <DashboardHeader />
 
       {/* ── Command Summary Strip (Market Regime Card) ── */}
       <CommandSummaryStrip />
@@ -143,7 +117,7 @@ export default async function DashboardPage() {
             </Link>
           </div>
         </div>
-        <LiveGainers initialSnap={overviewData.live_gainers} initialWatchlist={overviewData.watchlist} initialSummary={overviewData.gainers_summary} />
+        <LiveGainers />
       </Panel>
 
       {/* ── Row 2: Repeat runners + Follow-through (stacked on mobile, side-by-side on lg) ── */}
