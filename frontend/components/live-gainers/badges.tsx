@@ -40,9 +40,34 @@ export function GapCell({ gap }: { gap: number }) {
 export function PriceCell({ last, prev }: { last: number | null; prev: number | null }) {
   if (last == null) return <td className="py-[3px] px-1.5 text-right font-mono text-text-muted text-[12px] tabular-nums select-none">—</td>
   const up = prev == null || last >= prev
+  
+  let rangeClass = up ? 'text-text-primary' : 'text-red-custom'
+  let tooltip = ''
+  let containerStyle = ''
+  
+  if (last >= 2.0 && last <= 10.0) {
+    rangeClass = 'text-green-custom font-extrabold'
+    containerStyle = 'border border-green-custom/20 bg-green-custom/5 px-1 py-0.25 rounded-none'
+    tooltip = 'Ross Sweet Spot ($2.00 - $10.00)'
+  } else if (last < 2.0) {
+    rangeClass = 'text-red-custom font-extrabold animate-pulse'
+    containerStyle = 'border border-red-custom/30 bg-red-custom/10 px-1 py-0.25 rounded-none'
+    tooltip = 'Caution: Sub-$2 (Dilution & Compliance Risk)'
+  }
+
   return (
-    <td className={`py-[3px] px-1.5 text-right font-mono text-[12px] tabular-nums font-bold select-none ${up ? 'text-text-primary' : 'text-red-custom'}`}>
-      ${last.toFixed(2)}
+    <td className="py-[3px] px-1.5 text-right font-mono text-[12px] tabular-nums select-none">
+      <div className="inline-flex items-center justify-end w-full group/tooltip relative">
+        <span className={`${rangeClass} ${containerStyle}`}>
+          ${last.toFixed(2)}
+        </span>
+        {tooltip && (
+          <div className="pointer-events-none absolute bottom-full right-0 mb-1.5 hidden group-hover/tooltip:block bg-panel border border-border-strong text-text-primary text-[10px] font-medium py-1 px-2 shadow-2xl w-48 leading-normal z-50 normal-case font-sans text-left">
+            {tooltip}
+            <span className="absolute top-full right-2 border-4 border-transparent border-t-panel" />
+          </div>
+        )}
+      </div>
     </td>
   )
 }
@@ -83,24 +108,41 @@ export function SkeletonRows({ cols = 9 }: { cols?: number }) {
 // ── Float Inline Cell (badge + tooltip without td wrapper) ─────────────────
 
 export function FloatCellInline({ float }: { float: number | null }) {
-  if (float == null) return <span className="font-mono text-text-muted text-[11px] tabular-nums select-none">—</span>
+  if (float == null) {
+    const tooltip = 'WARNING: Float size currently unverified! Structural float size is unknown.'
+    const colorClass = 'text-red-custom bg-red-custom/10 border border-red-custom/30 px-1 py-0.25 font-bold animate-pulse'
+    return (
+      <div className="inline-flex items-center justify-end group/tooltip relative select-none">
+        <span className={`inline-flex items-center font-mono text-[10px] tabular-nums ${colorClass}`}>
+          UNVERIFIED
+        </span>
+        <div className="pointer-events-none absolute bottom-full right-0 mb-1.5 hidden group-hover/tooltip:block bg-panel border border-border-strong text-text-primary text-[10px] font-medium py-1 px-2 shadow-2xl w-56 leading-normal z-50 normal-case font-sans text-left">
+          {tooltip}
+          <span className="absolute top-full right-2 border-4 border-transparent border-t-panel" />
+        </div>
+      </div>
+    )
+  }
   
   const formatted = fmtVol(float)
   let tooltip = ''
   let colorClass = ''
   
-  if (float < 1_000_000) {
-    tooltip = 'Small Float (< 1M): High squeeze risk'
-    colorClass = 'text-red-custom bg-red-custom/10 px-1 py-0.25'
+  if (float < 5_000_000) {
+    tooltip = 'Micro-Float Sweet Spot (< 5M): Supply shock trigger'
+    colorClass = 'text-purple-400 bg-purple-400/10 border border-purple-500/25 px-1 py-0.25 font-black'
   } else if (float < 10_000_000) {
-    tooltip = 'Medium Float (1M - 10M): Moderate squeeze risk'
-    colorClass = 'text-amber-custom bg-amber-custom/10 px-1 py-0.25'
-  } else if (float < 50_000_000) {
-    tooltip = 'Normal Float (10M - 50M): Standard float'
+    tooltip = 'Low Float (5M - 10M): Ross Target Range'
+    colorClass = 'text-amber-custom bg-amber-custom/10 px-1 py-0.25 font-bold'
+  } else if (float < 20_000_000) {
+    tooltip = 'Medium Float (10M - 20M): Ross Target Cap'
     colorClass = 'text-green-custom bg-green-custom/10 px-1 py-0.25'
-  } else {
-    tooltip = 'Large Float (> 50M): Low squeeze risk'
+  } else if (float < 100_000_000) {
+    tooltip = 'Large Float (20M - 100M): Lower squeeze sensation'
     colorClass = 'text-info-custom bg-info-custom/10 px-1 py-0.25'
+  } else {
+    tooltip = 'Extreme Float (> 100M): Capped squeeze potential'
+    colorClass = 'text-text-muted bg-text-muted/5 px-1 py-0.25'
   }
   
   return (
@@ -119,24 +161,43 @@ export function FloatCellInline({ float }: { float: number | null }) {
 // ── Float cell with tooltip ──────────────────────────────────────────────────
 
 export function FloatCell({ float }: { float: number | null }) {
-  if (float == null) return <td className="py-[3px] px-1.5 text-right font-mono text-text-muted text-[11px] tabular-nums select-none">—</td>
+  if (float == null) {
+    const tooltip = 'WARNING: Float size currently unverified! Structural float size is unknown.'
+    const colorClass = 'text-red-custom bg-red-custom/10 border border-red-custom/30 px-1 py-0.25 font-bold animate-pulse'
+    return (
+      <td className="py-[3px] px-1.5 text-right select-none font-mono">
+        <div className="inline-flex items-center justify-end w-full group/tooltip relative">
+          <span className={`inline-flex items-center font-mono text-[10px] tabular-nums ${colorClass}`}>
+            UNVERIFIED
+          </span>
+          <div className="pointer-events-none absolute bottom-full right-0 mb-1.5 hidden group-hover/tooltip:block bg-panel border border-border-strong text-text-primary text-[10px] font-medium py-1 px-2 shadow-2xl w-56 leading-normal z-50 normal-case font-sans text-left">
+            {tooltip}
+            <span className="absolute top-full right-2 border-4 border-transparent border-t-panel" />
+          </div>
+        </div>
+      </td>
+    )
+  }
   
   const formatted = fmtVol(float)
   let tooltip = ''
   let colorClass = ''
   
-  if (float < 1_000_000) {
-    tooltip = 'Small Float (< 1M): High squeeze risk'
-    colorClass = 'text-red-custom bg-red-custom/10 px-1 py-0.25'
+  if (float < 5_000_000) {
+    tooltip = 'Micro-Float Sweet Spot (< 5M): Supply shock trigger'
+    colorClass = 'text-purple-400 bg-purple-400/10 border border-purple-500/25 px-1 py-0.25 font-black'
   } else if (float < 10_000_000) {
-    tooltip = 'Medium Float (1M - 10M): Moderate squeeze risk'
-    colorClass = 'text-amber-custom bg-amber-custom/10 px-1 py-0.25'
-  } else if (float < 50_000_000) {
-    tooltip = 'Normal Float (10M - 50M): Standard float'
+    tooltip = 'Low Float (5M - 10M): Ross Target Range'
+    colorClass = 'text-amber-custom bg-amber-custom/10 px-1 py-0.25 font-bold'
+  } else if (float < 20_000_000) {
+    tooltip = 'Medium Float (10M - 20M): Ross Target Cap'
     colorClass = 'text-green-custom bg-green-custom/10 px-1 py-0.25'
-  } else {
-    tooltip = 'Large Float (> 50M): Low squeeze risk'
+  } else if (float < 100_000_000) {
+    tooltip = 'Large Float (20M - 100M): Lower squeeze sensation'
     colorClass = 'text-info-custom bg-info-custom/10 px-1 py-0.25'
+  } else {
+    tooltip = 'Extreme Float (> 100M): Capped squeeze potential'
+    colorClass = 'text-text-muted bg-text-muted/5 px-1 py-0.25'
   }
   
   return (

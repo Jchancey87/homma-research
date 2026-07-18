@@ -297,6 +297,17 @@ def _build_gainer_rows(quotes: Dict[str, dict], candidate_meta: Dict[str, dict],
 
 # ── Step 4: Per-ticker minute-level enrichment ─────────────────────────────────
 
+def calculate_ema(prices: List[float], period: int) -> Optional[float]:
+    if len(prices) < period:
+        return None
+    sma = sum(prices[:period]) / period
+    multiplier = 2 / (period + 1)
+    ema = sma
+    for price in prices[period:]:
+        ema = (price - ema) * multiplier + ema
+    return round(ema, 2)
+
+
 def _compute_minute_metrics(ticker: str, last_price: Optional[float],
                              high_price: Optional[float],
                              bid: Optional[float], ask: Optional[float]) -> dict:
@@ -312,6 +323,7 @@ def _compute_minute_metrics(ticker: str, last_price: Optional[float],
       - intraday_sparkline: sampled list of closes (max 30 points)
     """
     now = time.time()
+    import math
 
     # 30-second cache — return stale data with fresh price updates applied inline
     with _minute_cache_lock:
@@ -337,6 +349,18 @@ def _compute_minute_metrics(ticker: str, last_price: Optional[float],
                         cached['intraday_sparkline'][-1] = last_price
                     if cached.get('sparkline_1h'):
                         cached['sparkline_1h'][-1] = last_price
+
+                    # Update price-derived fields in cached metrics inline
+                    ema9_1m = cached.get('ema9_1m')
+                    if ema9_1m and ema9_1m > 0:
+                        cached['ema9_dist_pct'] = round(((last_price - ema9_1m) / ema9_1m) * 100, 2)
+
+                    p_level = math.ceil(2 * last_price) / 2
+                    if abs(p_level - last_price) < 1e-4:
+                        p_level += 0.5
+                    cached['next_psych_level'] = p_level
+                    cached['psych_dist_cents'] = round((p_level - last_price) * 100, 1)
+
                 return cached
 
     try:
@@ -351,6 +375,9 @@ def _compute_minute_metrics(ticker: str, last_price: Optional[float],
         'atr_14': None, 'vwap': None,
         'atr_hod': None, 'atr_sprd': None, 'atr_vwap': None,
         'zen_v': None, 'intraday_sparkline': [], 'sparkline_1h': [], 'hod': high_price or last_price,
+        'consec_red_1m': 0, 'ema9_1m': None, 'ema9_dist_pct': None,
+        'next_psych_level': None, 'psych_dist_cents': None,
+        'volume_ratio': None, 'rvol_1m': 1.0
     }
 
     if not candles:
@@ -445,6 +472,54 @@ def _compute_minute_metrics(ticker: str, last_price: Optional[float],
     if sparkline_1h and curr_p:
         sparkline_1h[-1] = curr_p
 
+    # ── Consec red 1-min candles ──
+    consec_red_1m = 0
+    for c in reversed(candles):
+        o_v = c.get('o')
+        c_v = c.get('c')
+        if o_v is not None and c_v is not None:
+            if c_v < o_v:
+                consec_red_1m += 1
+            else:
+                break
+
+    # ── 9 EMA on 1-min ──
+    ema9_1m = calculate_ema(closes, 9)
+    ema9_dist_pct = round(((curr_p - ema9_1m) / ema9_1m) * 100, 2) if (ema9_1m and ema9_1m > 0 and curr_p) else None
+
+    # ── Psychological half/whole dollar level ──
+    next_psych_level = math.ceil(2 * curr_p) / 2
+    if abs(next_psych_level - curr_p) < 1e-4:
+        next_psych_level += 0.5
+    psych_dist_cents = round((next_psych_level - curr_p) * 100, 1)
+
+    # ── Volume ratio (First 30 Min vs Today) ──
+    vol_first_30m = 0
+    vol_today = 0
+    today_str = datetime.now(EASTERN).strftime('%Y-%m-%d')
+    for c in candles:
+        t_val = c.get('t')
+        if not t_val:
+            continue
+        dt_val = datetime.fromtimestamp(t_val / 1000.0, EASTERN)
+        if dt_val.strftime('%Y-%m-%d') == today_str:
+            if dt_val.hour == 9 and dt_val.minute >= 30:
+                vol_today += c.get('v') or 0
+                if dt_val.minute < 60:
+                    vol_first_30m += c.get('v') or 0
+            elif dt_val.hour >= 10:
+                vol_today += c.get('v') or 0
+    volume_ratio = round((vol_first_30m / vol_today) * 100, 1) if vol_today > 0 else None
+
+    # ── Tape acceleration (current 1-min vol vs 20-candle average) ──
+    rvol_1m = 1.0
+    if len(candles) >= 2:
+        latest_vol = candles[-1].get('v') or 0
+        prev_candles = candles[-21:-1]
+        if prev_candles:
+            avg_prev_vol = sum(pc.get('v') or 0 for pc in prev_candles) / len(prev_candles)
+            rvol_1m = round(latest_vol / avg_prev_vol, 2) if avg_prev_vol > 0 else 0.0
+
     metrics = {
         'mom_2m':            mom_2m,
         'price_2min_ago':    price_2min_ago,
@@ -457,6 +532,13 @@ def _compute_minute_metrics(ticker: str, last_price: Optional[float],
         'intraday_sparkline': sparkline,
         'sparkline_1h':      sparkline_1h,
         'hod':               hod,
+        'consec_red_1m':     consec_red_1m,
+        'ema9_1m':           ema9_1m,
+        'ema9_dist_pct':     ema9_dist_pct,
+        'next_psych_level':  next_psych_level,
+        'psych_dist_cents':  psych_dist_cents,
+        'volume_ratio':      volume_ratio,
+        'rvol_1m':           rvol_1m
     }
 
     with _minute_cache_lock:
@@ -465,7 +547,7 @@ def _compute_minute_metrics(ticker: str, last_price: Optional[float],
 
 
 def _compute_daily_metrics(ticker: str) -> dict:
-    """Fetch daily candles, compute SMA20/50/100 and 5-day sparkline. 1-hour cache."""
+    """Fetch daily candles, compute SMA20/50/100, EMA50/200, 20-day high and 5-day sparkline. 1-hour cache."""
     now = time.time()
     with _daily_cache_lock:
         if ticker in _daily_cache:
@@ -473,11 +555,17 @@ def _compute_daily_metrics(ticker: str) -> dict:
             if now - ts < 3600:
                 return data
 
-    empty = {'sparkline_5d': [], 'sma20': None, 'sma50': None, 'sma100': None}
+    empty = {
+        'sparkline_5d': [], 'sma20': None, 'sma50': None, 'sma100': None,
+        'ema50': None, 'ema200': None, 'high20d': None
+    }
     try:
         from services.schwab_client import get_price_history_every_day
         raw = get_price_history_every_day(ticker)
-        closes = [c.get('close') for c in raw if c.get('close') is not None]
+        closes = [c.get('close') or c.get('c') for c in raw]
+        closes = [p for p in closes if p is not None]
+        highs = [c.get('high') or c.get('h') for c in raw]
+        highs = [p for p in highs if p is not None]
         if not closes:
             data = empty
         else:
@@ -487,6 +575,9 @@ def _compute_daily_metrics(ticker: str) -> dict:
                 'sma20':  sma(20),
                 'sma50':  sma(50),
                 'sma100': sma(100),
+                'ema50':  calculate_ema(closes, 50),
+                'ema200': calculate_ema(closes, 200),
+                'high20d': max(highs[-20:]) if len(highs) > 0 else None,
             }
     except Exception as e:
         log.warning(f"[Screener] Daily metrics for {ticker} failed: {e}")
@@ -518,6 +609,16 @@ def _enrich_ticker(g: dict) -> dict:
     if mm.get('hod'):
         g['high_price'] = round(mm['hod'], 4)
 
+    # Ross indicators
+    g['consec_red_1m']     = mm.get('consec_red_1m', 0)
+    g['ema9_1m']           = mm.get('ema9_1m')
+    g['ema9_dist_pct']     = mm.get('ema9_dist_pct')
+    g['next_psych_level']  = mm.get('next_psych_level')
+    g['psych_dist_cents']  = mm.get('psych_dist_cents')
+    g['volume_ratio']      = mm.get('volume_ratio')
+    g['rvol_1m']           = mm.get('rvol_1m', 1.0)
+    g['atr_14']            = mm.get('atr_14')
+
     # Daily metrics
     dm = _compute_daily_metrics(ticker)
     live = last_price
@@ -531,6 +632,30 @@ def _enrich_ticker(g: dict) -> dict:
     g['above_sma20']  = (live > dm['sma20'])  if live and dm['sma20']  else False
     g['above_sma50']  = (live > dm['sma50'])  if live and dm['sma50']  else False
     g['above_sma100'] = (live > dm['sma100']) if live and dm['sma100'] else False
+
+    # Daily EMAs & resistance
+    g['ema50']        = dm.get('ema50')
+    g['ema200']       = dm.get('ema200')
+    g['high20d']      = dm.get('high20d')
+
+    # Calculate nearest resistance
+    overhead_levels = []
+    if dm.get('ema50') and live and dm['ema50'] > live:
+        overhead_levels.append(('EMA50', dm['ema50']))
+    if dm.get('ema200') and live and dm['ema200'] > live:
+        overhead_levels.append(('EMA200', dm['ema200']))
+    if dm.get('high20d') and live and dm['high20d'] > live:
+        overhead_levels.append(('20D High', dm['high20d']))
+
+    if overhead_levels and live:
+        name, val = min(overhead_levels, key=lambda x: x[1])
+        g['nearest_resistance_name'] = name
+        g['nearest_resistance_val'] = round(val, 2)
+        g['nearest_resistance_dist'] = round(((val - live) / live) * 100, 2)
+    else:
+        g['nearest_resistance_name'] = 'Blue Sky'
+        g['nearest_resistance_val'] = None
+        g['nearest_resistance_dist'] = None
 
     return g
 
@@ -682,6 +807,40 @@ def _fast_refresh():
                         ((new_price - base) / base) * 100, 2,
                     )
 
+                # Update price-derived fields in fast refresh
+                ema9_1m = cached.get('ema9_1m')
+                if ema9_1m and ema9_1m > 0:
+                    g['ema9_dist_pct'] = round(((new_price - ema9_1m) / ema9_1m) * 100, 2)
+
+                import math
+                p_level = math.ceil(2 * new_price) / 2
+                if abs(p_level - new_price) < 1e-4:
+                    p_level += 0.5
+                g['next_psych_level'] = p_level
+                g['psych_dist_cents'] = round((p_level - new_price) * 100, 1)
+
+                # Nearest resistance recalculation using cached daily EMAs/resistances
+                ema50_val = g.get('ema50')
+                ema200_val = g.get('ema200')
+                high20d_val = g.get('high20d')
+                overhead_levels = []
+                if ema50_val and ema50_val > new_price:
+                    overhead_levels.append(('EMA50', ema50_val))
+                if ema200_val and ema200_val > new_price:
+                    overhead_levels.append(('EMA200', ema200_val))
+                if high20d_val and high20d_val > new_price:
+                    overhead_levels.append(('20D High', high20d_val))
+
+                if overhead_levels:
+                    name, val = min(overhead_levels, key=lambda x: x[1])
+                    g['nearest_resistance_name'] = name
+                    g['nearest_resistance_val'] = round(val, 2)
+                    g['nearest_resistance_dist'] = round(((val - new_price) / new_price) * 100, 2)
+                else:
+                    g['nearest_resistance_name'] = 'Blue Sky'
+                    g['nearest_resistance_val'] = None
+                    g['nearest_resistance_dist'] = None
+
                 # Tail-update sparklines
                 if g.get('sparkline_intraday'):
                     g['sparkline_intraday'][-1] = new_price
@@ -785,6 +944,11 @@ def refresh_cache(force: bool = False) -> dict:
                 'sparkline_intraday': [], 'sparkline_5d': [], 'sparkline_1h': [],
                 'sma20': None, 'sma50': None, 'sma100': None,
                 'above_sma20': False, 'above_sma50': False, 'above_sma100': False,
+                'consec_red_1m': 0, 'ema9_1m': None, 'ema9_dist_pct': None,
+                'next_psych_level': None, 'psych_dist_cents': None,
+                'volume_ratio': None, 'rvol_1m': 1.0, 'atr_14': None,
+                'ema50': None, 'ema200': None, 'high20d': None,
+                'nearest_resistance_name': None, 'nearest_resistance_val': None, 'nearest_resistance_dist': None
             })
 
     # ── 6. Catalyst tags ──

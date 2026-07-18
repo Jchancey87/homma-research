@@ -26,6 +26,7 @@
 * **Subscription Loop:** `stream_client.py` uses `level_one_equity_add` for new symbols in `update_subscriptions`. Outdated `level_one_equity_subs` replaced all active subscriptions at Schwab.
 * **Rank Change Indicators:** `GainerTable.tsx` tracks previous ranks via React state/ref. Computes rank shifts between polls, rendering green ChevronUp or red ChevronDown next to ticker. Removed FT and Speculative badges.
 * **Decoupled Package (RFC-008):** `momentum_screener` has zero upward dependencies to `backend/config.py` or `backend/fastapi_app/celery_app.py`. Default `DATABASE_URL`, `ALERT_MIN_TIME_COOLDOWN_MINS` loaded from environment. Standalone Celery instance on local Redis broker replaces direct celery_app import.
+* **Ross Scanners:** `live_screener.py` calculates pullbacks (`consec_red_1m`), 9 EMA distance (`ema9_dist_pct`), psychological half/whole dollar distance (`psych_dist_cents`), opening-rush volume ratio (`volume_ratio`), tape acceleration (`rvol_1m`), and daily space to nearest EMA/resistance (`nearest_resistance_dist`). Rendered in `GainerTable.tsx` depending on `scannerType`. Price sweet spot ($2-$10) and caution (<$2) ranges highlighted. Float unverified cells display pulsing `UNVERIFIED` and micro-floats (<5M) fuchsia. details drawer shows absolute `ATR (1m)` and `Spread (Cents)`.
 
 ### 4. Validation Helpers (RFC-004 QW-4)
 * **Ticker normalisation:** `from validation import normalize_ticker` — uppercase + strip. Replaces inline `ticker.upper().strip()`. Legacy `_upper_strip` alias kept in `validation/schemas.py` for in-module use only.
@@ -104,8 +105,9 @@
 
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Redesign dashboard and scanner UI for Bloomberg/terminal look: high density, utilitarian, subtle separators, compact typography.
-* **Scope:** Edit [GainerTable.tsx](file:///home/jackc/projects/homma-research/frontend/components/live-gainers/GainerTable.tsx), [LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx), [badges.tsx](file:///home/jackc/projects/homma-research/frontend/components/live-gainers/badges.tsx), [globals.css](file:///home/jackc/projects/homma-research/frontend/app/globals.css), [Panel.tsx](file:///home/jackc/projects/homma-research/frontend/components/Panel.tsx). Add third scanner table, implement dense layout, inline tokens, shared column alignment, tabular figures, and micro-signals.
+* **Goal:** Implement Ross Cameron scanner improvements for: Float Sweet Spot (<5M), Distance to Daily EMAs (50/200), News Catalyst Tag, Consecutive Red Candles (Pullbacks), Distance to 9 EMA, Psychological Half/Whole dollar levels, Volume Ratio, Micro-bar RVOL, sweet spot highlighting, fallback float alert, and 20-cent risk metric.
+* **Scope:** Modify live_screener.py, live_quotes_service.py, LiveGainers.tsx, GainerTable.tsx, badges.tsx, api.ts. Add calculated fields in backend, render layout with Ross rules in frontend.
+
 
 
 ## 🗑️ Rot & Pruning Log

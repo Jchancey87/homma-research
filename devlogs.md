@@ -1632,3 +1632,28 @@ Optimized `/health` to use pool connection health check. Created `/api/market/da
   * **Skeletons ([badges.tsx](file:///home/jackc/projects/homma-research/frontend/components/live-gainers/badges.tsx))**: Incremented skeleton rows to 12 and styled row height to `h-[24px]` and inner placeholders to `h-3.5` to match loaded table rows exactly.
   * **Indicators ([LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx))**: Placed `LIVE 3S` and `FAST MODE` status indicators inside always-mounted layouts, using opacity transitions to show/hide them without shifting neighbors. Styled `REDIS` status to standard length (`REDIS: OK` / `REDIS: ERR`) and fixed width `w-[75px]`.
 
+---
+
+## [2026-07-18] Ross Cameron Scanner & Risk Indicators Integration
+
+### Summary
+* Implemented Ross Cameron momentum scanners and risk calibration metrics (Float sweet spot, daily resistance distance, news tags, pullbacks, EMA 9 distance, psych dollar levels, volume ratio, micro-bar RVOL, absolute ATR/spread, and unverified float warning).
+
+### What Changed
+* **Backend Live Screener ([live_screener.py](file:///home/jackc/projects/homma-research/backend/services/live_screener.py))**:
+  * Added `calculate_ema(prices, period)`.
+  * Computed `consec_red_1m` pullback count, `ema9_1m` value, `ema9_dist_pct` distance.
+  * Calculated `next_psych_level` half/whole dollar level, `psych_dist_cents`.
+  * Calculated regular-session `volume_ratio` (First 30m vs today) and `rvol_1m` tape acceleration.
+  * Computed daily `ema50`, `ema200`, `high20d` resistance, nearest resistance name/val/dist (or 'Blue Sky').
+  * Mapped fields to gainer rows, updated `_fast_refresh()` inline calculations.
+* **Frontend API Types ([api.ts](file:///home/jackc/projects/homma-research/frontend/lib/api.ts))**: Extended `LiveGainerRow` interface with new scanner keys.
+* **Frontend Badges ([badges.tsx](file:///home/jackc/projects/homma-research/frontend/components/live-gainers/badges.tsx))**:
+  * Highlighted $2-$10 price sweet spot and pulsed red for sub-$2 risk.
+  * Rendered 'UNVERIFIED' indicator for null floats, highlighted micro-floats (<5M) in purple fuchsia, and categorized float ranges.
+* **Gainer Table ([GainerTable.tsx](file:///home/jackc/projects/homma-research/frontend/components/live-gainers/GainerTable.tsx))**:
+  * Passed `scannerType` prop to customize headers and cells.
+  * Implemented sorting logic for new keys.
+  * Displayed dynamic columns: Resist/Space, Spark, Catalyst (All Live); PB, EMA9 Dist, Psych Dist (Near HOD); RVOL, Vol Ratio, 1m RVOL (High RVOL).
+  * Rendered absolute `ATR (1m)` and `Spread (Cents)` in details drawer.
+* **Live Gainers Dashboard ([LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx))**: Passed correct `scannerType` to tables.

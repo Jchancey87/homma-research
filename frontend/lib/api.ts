@@ -156,6 +156,21 @@ export interface LiveGainerRow {
   high_price?:   number | null
   // Catalyst classification (2026-05)
   catalyst?:     string | null   // 'Confirmed Catalyst' | 'Technical / No News' | 'Speculative'
+  // Ross Cameron scanner metrics
+  consec_red_1m?: number
+  ema9_1m?: number | null
+  ema9_dist_pct?: number | null
+  next_psych_level?: number | null
+  psych_dist_cents?: number | null
+  volume_ratio?: number | null
+  rvol_1m?: number | null
+  atr_14?: number | null
+  ema50?: number | null
+  ema200?: number | null
+  high20d?: number | null
+  nearest_resistance_name?: string | null
+  nearest_resistance_val?: number | null
+  nearest_resistance_dist?: number | null
 }
 
 export interface LiveGainerSnapshot {

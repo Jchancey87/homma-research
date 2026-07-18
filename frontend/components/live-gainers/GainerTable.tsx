@@ -16,9 +16,10 @@ import {
 
 // ── Sort header helper ──────────────────────────────────────────────────────
 
-type SortKey = 'rank' | 'ticker' | 'price' | 'change' | 'mom_2m' | 'atr_hod' | 'float' | 'rvol' | 'hod' | 'trend' | 'spark' | 'signal'
+type SortKey = 'rank' | 'ticker' | 'price' | 'change' | 'mom_2m' | 'atr_hod' | 'float' | 'rvol' | 'hod' | 'trend' | 'spark' | 'signal' | 'consec_red' | 'ema9_dist' | 'psych' | 'vol_ratio' | 'micro_rvol' | 'resist'
 
 interface GainerTableProps {
+  scannerType?:    'all_live' | 'near_hod' | 'high_rvol'
   gainers:         LiveGainerRow[]
   fullList:        LiveGainerRow[]
   title:           string
@@ -32,6 +33,7 @@ interface GainerTableProps {
 }
 
 export function GainerTable({
+  scannerType = 'all_live',
   gainers,
   fullList,
   title,
@@ -125,6 +127,12 @@ export function GainerTable({
       case 'trend':   valA = getTrendScore(a); valB = getTrendScore(b); break
       case 'spark':   valA = a.gap_pct ?? 0; valB = b.gap_pct ?? 0; break
       case 'signal':  valA = a.rvol_15m ?? 0; valB = b.rvol_15m ?? 0; break
+      case 'consec_red': valA = a.consec_red_1m ?? 0; valB = b.consec_red_1m ?? 0; break
+      case 'ema9_dist':  valA = a.ema9_dist_pct ?? 9999; valB = b.ema9_dist_pct ?? 9999; break
+      case 'psych':      valA = a.psych_dist_cents ?? 9999; valB = b.psych_dist_cents ?? 9999; break
+      case 'vol_ratio':  valA = a.volume_ratio ?? 0; valB = b.volume_ratio ?? 0; break
+      case 'micro_rvol': valA = a.rvol_1m ?? 0; valB = b.rvol_1m ?? 0; break
+      case 'resist':     valA = a.nearest_resistance_dist ?? 9999; valB = b.nearest_resistance_dist ?? 9999; break
     }
 
     if (valA < valB) return sortDir === 'asc' ? -1 : 1
@@ -196,9 +204,27 @@ export function GainerTable({
               <Th col="change" label="Chg(%)" align="right" width="w-[11%]" />
               <Th col="trend"  label="Tr"    align="center" width="w-[6%]" />
               <Th col="float"  label="Float"   align="right" width="w-[13%]" />
-              <Th col="rvol"   label="RVOL"    align="right" width="w-[10%]" />
-              <Th col="spark"  label="Spark"   align="center" width="w-[14%]" />
-              <Th col="signal" label="Signals" align="left" width="w-[16%]" />
+              {scannerType === 'all_live' && (
+                <>
+                  <Th col="resist" label="Space" align="right" width="w-[12%]" />
+                  <Th col="spark"  label="Spark"   align="center" width="w-[12%]" />
+                  <Th col="signal" label="Catalyst" align="left" width="w-[16%]" />
+                </>
+              )}
+              {scannerType === 'near_hod' && (
+                <>
+                  <Th col="consec_red" label="PB" align="center" width="w-[10%]" />
+                  <Th col="ema9_dist"  label="EMA9 Dist" align="right" width="w-[14%]" />
+                  <Th col="psych"      label="Psych Dist" align="right" width="w-[16%]" />
+                </>
+              )}
+              {scannerType === 'high_rvol' && (
+                <>
+                  <Th col="rvol"      label="RVOL"    align="right" width="w-[10%]" />
+                  <Th col="vol_ratio" label="Vol Ratio" align="right" width="w-[14%]" />
+                  <Th col="micro_rvol" label="1m RVOL" align="right" width="w-[16%]" />
+                </>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y divide-[#1e222a]/50">
@@ -309,53 +335,144 @@ export function GainerTable({
                         <FloatCellInline float={g.float_shares} />
                       </td>
 
-                      {/* 7. RVOL */}
-                      <td className={`py-[3px] px-1.5 text-right select-none font-mono text-[11px] font-bold ${getRvolColor(g.rvol_15m)}`}>
-                        {g.rvol_15m != null ? `${g.rvol_15m.toFixed(1)}x` : '—'}
-                      </td>
-
-                      {/* 8. Sparkline (colored dynamically by last 5m candle direction) */}
-                      <td className="py-[3px] px-1.5 text-center select-none">
-                        {((g.sparkline_intraday && g.sparkline_intraday.length > 0) || (g.sparkline_5d && g.sparkline_5d.length > 0)) ? (
-                          <Sparkline
-                            points={g.sparkline_intraday && g.sparkline_intraday.length > 0 ? g.sparkline_intraday : g.sparkline_5d}
-                            width={38}
-                            height={10}
-                            colorByLast5m={true}
-                          />
-                        ) : (
-                          <span className="text-[10px] text-text-muted">—</span>
-                        )}
-                      </td>
-
-                      {/* 9. Signals */}
-                      {(() => {
-                        const signals = []
-                        if (g.mom_2m != null && g.mom_2m > 0.5) {
-                          signals.push({ code: 'MOM', className: 'text-green-custom' })
-                        }
-                        if (g.atr_hod != null && g.atr_hod <= 1.0) {
-                          signals.push({ code: 'HOD', className: 'text-amber-custom' })
-                        }
-                        if (g.atr_vwap != null && g.atr_vwap >= 0) {
-                          signals.push({ code: 'VWP', className: 'text-info-custom' })
-                        }
-                        if (g.rvol_15m != null && g.rvol_15m >= 5.0) {
-                          signals.push({ code: 'VOL', className: 'text-emerald-500 font-bold' })
-                        }
-                        return (
-                          <td className="py-[3px] px-1.5 text-left select-none font-mono text-[9px] font-bold">
-                            <div className="flex items-center gap-1">
-                              {signals.map(s => (
-                                <span key={s.code} className={`${s.className} tracking-tighter`} title={s.code}>
-                                  {s.code}
+                      {/* 7, 8, 9. Conditional Columns based on scannerType */}
+                      {scannerType === 'all_live' && (
+                        <>
+                          {/* Space to daily resistance */}
+                          <td className="py-[3px] px-1.5 text-right select-none font-mono text-[11px]">
+                            <div className="inline-flex items-center justify-end w-full group/tooltip relative">
+                              {g.nearest_resistance_name === 'Blue Sky' ? (
+                                <span className="text-info-custom font-bold">Blue Sky</span>
+                              ) : g.nearest_resistance_dist != null ? (
+                                <span className="text-text-secondary font-bold hover:text-text-primary transition-colors cursor-help">
+                                  +{g.nearest_resistance_dist.toFixed(1)}%
                                 </span>
-                              ))}
-                              {signals.length === 0 && <span className="text-text-muted/40">—</span>}
+                              ) : (
+                                <span className="text-text-muted">—</span>
+                              )}
+                              {g.nearest_resistance_name !== 'Blue Sky' && g.nearest_resistance_name && (
+                                <div className="pointer-events-none absolute bottom-full right-0 mb-1.5 hidden group-hover/tooltip:block bg-panel border border-border-strong text-text-primary text-[10px] font-medium py-1 px-2 shadow-2xl w-48 leading-normal z-50 normal-case font-sans text-left">
+                                  {g.nearest_resistance_name} @ ${g.nearest_resistance_val?.toFixed(2)}
+                                  <span className="absolute top-full right-2 border-4 border-transparent border-t-panel" />
+                                </div>
+                              )}
                             </div>
                           </td>
-                        )
-                      })()}
+
+                          {/* Sparkline */}
+                          <td className="py-[3px] px-1.5 text-center select-none">
+                            {((g.sparkline_intraday && g.sparkline_intraday.length > 0) || (g.sparkline_5d && g.sparkline_5d.length > 0)) ? (
+                              <Sparkline
+                                points={g.sparkline_intraday && g.sparkline_intraday.length > 0 ? g.sparkline_intraday : g.sparkline_5d}
+                                width={38}
+                                height={10}
+                                colorByLast5m={true}
+                              />
+                            ) : (
+                              <span className="text-[10px] text-text-muted">—</span>
+                            )}
+                          </td>
+
+                          {/* Catalyst Tag */}
+                          <td className="py-[3px] px-1.5 text-left select-none font-mono text-[10px] font-bold">
+                            <div className="inline-flex items-center group/tooltip relative">
+                              {g.catalyst === 'Confirmed Catalyst' ? (
+                                <span className="text-green-custom bg-green-custom/10 border border-green-custom/25 px-1 py-0.25 font-extrabold cursor-help">
+                                  NEWS
+                                </span>
+                              ) : g.catalyst === 'Technical / No News' ? (
+                                <span className="text-amber-custom bg-amber-custom/10 border border-amber-custom/25 px-1 py-0.25 font-extrabold cursor-help" title="No news found, but high volume/momentum pump. Caution: prone to rug pull.">
+                                  NO NEWS
+                                </span>
+                              ) : (
+                                <span className="text-text-muted bg-text-muted/10 border border-text-muted/20 px-1 py-0.25 font-bold cursor-help" title="No news, low or unknown relative volume. Speculative pump.">
+                                  SPEC
+                                </span>
+                              )}
+                              {g.catalyst === 'Confirmed Catalyst' && g.news_headline && (
+                                <div className="pointer-events-none absolute bottom-full left-0 mb-1.5 hidden group-hover/tooltip:block bg-panel border border-border-strong text-text-primary text-[10px] font-medium py-1.5 px-2.5 shadow-2xl w-64 leading-normal z-50 normal-case font-sans text-left">
+                                  {g.news_headline}
+                                  <span className="absolute top-full left-2 border-4 border-transparent border-t-panel" />
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </>
+                      )}
+
+                      {scannerType === 'near_hod' && (
+                        <>
+                          {/* Pullback Count */}
+                          <td className="py-[3px] px-1.5 text-center select-none font-mono text-[11px]">
+                            {g.consec_red_1m != null ? (
+                              <span className={g.consec_red_1m >= 2 ? 'text-amber-custom bg-amber-custom/10 px-1.5 py-0.25 font-extrabold border border-amber-custom/25 animate-pulse' : 'text-text-muted'}>
+                                {g.consec_red_1m}R
+                              </span>
+                            ) : (
+                              <span className="text-text-muted">—</span>
+                            )}
+                          </td>
+
+                          {/* Distance to 9 EMA */}
+                          <td className="py-[3px] px-1.5 text-right select-none font-mono text-[11px]">
+                            {g.ema9_dist_pct != null ? (
+                              <span className={
+                                Math.abs(g.ema9_dist_pct) <= 0.5
+                                  ? 'text-green-custom bg-green-custom/10 border border-green-custom/25 px-1 py-0.25 font-bold'
+                                  : g.ema9_dist_pct > 1.5
+                                  ? 'text-red-custom bg-red-custom/10 border border-red-custom/20 px-1'
+                                  : 'text-text-secondary'
+                              }>
+                                {g.ema9_dist_pct >= 0 ? '+' : ''}{g.ema9_dist_pct.toFixed(2)}%
+                              </span>
+                            ) : (
+                              <span className="text-text-muted">—</span>
+                            )}
+                          </td>
+
+                          {/* Psych distance */}
+                          <td className="py-[3px] px-1.5 text-right select-none font-mono text-[11px] font-medium text-text-secondary">
+                            {g.next_psych_level != null && g.psych_dist_cents != null ? (
+                              <span>
+                                ${g.next_psych_level.toFixed(2)} (<span className="text-info-custom font-bold">+{Math.round(g.psych_dist_cents)}c</span>)
+                              </span>
+                            ) : (
+                              <span className="text-text-muted">—</span>
+                            )}
+                          </td>
+                        </>
+                      )}
+
+                      {scannerType === 'high_rvol' && (
+                        <>
+                          {/* RVOL */}
+                          <td className={`py-[3px] px-1.5 text-right select-none font-mono text-[11px] font-bold ${getRvolColor(g.rvol_15m)}`}>
+                            {g.rvol_15m != null ? `${g.rvol_15m.toFixed(1)}x` : '—'}
+                          </td>
+
+                          {/* Vol Ratio */}
+                          <td className="py-[3px] px-1.5 text-right select-none font-mono text-[11px]">
+                            {g.volume_ratio != null ? (
+                              <span className={g.volume_ratio >= 50 ? 'text-amber-custom font-bold' : 'text-text-secondary'}>
+                                {g.volume_ratio.toFixed(1)}%
+                              </span>
+                            ) : (
+                              <span className="text-text-muted">—</span>
+                            )}
+                          </td>
+
+                          {/* Micro RVOL */}
+                          <td className="py-[3px] px-1.5 text-right select-none font-mono text-[11px] font-bold">
+                            {g.rvol_1m != null ? (
+                              <span className={g.rvol_1m >= 2.0 ? 'text-purple-400 bg-purple-400/10 border border-purple-500/25 px-1.5 py-0.25 animate-pulse' : 'text-text-secondary'}>
+                                {g.rvol_1m.toFixed(1)}x
+                              </span>
+                            ) : (
+                              <span className="text-text-muted">—</span>
+                            )}
+                          </td>
+                        </>
+                      )}
                     </tr>
 
                     {/* Expandable details row */}
@@ -467,6 +584,22 @@ export function GainerTable({
                                         {getZenVStyle(g.zen_v).text}
                                       </span>
                                     </div>
+
+                                    <MetricLabelWithTooltip
+                                      label="ATR (1m):"
+                                      tooltip="1-minute Average True Range. Use to check if a tight 20-cent stop fits this stock's volatility."
+                                    />
+                                    <span className="text-text-primary font-bold">
+                                      {g.atr_14 != null ? `$${g.atr_14.toFixed(3)}` : '—'}
+                                    </span>
+
+                                    <MetricLabelWithTooltip
+                                      label="Spread (Cents):"
+                                      tooltip="Absolute bid-ask spread in cents. Smaller spreads minimize slippage for 20-cent risk."
+                                    />
+                                    <span className="text-text-primary font-bold">
+                                      {g.ask != null && g.bid != null ? `${((g.ask - g.bid) * 100).toFixed(1)}c` : '—'}
+                                    </span>
 
                                     <span className="text-text-muted">Sector:</span>
                                     <span className="text-text-primary font-bold font-sans truncate">{g.sector ?? '—'}</span>

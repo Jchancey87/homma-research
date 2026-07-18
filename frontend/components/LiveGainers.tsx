@@ -327,6 +327,7 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = EMP
       {/* 3-Column Terminal Panel Grid */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-2.5">
         <GainerTable
+          scannerType="all_live"
           gainers={loading ? [] : filteredGainers}
           fullList={loading ? [] : filteredGainers}
           title="All Live Gainers"
@@ -341,6 +342,7 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = EMP
           flashingTickers={flashingTickers}
         />
         <GainerTable
+          scannerType="near_hod"
           gainers={loading ? [] : filteredGainers.filter(g => g.atr_hod != null && g.atr_hod < 1.0)}
           fullList={loading ? [] : filteredGainers}
           title="Near HOD Radar"
@@ -353,6 +355,7 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = EMP
           flashingTickers={flashingTickers}
         />
         <GainerTable
+          scannerType="high_rvol"
           gainers={loading ? [] : filteredGainers.filter(g => g.rvol_15m != null && g.rvol_15m >= 2.0)}
           fullList={loading ? [] : filteredGainers}
           title="High RVOL Radar"
