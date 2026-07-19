@@ -273,7 +273,7 @@ export default function NavBar() {
             
             {/* PRIMARY */}
             <div>
-              <div className="px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-text-muted font-semibold border-b border-border-subtle/40 mb-1">
+              <div className="px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-text-muted font-semibold border-b border-border-subtle mb-1">
                 PRIMARY
               </div>
               <div className="space-y-0.5">
@@ -293,7 +293,7 @@ export default function NavBar() {
 
             {/* JOURNALS */}
             <div>
-              <div className="px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-text-muted font-semibold border-b border-border-subtle/40 mb-1">
+              <div className="px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-text-muted font-semibold border-b border-border-subtle mb-1">
                 JOURNALS
               </div>
               <div className="space-y-0.5">
@@ -312,7 +312,7 @@ export default function NavBar() {
 
             {/* CHARTS */}
             <div>
-              <div className="px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-text-muted font-semibold border-b border-border-subtle/40 mb-1">
+              <div className="px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-text-muted font-semibold border-b border-border-subtle mb-1">
                 CHARTS
               </div>
               <div className="space-y-0.5">
@@ -331,7 +331,7 @@ export default function NavBar() {
 
             {/* FEEDS */}
             <div>
-              <div className="px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-text-muted font-semibold border-b border-border-subtle/40 mb-1">
+              <div className="px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-text-muted font-semibold border-b border-border-subtle mb-1">
                 FEEDS
               </div>
               <div className="space-y-0.5">

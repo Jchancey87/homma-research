@@ -5,8 +5,8 @@ This file tracks major milestones, debugging struggles, architectural decisions,
 ## [2026-07-19] Dashboard Borders Opacity Cleanup
 
 ### Summary
-* Remove `/30` opacity modifier from layout border classes (`border-border-subtle/30`).
-* Modify [Panel.tsx](file:///home/jackc/projects/homma-research/frontend/components/Panel.tsx), [DashboardHeader.tsx](file:///home/jackc/projects/homma-research/frontend/components/DashboardHeader.tsx), [GainerTable.tsx](file:///home/jackc/projects/homma-research/frontend/components/live-gainers/GainerTable.tsx).
+* Remove all opacity modifiers from `border-border-subtle` classes (such as `/30`, `/50`, `/20`, `/25`, `/45`, `/40`).
+* Modify [Panel.tsx](file:///home/jackc/projects/homma-research/frontend/components/Panel.tsx), [DashboardHeader.tsx](file:///home/jackc/projects/homma-research/frontend/components/DashboardHeader.tsx), [GainerTable.tsx](file:///home/jackc/projects/homma-research/frontend/components/live-gainers/GainerTable.tsx), [badges.tsx](file:///home/jackc/projects/homma-research/frontend/components/live-gainers/badges.tsx), [NavBar.tsx](file:///home/jackc/projects/homma-research/frontend/components/NavBar.tsx), [page.tsx](file:///home/jackc/projects/homma-research/frontend/app/gainers/page.tsx).
 * Restore solid default border color (`--border-subtle`).
 * Run tests, build successful.
 

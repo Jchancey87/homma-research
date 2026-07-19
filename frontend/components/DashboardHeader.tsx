@@ -186,7 +186,7 @@ export default function DashboardHeader({
       </div>
 
       {/* CENTER: Live session strip (fixed size on desktop to prevent horizontal shift) */}
-      <div className="flex items-center bg-raised/50 border border-border-subtle/50 px-3 py-1.5 font-mono text-[11px] text-text-secondary self-start lg:self-center overflow-x-auto max-w-full whitespace-nowrap scrollbar-none lg:w-[480px] lg:justify-center lg:shrink-0">
+      <div className="flex items-center bg-raised/50 border border-border-subtle px-3 py-1.5 font-mono text-[11px] text-text-secondary self-start lg:self-center overflow-x-auto max-w-full whitespace-nowrap scrollbar-none lg:w-[480px] lg:justify-center lg:shrink-0">
         <span className="font-bold text-text-primary tracking-wider">{timeDetails.dayName}</span>
         <span className="mx-2 text-text-muted">·</span>
         <span className="tabular-nums">{timeDetails.dateStr}</span>

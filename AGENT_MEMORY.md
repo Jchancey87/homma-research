@@ -50,7 +50,7 @@
 * **TradeStation Style:** Redesigned visual system dark-mode dashboard. Preserve zero-round sharp edges. Map 4-level dark surface depth variables in `globals.css`: app background `#070A0D`, cards/panels `#0D1218`, nested/headers `#131B24`, hover states `#192431`. Unified colors via Tailwind config (`green-custom`, `red-custom`, `amber-custom`, `info-custom`). Applied `tabular-nums` universally for price, change, momentum, volume, float data columns. Added faint raised background containers to inline sparklines.
 * **Continuation Journal:** Card-based UI grouped by date. Left colored border reflects tracking outcomes (Runner, Win, Flat, Fade, Active). Custom SVG inline sparklines show 3-day closes. Details pane opens inline. Scorecard metrics rendered as visual stacked percentage edge bars instead of static tables.
 * **GainerTable Overhaul:** Columns reduced to 6: Rank, Ticker, Price, Change(%), Trend, Float. Rank always visible. Suffixes [RR]/[FT] as badges + tooltips in Ticker col. Price 16px, Rank 14px bold, Ticker 13px monospace, Change 14px bold, Float 12px. Float uses dot-badge + tooltip. Trend is emoji-badge + tooltip. Float cell includes expand chevron. Enabled SortKey trend sorting.
-* **Dashboard borders:** Remove `/30` opacity modifier from layout border classes (`border-border-subtle/30`). Maintain solid default border color (`--border-subtle`).
+* **Dashboard borders:** Remove all opacity modifiers from layout border classes (such as `/30`, `/50`, `/20`, `/25`, `/45`, `/40`). Maintain solid default border color (`--border-subtle`).
 
 
 ### 7. Testing & DevOps

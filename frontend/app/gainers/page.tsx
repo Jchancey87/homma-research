@@ -141,9 +141,9 @@ export default function GainersPage() {
                   <th className="px-3 py-2 text-left text-[10px] font-mono text-text-muted uppercase tracking-wider">News</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border-subtle/50">
+              <tbody className="divide-y divide-border-subtle">
                 {sorted.map(g => (
-                  <tr key={g.id} className="border-b border-border-subtle/50 hover:bg-hover even:bg-raised/20 transition-all duration-150">
+                  <tr key={g.id} className="border-b border-border-subtle hover:bg-hover even:bg-raised/20 transition-all duration-150">
                     <td className="px-3 py-2 font-mono text-xs text-text-muted tabular-nums">{g.date}</td>
                     <td className="px-3 py-2 font-mono text-xs font-bold text-text-primary">{g.ticker}</td>
                     <td className="px-3 py-2 font-mono text-xs text-green-custom font-bold tabular-nums">

@@ -486,7 +486,7 @@ export function GainerTable({
                           <div className="overflow-hidden">
                             <div className="py-2.5 px-4 border-t border-border-subtle bg-[#0E1116] space-y-2.5">
                               {/* Actionability & Technical Status Dashboard */}
-                              <div className="flex flex-wrap gap-2 select-none border-b border-border-subtle/20 pb-2">
+                              <div className="flex flex-wrap gap-2 select-none border-b border-border-subtle pb-2">
                                 {playStatus && (
                                   <span className={`inline-flex items-center px-1.5 py-0.25 text-[10px] font-mono font-bold border border-current bg-transparent ${playStatus.className}`}>
                                     {playStatus.label}
@@ -512,7 +512,7 @@ export function GainerTable({
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-text-secondary">
                                 {/* Left Column: Detailed Metrics */}
                                 <div className="space-y-2">
-                                  <h4 className="text-[10px] font-bold text-text-muted uppercase tracking-wider select-none border-b border-border-subtle/25 pb-0.5">Secondary Metrics</h4>
+                                  <h4 className="text-[10px] font-bold text-text-muted uppercase tracking-wider select-none border-b border-border-subtle pb-0.5">Secondary Metrics</h4>
                                   <div className="grid grid-cols-2 gap-x-2 gap-y-1 font-mono text-[11px]">
                                     <span className="text-text-muted">Volume:</span>
                                     <span className="text-text-primary font-bold">{fmtVol(g.volume)}</span>
@@ -553,7 +553,7 @@ export function GainerTable({
 
                                 {/* Middle Column: Volatility & Relative Level */}
                                 <div className="space-y-2">
-                                  <h4 className="text-[10px] font-bold text-text-muted uppercase tracking-wider select-none border-b border-border-subtle/25 pb-0.5">Volatility & Relative Level</h4>
+                                  <h4 className="text-[10px] font-bold text-text-muted uppercase tracking-wider select-none border-b border-border-subtle pb-0.5">Volatility & Relative Level</h4>
                                   <div className="grid grid-cols-2 gap-x-2 gap-y-1 font-mono text-[11px]">
                                     <MetricLabelWithTooltip
                                       label="ATR Spread:"
@@ -641,7 +641,7 @@ export function GainerTable({
                                         e.stopPropagation()
                                         handleResearch(g)
                                       }}
-                                      className="flex-1 md:flex-initial flex items-center justify-center gap-1 px-2.5 py-1 text-[11px] font-bold text-text-secondary hover:text-text-primary bg-[#12161c] hover:bg-[#1b222d] border border-border-subtle/45 transition-all"
+                                      className="flex-1 md:flex-initial flex items-center justify-center gap-1 px-2.5 py-1 text-[11px] font-bold text-text-secondary hover:text-text-primary bg-[#12161c] hover:bg-[#1b222d] border border-border-subtle transition-all"
                                     >
                                       <ExternalLink size={11} />
                                       Research Ticker
@@ -651,7 +651,7 @@ export function GainerTable({
                               </div>
 
                               {/* Headline Footer */}
-                              <div className="mt-2 pt-2 border-t border-border-subtle/20 flex items-start gap-1.5 text-[11px]">
+                              <div className="mt-2 pt-2 border-t border-border-subtle flex items-start gap-1.5 text-[11px]">
                                 <span className="text-text-muted font-bold uppercase select-none shrink-0">Headline:</span>
                                 {g.catalyst === 'Technical / No News' ? (
                                   <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-custom">
