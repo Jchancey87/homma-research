@@ -61,6 +61,13 @@ async def lifespan(app: FastAPI):
         start_streaming_bridge()
     except Exception as e:
         log.error(f"[startup] Failed to start streaming price bridge: {e}")
+    log.info("[startup] Starting WebSocket alert streamer…")
+    try:
+        from .websocket_alerts import start_redis_subscriber
+        import asyncio
+        asyncio.create_task(start_redis_subscriber())
+    except Exception as e:
+        log.error(f"[startup] Failed to start WebSocket alert streamer: {e}")
     log.info("[startup] FastAPI app ready on port 5000")
     yield
     log.info("[shutdown] Stopping APScheduler…")
@@ -154,6 +161,10 @@ app.include_router(market_data.router, prefix="/api")
 app.include_router(strategies.router, prefix="/api")
 app.include_router(rss.router, prefix="/api")
 app.include_router(alert_config.router, prefix="/api")
+
+# WebSocket alert streaming
+from .websocket_alerts import router as ws_router
+app.include_router(ws_router)
 
 # Serve static storage files (charts, screenshots)
 from fastapi.staticfiles import StaticFiles

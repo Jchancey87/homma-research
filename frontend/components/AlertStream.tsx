@@ -1,8 +1,8 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { getAlertsDailySummary } from '@/lib/api'
-import { ChevronRight, Loader2, AlertCircle } from 'lucide-react'
+import { ChevronRight, Loader2, AlertCircle, Wifi, WifiOff } from 'lucide-react'
 
 // Alert type metadata for color coding
 const ALERT_TYPE_META: Record<string, { bg: string; text: string; border: string; label: string; emoji: string }> = {
@@ -34,24 +34,74 @@ interface AlertStreamItem {
   catalyst: string | null
 }
 
+// WebSocket URL - uses wss in production, ws in development
+const getWsUrl = () => {
+  if (typeof window === 'undefined') return ''
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const wsHost = window.location.hostname
+  return `${protocol}//${wsHost}:5000/ws/alerts`
+}
+
 export default function AlertStream() {
   const router = useRouter()
   const [alerts, setAlerts] = useState<AlertStreamItem[]>([])
   const [loading, setLoading] = useState(true)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [newAlertIds, setNewAlertIds] = useState<Set<number>>(new Set())
+  const [wsConnected, setWsConnected] = useState(false)
+  
   const prevAlertIdsRef = useRef<Set<number>>(new Set())
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const wsRef = useRef<WebSocket | null>(null)
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const alertIdCounterRef = useRef<number>(1000000)
 
-  const fetchAlerts = async () => {
+  // Process incoming alert (from WebSocket or polling)
+  const processAlert = useCallback((alertData: Record<string, unknown>) => {
+    const id = (alertData.id as number) || alertIdCounterRef.current++
+    
+    const newAlert: AlertStreamItem = {
+      id,
+      symbol: (alertData.symbol as string) || 'UNKNOWN',
+      alert_type: (alertData.alert_type as string) || 'UNKNOWN',
+      trigger_price: (alertData.price as number) || (alertData.trigger_price as number) || 0,
+      rel_vol: (alertData.rvol as number) || (alertData.rel_vol as number) || 0,
+      alert_time: (alertData.time as string) || (alertData.alert_time as string) || new Date().toISOString(),
+      priority_tier: (alertData.priority_tier as string) || 'Tier 3',
+      catalyst: (alertData.catalyst as string) || null,
+    }
+
+    setAlerts(prev => {
+      if (prev.some(a => a.symbol === newAlert.symbol && a.alert_type === newAlert.alert_type && 
+          Math.abs(new Date(a.alert_time).getTime() - new Date(newAlert.alert_time).getTime()) < 5000)) {
+        return prev
+      }
+      return [newAlert, ...prev].slice(0, 20)
+    })
+
+    setNewAlertIds(prev => {
+      const next = new Set(Array.from(prev))
+      next.add(id)
+      return next
+    })
+    setTimeout(() => {
+      setNewAlertIds(prev => {
+        const next = new Set(Array.from(prev))
+        next.delete(id)
+        return next
+      })
+    }, 3000)
+
+    setLastUpdate(new Date())
+  }, [])
+
+  // Fetch initial alerts via REST API
+  const fetchInitialAlerts = useCallback(async () => {
     try {
-      // Get today's date in ET
       const now = new Date()
       const etDate = now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-      
       const summary = await getAlertsDailySummary(etDate)
       
-      // Flatten all alerts from all tickers and sort by time (newest first)
       const allAlerts: AlertStreamItem[] = []
       for (const ticker of summary.tickers) {
         for (const alert of ticker.alerts) {
@@ -68,53 +118,154 @@ export default function AlertStream() {
         }
       }
       
-      // Sort by alert_time descending (newest first)
       allAlerts.sort((a, b) => new Date(b.alert_time).getTime() - new Date(a.alert_time).getTime())
-      
-      // Take only the most recent 20 alerts
-      const recentAlerts = allAlerts.slice(0, 20)
-      
-      // Detect new alerts (ones we haven't seen before)
-      const currentIds = new Set(recentAlerts.map(a => a.id))
-      const newIds = new Set<number>()
-      
-      if (prevAlertIdsRef.current.size > 0) {
+      setAlerts(allAlerts.slice(0, 20))
+      prevAlertIdsRef.current = new Set(allAlerts.map(a => a.id))
+      setLastUpdate(new Date())
+    } catch (err) {
+      console.error('Failed to fetch initial alerts:', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  // Polling fallback - defined before connectWebSocket to avoid hoisting issues
+  const startPolling = useCallback(() => {
+    if (pollIntervalRef.current) return
+    
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        const now = new Date()
+        const etDate = now.toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+        const summary = await getAlertsDailySummary(etDate)
+        
+        const allAlerts: AlertStreamItem[] = []
+        for (const ticker of summary.tickers) {
+          for (const alert of ticker.alerts) {
+            allAlerts.push({
+              id: alert.id,
+              symbol: ticker.symbol,
+              alert_type: alert.alert_type,
+              trigger_price: alert.trigger_price,
+              rel_vol: alert.rel_vol,
+              alert_time: alert.alert_time,
+              priority_tier: alert.priority_tier,
+              catalyst: alert.catalyst,
+            })
+          }
+        }
+        
+        allAlerts.sort((a, b) => new Date(b.alert_time).getTime() - new Date(a.alert_time).getTime())
+        const recentAlerts = allAlerts.slice(0, 20)
+        
+        const currentIds = new Set(recentAlerts.map(a => a.id))
+        const newIds = new Set<number>()
+        
         Array.from(currentIds).forEach(id => {
           if (!prevAlertIdsRef.current.has(id)) {
             newIds.add(id)
           }
         })
+        
+        prevAlertIdsRef.current = currentIds
+        
+        if (newIds.size > 0) {
+          setNewAlertIds(newIds)
+          setTimeout(() => setNewAlertIds(new Set()), 3000)
+        }
+        
+        setAlerts(recentAlerts)
+        setLastUpdate(new Date())
+      } catch (err) {
+        console.error('Polling error:', err)
       }
-      
-      prevAlertIdsRef.current = currentIds
-      
-      if (newIds.size > 0) {
-        setNewAlertIds(newIds)
-        // Clear new alert highlighting after 3 seconds
-        setTimeout(() => setNewAlertIds(new Set()), 3000)
-      }
-      
-      setAlerts(recentAlerts)
-      setLastUpdate(new Date())
-    } catch (err) {
-      console.error('Failed to fetch alerts:', err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchAlerts()
-    
-    // Poll every 5 seconds for new alerts
-    intervalRef.current = setInterval(fetchAlerts, 5000)
-    
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-      }
-    }
+    }, 5000)
   }, [])
+
+  // WebSocket connection
+  const connectWebSocket = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) return
+
+    try {
+      const wsUrl = getWsUrl()
+      if (!wsUrl) return
+
+      const ws = new WebSocket(wsUrl)
+      wsRef.current = ws
+
+      ws.onopen = () => {
+        console.log('WebSocket connected')
+        setWsConnected(true)
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current)
+          pollIntervalRef.current = null
+        }
+      }
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          if (data.type !== 'pong' && data.symbol) {
+            processAlert(data)
+          }
+        } catch (e) {
+          console.error('Failed to parse WebSocket message:', e)
+        }
+      }
+
+      ws.onclose = () => {
+        console.log('WebSocket disconnected')
+        setWsConnected(false)
+        startPolling()
+        reconnectTimeoutRef.current = setTimeout(() => {
+          connectWebSocket()
+        }, 5000)
+      }
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error)
+        ws.close()
+      }
+    } catch (e) {
+      console.error('Failed to create WebSocket:', e)
+      startPolling()
+    }
+  }, [processAlert, startPolling])
+
+  // Initialize
+  useEffect(() => {
+    fetchInitialAlerts()
+    
+    const timer = setTimeout(() => {
+      connectWebSocket()
+    }, 1000)
+
+    return () => {
+      clearTimeout(timer)
+      if (wsRef.current) {
+        wsRef.current.close()
+      }
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+      }
+    }
+  }, [fetchInitialAlerts, connectWebSocket])
+
+  // Keep alive ping
+  useEffect(() => {
+    if (!wsConnected) return
+    
+    const pingInterval = setInterval(() => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: 'ping' }))
+      }
+    }, 30000)
+
+    return () => clearInterval(pingInterval)
+  }, [wsConnected])
 
   const formatTime = (timeStr: string) => {
     const date = new Date(timeStr)
@@ -161,60 +312,60 @@ export default function AlertStream() {
 
   return (
     <div className="space-y-0.5">
-      {/* Header with live indicator */}
       <div className="flex items-center justify-between px-2 pb-2 border-b border-[#1a1a1a] mb-2">
         <div className="flex items-center gap-2">
           <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00ff00] opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00ff00]"></span>
+            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${wsConnected ? 'bg-[#00ff00]' : 'bg-amber-400'}`}></span>
+            <span className={`relative inline-flex rounded-full h-2 w-2 ${wsConnected ? 'bg-[#00ff00]' : 'bg-amber-400'}`}></span>
           </span>
           <span className="text-[10px] font-mono text-gray-500 uppercase tracking-wider">Live Feed</span>
+          <span className={`flex items-center gap-1 px-1.5 py-0.5 text-[8px] font-mono rounded-none ${
+            wsConnected 
+              ? 'bg-green-950/20 text-green-400 border border-green-500/30' 
+              : 'bg-amber-950/20 text-amber-400 border border-amber-500/30'
+          }`}>
+            {wsConnected ? <Wifi size={8} /> : <WifiOff size={8} />}
+            {wsConnected ? 'Live' : 'Polling'}
+          </span>
         </div>
         {lastUpdate && (
           <span className="text-[9px] font-mono text-gray-600">
-            Updated {lastUpdate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+            {lastUpdate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
           </span>
         )}
       </div>
 
-      {/* Alert list */}
       <div className="max-h-[280px] overflow-y-auto space-y-0.5">
         {alerts.map((alert) => {
           const meta = getAlertMeta(alert.alert_type)
           const isNew = newAlertIds.has(alert.id)
-          const isNewlyHighlighted = isNew
           
           return (
             <div
               key={alert.id}
               onClick={() => router.push(`/alerts?date=${new Date(alert.alert_time).toLocaleDateString('en-CA', { timeZone: 'America/New_York' })}`)}
               className={`group flex items-center gap-2 px-2 py-1.5 cursor-pointer transition-all rounded-none ${
-                isNewlyHighlighted
+                isNew
                   ? 'bg-[#00ff00]/10 border border-[#00ff00]/30 animate-pulse'
                   : 'hover:bg-[#0a0a0a] border border-transparent hover:border-[#262626]'
               }`}
             >
-              {/* Alert type badge */}
               <span className={`px-1 py-0.5 text-[8px] font-mono font-bold border ${meta.bg} ${meta.text} ${meta.border} rounded-none shrink-0`}>
                 {meta.label}
               </span>
               
-              {/* Ticker */}
               <span className="text-xs font-mono font-bold text-white group-hover:text-[#00ff00] transition-colors shrink-0 w-14">
                 {alert.symbol}
               </span>
               
-              {/* Price */}
               <span className="text-[10px] font-mono text-gray-400 shrink-0 w-14 text-right">
                 ${alert.trigger_price.toFixed(2)}
               </span>
               
-              {/* RVOL */}
               <span className="text-[10px] font-mono text-amber-400 shrink-0 w-10 text-right">
                 {alert.rel_vol.toFixed(1)}x
               </span>
               
-              {/* Priority tier */}
               <span className={`px-1 py-0.5 text-[8px] font-mono font-bold rounded-none shrink-0 ${
                 alert.priority_tier === 'Tier 1' ? 'text-[#ff003c] border border-[#ff003c]/30 bg-red-950/20'
                 : alert.priority_tier === 'Tier 2' ? 'text-amber-400 border border-amber-500/30 bg-amber-950/20'
@@ -223,26 +374,22 @@ export default function AlertStream() {
                 {alert.priority_tier?.replace('Tier ', 'T') ?? 'T3'}
               </span>
               
-              {/* Catalyst indicator */}
               {alert.catalyst && alert.catalyst !== 'Technical / No News' && (
                 <span className="px-1 py-0.5 text-[8px] font-mono text-cyan-400 border border-cyan-500/30 bg-cyan-950/20 rounded-none shrink-0" title={alert.catalyst}>
                   ⚡
                 </span>
               )}
               
-              {/* Time ago */}
               <span className="text-[9px] font-mono text-gray-600 ml-auto shrink-0">
                 {getTimeAgo(alert.alert_time)}
               </span>
               
-              {/* Arrow on hover */}
               <ChevronRight size={10} className="text-gray-600 group-hover:text-[#00ff00] transition-colors shrink-0 opacity-0 group-hover:opacity-100" />
             </div>
           )
         })}
       </div>
 
-      {/* Footer with link to full journal */}
       <div className="pt-2 border-t border-[#1a1a1a] mt-2">
         <button
           onClick={() => router.push('/alerts')}
