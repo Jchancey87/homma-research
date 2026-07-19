@@ -215,7 +215,7 @@ export default function DashboardHeader({
       </div>
 
       {/* RIGHT: Scope and actions */}
-      <div className="flex items-center justify-between lg:justify-end gap-3 flex-wrap lg:flex-nowrap border-t border-border-subtle/30 pt-2 lg:border-t-0 lg:pt-0">
+      <div className="flex items-center justify-between lg:justify-end gap-3 flex-wrap lg:flex-nowrap border-t border-border-subtle pt-2 lg:border-t-0 lg:pt-0">
         {/* Scope and Timezone */}
         <div className="flex items-center gap-2 font-mono text-[10px] text-text-muted">
           <span className="px-1.5 py-0.5 border border-info-custom/20 bg-info-custom/5 text-info-custom uppercase font-semibold">

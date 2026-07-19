@@ -2,6 +2,14 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-07-19] Dashboard Borders Opacity Cleanup
+
+### Summary
+* Remove `/30` opacity modifier from layout border classes (`border-border-subtle/30`).
+* Modify [Panel.tsx](file:///home/jackc/projects/homma-research/frontend/components/Panel.tsx), [DashboardHeader.tsx](file:///home/jackc/projects/homma-research/frontend/components/DashboardHeader.tsx), [GainerTable.tsx](file:///home/jackc/projects/homma-research/frontend/components/live-gainers/GainerTable.tsx).
+* Restore solid default border color (`--border-subtle`).
+* Run tests, build successful.
+
 ## [2026-07-17] Data Source Reliability & Performance Optimizations
 
 ### Summary

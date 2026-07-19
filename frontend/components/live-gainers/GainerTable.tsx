@@ -181,8 +181,8 @@ export function GainerTable({
   const colSpanCount = 9
 
   return (
-    <div className="bg-panel border border-border-subtle/30 p-2.5 space-y-2.5">
-      <h3 className="text-[11px] font-bold text-text-secondary tracking-wide uppercase border-b border-border-subtle/30 pb-1.5 flex items-center justify-between select-none h-[24px]">
+    <div className="bg-panel border border-border-subtle p-2.5 space-y-2.5">
+      <h3 className="text-[11px] font-bold text-text-secondary tracking-wide uppercase border-b border-border-subtle pb-1.5 flex items-center justify-between select-none h-[24px]">
         <div className="flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 bg-green-custom animate-pulse shrink-0" />
           <span>{title}</span>
@@ -484,7 +484,7 @@ export function GainerTable({
                           }`}
                         >
                           <div className="overflow-hidden">
-                            <div className="py-2.5 px-4 border-t border-border-subtle/30 bg-[#0E1116] space-y-2.5">
+                            <div className="py-2.5 px-4 border-t border-border-subtle bg-[#0E1116] space-y-2.5">
                               {/* Actionability & Technical Status Dashboard */}
                               <div className="flex flex-wrap gap-2 select-none border-b border-border-subtle/20 pb-2">
                                 {playStatus && (
@@ -613,7 +613,7 @@ export function GainerTable({
                                       <span className="text-[9px] font-bold text-text-muted uppercase tracking-wider select-none block">
                                         Trend Sparkline:
                                       </span>
-                                      <div className="bg-[#12161c] p-1.5 border border-border-subtle/30 inline-block">
+                                      <div className="bg-[#12161c] p-1.5 border border-border-subtle inline-block">
                                         <Sparkline
                                           points={g.sparkline_intraday && g.sparkline_intraday.length > 0 ? g.sparkline_intraday : g.sparkline_5d}
                                           width={80}
