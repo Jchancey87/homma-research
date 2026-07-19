@@ -32,23 +32,23 @@ function fmtInt(v: number | null): string {
 const INDEX_ORDER = ['SPY', 'QQQ', 'IWM'] as const
 
 const REGIME_STYLE: Record<string, { bg: string; text: string; border: string }> = {
-  risk_on:  { bg: 'bg-green-custom/15', text: 'text-green-custom', border: 'border-green-custom/35' },
-  neutral:  { bg: 'bg-amber-custom/15',  text: 'text-amber-custom',  border: 'border-amber-custom/35' },
-  risk_off: { bg: 'bg-red-custom/15', text: 'text-red-custom', border: 'border-red-custom/35' },
+  risk_on:  { bg: 'bg-green-custom/15', text: 'text-green-custom', border: 'border-transparent' },
+  neutral:  { bg: 'bg-amber-custom/15',  text: 'text-amber-custom',  border: 'border-transparent' },
+  risk_off: { bg: 'bg-red-custom/15', text: 'text-red-custom', border: 'border-transparent' },
 }
 
 const RISK_STYLE: Record<string, { bg: string; text: string; border: string }> = {
-  normal:   { bg: 'bg-info-custom/15',    text: 'text-info-custom',   border: 'border-info-custom/35' },
-  elevated: { bg: 'bg-amber-custom/15',   text: 'text-amber-custom',  border: 'border-amber-custom/35' },
-  high:     { bg: 'bg-red-custom/20',  text: 'text-red-custom', border: 'border-red-custom/40 font-black' },
+  normal:   { bg: 'bg-info-custom/15',    text: 'text-info-custom',   border: 'border-transparent' },
+  elevated: { bg: 'bg-amber-custom/15',   text: 'text-amber-custom',  border: 'border-transparent' },
+  high:     { bg: 'bg-red-custom/20',  text: 'text-red-custom', border: 'border-transparent font-black' },
 }
 
 function getFloatThemeStyle(theme: string) {
   if (theme.includes('MICRO'))
-    return 'bg-red-custom/15 text-red-custom border-red-custom/25'
+    return 'bg-red-custom/15 text-red-custom border-transparent'
   if (theme.includes('MID'))
-    return 'bg-amber-custom/15 text-amber-custom border-amber-custom/25'
-  return 'bg-info-custom/15 text-info-custom border-info-custom/25'
+    return 'bg-amber-custom/15 text-amber-custom border-transparent'
+  return 'bg-info-custom/15 text-info-custom border-transparent'
 }
 
 type CardId = 'regime' | 'breadth' | 'liquidity' | 'risk'
@@ -281,8 +281,8 @@ export default function CommandSummaryStrip() {
           <Badge
             label={breadth.status}
             style={breadth.is_bullish
-              ? { bg: 'bg-[#00ff00]/10', text: 'text-[#00ff00]', border: 'border-[#00ff00]/20' }
-              : { bg: 'bg-gray-500/10', text: 'text-gray-400', border: 'border-gray-500/20' }
+              ? { bg: 'bg-[#00ff00]/10', text: 'text-[#00ff00]', border: 'border-transparent' }
+              : { bg: 'bg-gray-500/10', text: 'text-gray-400', border: 'border-transparent' }
             }
           />
 
@@ -345,8 +345,8 @@ export default function CommandSummaryStrip() {
           <Badge
             label={liquidity.status}
             style={liquidity.is_high
-              ? { bg: 'bg-[#00ff00]/10', text: 'text-[#00ff00]', border: 'border-[#00ff00]/20' }
-              : { bg: 'bg-gray-500/10', text: 'text-gray-400', border: 'border-gray-500/20' }
+              ? { bg: 'bg-[#00ff00]/10', text: 'text-[#00ff00]', border: 'border-transparent' }
+              : { bg: 'bg-gray-500/10', text: 'text-gray-400', border: 'border-transparent' }
             }
           />
 
@@ -436,7 +436,7 @@ export default function CommandSummaryStrip() {
               {risk.halt_tickers.slice(0, 5).map(ticker => (
                 <span
                   key={ticker}
-                  className="inline-flex items-center px-1.5 py-0.5 font-mono text-[9px] font-bold bg-amber-400/10 text-amber-400 border border-amber-400/20"
+                  className="inline-flex items-center px-1.5 py-0.5 font-mono text-[9px] font-bold bg-amber-400/10 text-amber-400 border border-transparent"
                 >
                   {ticker}
                 </span>
@@ -474,7 +474,7 @@ export default function CommandSummaryStrip() {
                     {risk.halt_tickers.map(ticker => (
                       <span
                         key={ticker}
-                        className="inline-flex items-center px-1.5 py-0.5 font-mono text-[9px] font-bold bg-amber-400/10 text-amber-400 border border-amber-400/20"
+                        className="inline-flex items-center px-1.5 py-0.5 font-mono text-[9px] font-bold bg-amber-400/10 text-amber-400 border border-transparent"
                       >
                         {ticker}
                       </span>

@@ -151,7 +151,7 @@ export function GainerTable({
           <div className="relative group/tooltip inline-flex items-center gap-0.5">
             <span>{label}</span>
             <Info size={9} className="text-amber-custom hover:text-amber-300 cursor-help shrink-0" />
-            <div className="pointer-events-none absolute top-full right-0 mt-1 hidden group-hover/tooltip:block bg-panel border border-border-strong text-text-primary text-[10px] font-medium py-1 px-2 shadow-2xl w-56 leading-normal z-50 normal-case font-sans text-left">
+            <div className="pointer-events-none absolute top-full right-0 mt-1 hidden group-hover/tooltip:block bg-panel border border-border-subtle text-text-primary text-[10px] font-medium py-1 px-2 shadow-2xl w-56 leading-normal z-50 normal-case font-sans text-left">
               Schwab API does not return today&apos;s pre-market minute bars between 4:00 AM and 7:00 AM ET. Momentum calculations will start updating after 7:00 AM ET.
               <span className="absolute bottom-full right-2 border-4 border-transparent border-b-panel" />
             </div>
@@ -292,12 +292,12 @@ export function GainerTable({
                               </span>
                             )}
                             {g.is_repeat_runner && (
-                              <span className="text-[9px] font-bold text-amber-custom bg-amber-custom/5 px-0.5 border border-amber-custom/10 shrink-0" title="Recent Runner (24h)">
+                              <span className="text-[9px] font-bold text-amber-custom bg-amber-custom/5 px-0.5 shrink-0" title="Recent Runner (24h)">
                                 RR
                               </span>
                             )}
                             {g.is_follow_through && (
-                              <span className="text-[9px] font-bold text-info-custom bg-info-custom/5 px-0.5 border border-info-custom/10 shrink-0" title="Fast Trade (24h)">
+                              <span className="text-[9px] font-bold text-info-custom bg-info-custom/5 px-0.5 shrink-0" title="Fast Trade (24h)">
                                 FT
                               </span>
                             )}
@@ -351,7 +351,7 @@ export function GainerTable({
                                 <span className="text-text-muted">—</span>
                               )}
                               {g.nearest_resistance_name !== 'Blue Sky' && g.nearest_resistance_name && (
-                                <div className="pointer-events-none absolute bottom-full right-0 mb-1.5 hidden group-hover/tooltip:block bg-panel border border-border-strong text-text-primary text-[10px] font-medium py-1 px-2 shadow-2xl w-48 leading-normal z-50 normal-case font-sans text-left">
+                                <div className="pointer-events-none absolute bottom-full right-0 mb-1.5 hidden group-hover/tooltip:block bg-panel border border-border-subtle text-text-primary text-[10px] font-medium py-1 px-2 shadow-2xl w-48 leading-normal z-50 normal-case font-sans text-left">
                                   {g.nearest_resistance_name} @ ${g.nearest_resistance_val?.toFixed(2)}
                                   <span className="absolute top-full right-2 border-4 border-transparent border-t-panel" />
                                 </div>
@@ -377,20 +377,20 @@ export function GainerTable({
                           <td className="py-[3px] px-1.5 text-left select-none font-mono text-[10px] font-bold">
                             <div className="inline-flex items-center group/tooltip relative">
                               {g.catalyst === 'Confirmed Catalyst' ? (
-                                <span className="text-green-custom bg-green-custom/10 border border-green-custom/25 px-1 py-0.25 font-extrabold cursor-help">
+                                <span className="text-green-custom bg-green-custom/10 px-1 py-0.25 font-extrabold cursor-help">
                                   NEWS
                                 </span>
                               ) : g.catalyst === 'Technical / No News' ? (
-                                <span className="text-amber-custom bg-amber-custom/10 border border-amber-custom/25 px-1 py-0.25 font-extrabold cursor-help" title="No news found, but high volume/momentum pump. Caution: prone to rug pull.">
+                                <span className="text-amber-custom bg-amber-custom/10 px-1 py-0.25 font-extrabold cursor-help" title="No news found, but high volume/momentum pump. Caution: prone to rug pull.">
                                   NO NEWS
                                 </span>
                               ) : (
-                                <span className="text-text-muted bg-text-muted/10 border border-text-muted/20 px-1 py-0.25 font-bold cursor-help" title="No news, low or unknown relative volume. Speculative pump.">
+                                <span className="text-text-muted bg-text-muted/10 px-1 py-0.25 font-bold cursor-help" title="No news, low or unknown relative volume. Speculative pump.">
                                   SPEC
                                 </span>
                               )}
                               {g.catalyst === 'Confirmed Catalyst' && g.news_headline && (
-                                <div className="pointer-events-none absolute bottom-full left-0 mb-1.5 hidden group-hover/tooltip:block bg-panel border border-border-strong text-text-primary text-[10px] font-medium py-1.5 px-2.5 shadow-2xl w-64 leading-normal z-50 normal-case font-sans text-left">
+                                <div className="pointer-events-none absolute bottom-full left-0 mb-1.5 hidden group-hover/tooltip:block bg-panel border border-border-subtle text-text-primary text-[10px] font-medium py-1.5 px-2.5 shadow-2xl w-64 leading-normal z-50 normal-case font-sans text-left">
                                   {g.news_headline}
                                   <span className="absolute top-full left-2 border-4 border-transparent border-t-panel" />
                                 </div>
@@ -405,7 +405,7 @@ export function GainerTable({
                           {/* Pullback Count */}
                           <td className="py-[3px] px-1.5 text-center select-none font-mono text-[11px]">
                             {g.consec_red_1m != null ? (
-                              <span className={g.consec_red_1m >= 2 ? 'text-amber-custom bg-amber-custom/10 px-1.5 py-0.25 font-extrabold border border-amber-custom/25 animate-pulse' : 'text-text-muted'}>
+                              <span className={g.consec_red_1m >= 2 ? 'text-amber-custom bg-amber-custom/10 px-1.5 py-0.25 font-extrabold animate-pulse' : 'text-text-muted'}>
                                 {g.consec_red_1m}R
                               </span>
                             ) : (
@@ -418,9 +418,9 @@ export function GainerTable({
                             {g.ema9_dist_pct != null ? (
                               <span className={
                                 Math.abs(g.ema9_dist_pct) <= 0.5
-                                  ? 'text-green-custom bg-green-custom/10 border border-green-custom/25 px-1 py-0.25 font-bold'
+                                  ? 'text-green-custom bg-green-custom/10 px-1 py-0.25 font-bold'
                                   : g.ema9_dist_pct > 1.5
-                                  ? 'text-red-custom bg-red-custom/10 border border-red-custom/20 px-1'
+                                  ? 'text-red-custom bg-red-custom/10 px-1'
                                   : 'text-text-secondary'
                               }>
                                 {g.ema9_dist_pct >= 0 ? '+' : ''}{g.ema9_dist_pct.toFixed(2)}%
@@ -464,7 +464,7 @@ export function GainerTable({
                           {/* Micro RVOL */}
                           <td className="py-[3px] px-1.5 text-right select-none font-mono text-[11px] font-bold">
                             {g.rvol_1m != null ? (
-                              <span className={g.rvol_1m >= 2.0 ? 'text-purple-400 bg-purple-400/10 border border-purple-500/25 px-1.5 py-0.25 animate-pulse' : 'text-text-secondary'}>
+                              <span className={g.rvol_1m >= 2.0 ? 'text-purple-400 bg-purple-400/10 px-1.5 py-0.25 animate-pulse' : 'text-text-secondary'}>
                                 {g.rvol_1m.toFixed(1)}x
                               </span>
                             ) : (
@@ -631,7 +631,7 @@ export function GainerTable({
                                         e.stopPropagation()
                                         onOpenModal(g)
                                       }}
-                                      className="flex-1 md:flex-initial flex items-center justify-center gap-1 px-2.5 py-1 text-[11px] font-bold text-white bg-green-custom/80 hover:bg-green-custom border border-green-custom/20 transition-all"
+                                      className="flex-1 md:flex-initial flex items-center justify-center gap-1 px-2.5 py-1 text-[11px] font-bold text-white bg-green-custom/80 hover:bg-green-custom transition-all"
                                     >
                                       <Maximize2 size={11} />
                                       Detailed View

@@ -227,7 +227,7 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = EMP
   return (
     <div className="space-y-2.5">
       {/* Bloomberg-style Functional Toolbar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between border border-[#2b3547]/50 bg-[#0E1116] text-[11px] font-mono select-none w-full min-h-[30px]">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between border border-border-subtle bg-[#0E1116] text-[11px] font-mono select-none w-full min-h-[30px]">
         {/* Left Side: Terminal Status Metrics */}
         <div className="flex items-center gap-3 px-2.5 py-1 flex-wrap">
           <SessionBadge session={session} label={snap?.session_label ?? (session === 'closed' ? 'Closed' : 'Active')} />
@@ -263,11 +263,11 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = EMP
         </div>
 
         {/* Right Side: Function Keys Control Strip */}
-        <div className="flex items-stretch border-t sm:border-t-0 sm:border-l border-[#2b3547]/50 h-full">
+        <div className="flex items-stretch border-t sm:border-t-0 sm:border-l border-border-subtle h-full">
           {/* Audio Chime F1 */}
           <button
             onClick={() => setAudioChimesEnabled(!audioChimesEnabled)}
-            className={`px-3 py-1.5 sm:py-0 flex items-center gap-1 hover:bg-[#1C2330] border-r border-[#2b3547]/50 transition-colors ${
+            className={`px-3 py-1.5 sm:py-0 flex items-center gap-1 hover:bg-[#1C2330] border-r border-border-subtle transition-colors ${
               audioChimesEnabled ? 'text-green-custom font-bold bg-green-custom/5' : 'text-text-muted hover:text-text-primary'
             }`}
             title="Toggle Audio Chimes on Breakouts [F1]"
@@ -278,7 +278,7 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = EMP
           {/* Toasts Toggle F2 */}
           <button
             onClick={() => setToastStackEnabled(!toastStackEnabled)}
-            className={`px-3 py-1.5 sm:py-0 flex items-center gap-1 hover:bg-[#1C2330] border-r border-[#2b3547]/50 transition-colors ${
+            className={`px-3 py-1.5 sm:py-0 flex items-center gap-1 hover:bg-[#1C2330] border-r border-border-subtle transition-colors ${
               toastStackEnabled ? 'text-green-custom font-bold bg-green-custom/5' : 'text-text-muted hover:text-text-primary'
             }`}
             title="Toggle Toast Notifications [F2]"
@@ -294,7 +294,7 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = EMP
               localStorage.setItem(PRICE_FILTER_KEY, String(newValue))
               window.dispatchEvent(new Event(PRICE_FILTER_EVENT))
             }}
-            className={`px-3 py-1.5 sm:py-0 flex items-center gap-1 hover:bg-[#1C2330] border-r border-[#2b3547]/50 transition-colors ${
+            className={`px-3 py-1.5 sm:py-0 flex items-center gap-1 hover:bg-[#1C2330] border-r border-border-subtle transition-colors ${
               priceFilterEnabled ? 'text-info-custom font-bold bg-info-custom/5' : 'text-text-muted hover:text-text-primary'
             }`}
             title="Toggle $1-$30 Price Filter [F3]"

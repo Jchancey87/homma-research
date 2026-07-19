@@ -55,11 +55,11 @@ export default function MomentumBreadthBanner() {
     const isMid = theme.includes('MID')
     
     if (isMicro) {
-      return 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+      return 'bg-rose-500/10 text-rose-400 border border-transparent'
     } else if (isMid) {
-      return 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+      return 'bg-amber-500/10 text-amber-400 border border-transparent'
     } else {
-      return 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+      return 'bg-blue-500/10 text-blue-400 border border-transparent'
     }
   }
 
@@ -166,7 +166,7 @@ export default function MomentumBreadthBanner() {
                 data.active_halts.tickers.map(ticker => (
                   <span
                     key={ticker}
-                    className="inline-flex items-center px-1.5 py-0.5 rounded font-mono text-[9px] font-bold bg-amber-500/10 text-amber-500 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-500/20"
+                    className="inline-flex items-center px-1.5 py-0.5 rounded font-mono text-[9px] font-bold bg-amber-500/10 text-amber-500 dark:bg-amber-500/10 dark:text-amber-400 border border-transparent"
                   >
                     {ticker}
                   </span>
