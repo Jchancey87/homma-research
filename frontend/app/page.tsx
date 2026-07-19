@@ -3,7 +3,7 @@ import Link from 'next/link'
 import LiveGainers from '@/components/LiveGainers'
 import CommandSummaryStrip from '@/components/CommandSummaryStrip'
 import RepeatRunnerAlert from '@/components/RepeatRunnerAlert'
-import FollowThrough from '@/components/FollowThrough'
+import AlertStream from '@/components/AlertStream'
 import FloatBucketSummary from '@/components/FloatBucketSummary'
 import SectorRotation from '@/components/SectorRotation'
 import EconomicCalendar from '@/components/EconomicCalendar'
@@ -14,7 +14,7 @@ import { getContinuationPicks, ContinuationPick } from '@/lib/api'
 import {
   TrendingUp, RotateCcw,
   BarChart2, ArrowRight, CalendarDays,
-  Layers, TrendingDown, Zap,
+  Layers, Bell, Zap,
 } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -120,7 +120,7 @@ export default function DashboardPage() {
         <LiveGainers />
       </Panel>
 
-      {/* ── Row 2: Repeat runners + Follow-through (stacked on mobile, side-by-side on lg) ── */}
+      {/* ── Row 2: Repeat runners + Alert stream (stacked on mobile, side-by-side on lg) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
         <Panel>
           <PanelLabel icon={RotateCcw} label="Repeat Runners" href="/history" />
@@ -130,10 +130,8 @@ export default function DashboardPage() {
         </Panel>
 
         <Panel>
-          <PanelLabel icon={TrendingDown} label="Yesterday's Follow-Through" />
-          <Suspense fallback={<div className="space-y-2 animate-pulse">{[1,2,3].map(i=><div key={i} className="h-8 bg-[#111] rounded-none" />)}</div>}>
-            <FollowThrough />
-          </Suspense>
+          <PanelLabel icon={Bell} label="Live Alert Stream" href="/alerts" />
+          <AlertStream />
         </Panel>
       </div>
 
