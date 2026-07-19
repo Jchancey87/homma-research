@@ -41,6 +41,19 @@ redis_url = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
 # Create redis connection pool
 redis_client = redis.Redis.from_url(redis_url)
 
+# Time-of-day volume profile: multipliers for expected volume relative to 10d avg
+# Keys are hour boundaries (ET): before 8am, 8-9am, 9-9:30am, 9:30-10am, 10-11am, 11am-2pm, 2-4pm, after 4pm
+VOLUME_TOD_PROFILE = {
+    'pre_8am': 0.02,
+    '8am_9am': 0.08,
+    '9am_930am': 0.15,    # pre-market active
+    '930am_10am': 0.20,   # opening rush
+    '10am_11am': 0.16,
+    '11am_2pm': 0.14,
+    '2pm_4pm': 0.18,      # afternoon ramp
+    'post_4pm': 0.03,
+}
+
 STRATEGY_LABELS = {
     "NEAR_HOD_RADAR": "Near HOD Radar",
     "VOLUME_SPIKE": "Volume Spike",
@@ -107,6 +120,54 @@ class SchwabStreamer:
         self.ticker_group_ids = {}
 
         
+    def _volume_tod_multiplier(self, now_et=None):
+        """Return time-of-day volume multiplier for RVOL baseline calculation.
+        Uses VOLUME_TOD_PROFILE to determine expected volume fraction at current time.
+        """
+        if now_et is None:
+            now_et = datetime.now(pytz.timezone('America/New_York'))
+        h, m = now_et.hour, now_et.minute
+        if h < 8:
+            return VOLUME_TOD_PROFILE['pre_8am']
+        elif h < 9:
+            return VOLUME_TOD_PROFILE['8am_9am']
+        elif h == 9 and m < 30:
+            return VOLUME_TOD_PROFILE['9am_930am']
+        elif h == 9 or (h == 10 and m == 0):
+            return VOLUME_TOD_PROFILE['930am_10am']
+        elif h < 11:
+            return VOLUME_TOD_PROFILE['10am_11am']
+        elif h < 14:
+            return VOLUME_TOD_PROFILE['11am_2pm']
+        elif h < 16:
+            return VOLUME_TOD_PROFILE['2pm_4pm']
+        else:
+            return VOLUME_TOD_PROFILE['post_4pm']
+
+    def _volume_spike_threshold(self, now_et=None):
+        """Dynamic VOLUME_SPIKE multiplier: tighter during high-volume periods, looser in low-volume windows."""
+        if now_et is None:
+            now_et = datetime.now(pytz.timezone('America/New_York'))
+        h, m = now_et.hour, now_et.minute
+        # Pre-market (4:00-9:00 AM): 7x (sparse, need stronger confirmation)
+        if h < 9:
+            return 7.0
+        # Opening hour: 4x (lower bar, volume naturally surges)
+        elif h == 9:
+            return 4.0
+        # Mid-morning 10-11am: 5x (normal)
+        elif h < 11:
+            return 5.0
+        # Lunch 11am-2pm: 6x (quieter, need stronger signal)
+        elif h < 14:
+            return 6.0
+        # Afternoon 2-4pm: 5x
+        elif h < 16:
+            return 5.0
+        # Post-market: 7x (sparse, need stronger confirmation)
+        else:
+            return 7.0
+
     async def init_db(self):
         dsn = os.getenv('DATABASE_URL', DATABASE_URL)
         # Convert postgresql:// to postgres:// for asyncpg if necessary
@@ -744,7 +805,7 @@ class SchwabStreamer:
         mkt_end = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
         
         if now_et < mkt_start:
-            elapsed_pct = 0.05 # Premarket baseline
+            elapsed_pct = self._volume_tod_multiplier(now_et)
         elif now_et > mkt_end:
             elapsed_pct = 1.0
         else:
@@ -761,6 +822,14 @@ class SchwabStreamer:
         # Update 1-minute volume candle
         current_min = int(time.time() / 60)
         state = self.bars_1m.get(symbol)
+
+        # Post-halt suppression: skip momentum triggers for 2 min after volatility resume
+        post_halt_suppressed = False
+        resume_ts = self.halt_resume_times.get(symbol)
+        if resume_ts is not None and (time.time() - resume_ts) < 120:
+            post_halt_suppressed = True
+            logger.debug(f"Post-halt suppression active for {symbol} ({120 - (time.time() - resume_ts):.0f}s remaining)")
+
         if not state:
             self.bars_1m[symbol] = {
                 'minute': current_min,
@@ -790,17 +859,42 @@ class SchwabStreamer:
                     if state['open'] > 0:
                         price_rise_pct = (state['close'] - state['open']) / state['open']
                     
-                    if avg_vol > 0 and candle_volume >= 5.0 * avg_vol and price_rise_pct >= 0.01:
+                    # Time-of-day adjusted volume spike threshold
+                    vol_spike_mult = self._volume_spike_threshold(now_et)
+                    if avg_vol > 0 and candle_volume >= vol_spike_mult * avg_vol and price_rise_pct >= 0.01:
                         # Trigger VOLUME_SPIKE
                         asyncio.create_task(self.check_and_fire_alert(
                             symbol, state['close'], total_volume, rvol, gap_pct, "VOLUME_SPIKE"
                         ))
-                
-                # Append current completed candle to history
+
+                # HOD Breakout: fire once per candle at completion, body-close > HOD reference
+                if not post_halt_suppressed:
+                    if symbol not in self.prev_session_high or self.prev_session_high[symbol] <= 0:
+                        if high_price > 0:
+                            self.prev_session_high[symbol] = high_price
+                        elif last_price > 0:
+                            self.prev_session_high[symbol] = last_price
+
+                    hod_ref = self.prev_session_high.get(symbol, 0.0)
+                    if hod_ref > 0.0 and state['close'] > hod_ref:
+                        old_high = hod_ref
+                        self.prev_session_high[symbol] = max(
+                            self.prev_session_high.get(symbol, 0.0),
+                            state['high']
+                        )
+                        if rvol >= 1.5:
+                            asyncio.create_task(self.check_and_fire_alert(
+                                symbol, state['close'], total_volume, rvol, gap_pct,
+                                "NEAR_HOD_RADAR", high_price=old_high, low_price=low_price
+                            ))
+
+                # Append current completed candle to history (with high/low for True Range)
                 history.append({
                     'volume': candle_volume,
                     'open': state['open'],
-                    'close': state['close']
+                    'close': state['close'],
+                    'high': state['high'],
+                    'low': state['low']
                 })
                 if len(history) > 20:
                     history.pop(0)
@@ -822,36 +916,22 @@ class SchwabStreamer:
                 state['close'] = last_price
                 state['last_volume'] = total_volume
 
-        # Post-halt suppression: skip momentum triggers for 2 min after volatility resume
-        post_halt_suppressed = False
-        resume_ts = self.halt_resume_times.get(symbol)
-        if resume_ts is not None and (time.time() - resume_ts) < 120:
-            post_halt_suppressed = True
-            logger.debug(f"Post-halt suppression active for {symbol} ({120 - (time.time() - resume_ts):.0f}s remaining)")
-
-        # Trigger 1: Near HOD Radar breakout (more responsive, live tick breakout)
-        if not post_halt_suppressed:
-            if symbol not in self.prev_session_high or self.prev_session_high[symbol] <= 0:
-                if high_price > 0:
-                    self.prev_session_high[symbol] = high_price
-                elif last_price > 0:
-                    self.prev_session_high[symbol] = last_price
-            
-            if self.prev_session_high.get(symbol, 0.0) > 0.0 and last_price > self.prev_session_high[symbol]:
-                old_high = self.prev_session_high[symbol]
-                self.prev_session_high[symbol] = last_price
-                if rvol >= 1.5:
-                    await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "NEAR_HOD_RADAR", high_price=old_high, low_price=low_price)
-
-        # Trigger 2: VWAP Crossing (ATR-based dynamic hysteresis to prevent chatter)
-        # Estimate ATR from last 10 completed candles (candle range = high - low, approximated here
-        # via open/close since we only store open/close in the bar history).
+        # Trigger 2: VWAP Crossing (True Range-based dynamic hysteresis to prevent chatter)
+        # Uses proper True Range from completed candles (high-low range, not open-close approx).
         if vwap > 0 and not post_halt_suppressed:
             if len(candle_history) >= 5:
-                recent = candle_history[-10:] if len(candle_history) >= 10 else candle_history
-                avg_range = sum(abs(c['close'] - c['open']) for c in recent) / len(recent)
-                # ATR buffer: half the average candle range as a % of vwap, floored at 0.5% capped at 3%
-                atr_buffer = max(0.005, min(0.03, (avg_range / vwap) * 0.5))
+                recent = candle_history[-14:] if len(candle_history) >= 14 else candle_history
+                # True Range: max(high-low, abs(high-prev_close), abs(low-prev_close))
+                # Use close of prior candle as prev_close proxy
+                true_ranges = []
+                for i, c in enumerate(recent):
+                    hi, lo = c.get('high', c['close']), c.get('low', c['close'])
+                    prev_close = recent[i-1]['close'] if i > 0 else c['open']
+                    tr = max(hi - lo, abs(hi - prev_close), abs(lo - prev_close))
+                    true_ranges.append(tr)
+                atr_val = sum(true_ranges) / len(true_ranges)
+                # ATR buffer as % of VWAP, floored at 0.5% capped at 3%
+                atr_buffer = max(0.005, min(0.03, atr_val / vwap))
             else:
                 atr_buffer = 0.015  # default 1.5% until we have enough candle history
 
@@ -1193,7 +1273,7 @@ class SchwabStreamer:
             mkt_start = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
             mkt_end = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
             if now_et < mkt_start:
-                elapsed_pct = 0.05
+                elapsed_pct = self._volume_tod_multiplier(now_et)
             elif now_et > mkt_end:
                 elapsed_pct = 1.0
             else:

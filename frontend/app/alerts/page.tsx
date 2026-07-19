@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef, useState, useCallback, Suspense } from 'react'
+import { useEffect, useRef, useState, useCallback, Suspense, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   createChart, IChartApi,
@@ -16,7 +16,7 @@ import {
 import {
   Bell, ChevronLeft, ChevronRight, Loader2,
   AlertCircle, ThumbsUp, ThumbsDown, Save, CheckCircle, Info, BarChart2,
-  Activity, AlertTriangle
+  Activity, AlertTriangle, Download, Filter, Eye, TrendingUp, TrendingDown, SkipForward
 } from 'lucide-react'
 import {
   CHART_BG, GRID_COLOR, TEXT_COLOR, UP_COLOR, DOWN_COLOR, EMA21_COL,
@@ -24,6 +24,212 @@ import {
   dedupSort, shiftChartDataTime,
 } from '@/lib/chart'
 import { fmtFloat } from '@/lib/format'
+
+// ── Alert Type Colors & Metadata ──────────────────────────────────────────
+const ALERT_TYPE_META: Record<string, { bg: string; text: string; border: string; label: string; emoji: string }> = {
+  'NEAR_HOD_RADAR': { bg: 'bg-pink-950/20', text: 'text-pink-400', border: 'border-pink-500/40', label: 'HOD Breakout', emoji: '🎯' },
+  'VOLUME_SPIKE': { bg: 'bg-purple-950/20', text: 'text-purple-400', border: 'border-purple-500/40', label: 'Volume Spike', emoji: '📊' },
+  'PREV_DAY_BREAKOUT': { bg: 'bg-blue-950/20', text: 'text-blue-400', border: 'border-blue-500/40', label: 'Prev Day Break', emoji: '🚀' },
+  'VOLATILITY_HALT': { bg: 'bg-red-950/20', text: 'text-red-400', border: 'border-red-500/40', label: 'Halt', emoji: '🛑' },
+  'VOLATILITY_RESUME': { bg: 'bg-green-950/20', text: 'text-green-400', border: 'border-green-500/40', label: 'Resume', emoji: '▶️' },
+  'VWAP_CROSSOVER': { bg: 'bg-amber-950/20', text: 'text-amber-400', border: 'border-amber-500/40', label: 'VWAP Cross', emoji: '📈' },
+  'VWAP_BOUNCE': { bg: 'bg-amber-950/20', text: 'text-amber-400', border: 'border-amber-500/40', label: 'VWAP Bounce', emoji: '↩️' },
+  'RUNNING_UP': { bg: 'bg-emerald-950/20', text: 'text-emerald-400', border: 'border-emerald-500/40', label: 'Running Up', emoji: '🏃' },
+  'BULL_FLAG': { bg: 'bg-cyan-950/20', text: 'text-cyan-400', border: 'border-cyan-500/40', label: 'Bull Flag', emoji: '🏳️' },
+  'MULTI_TF_CONFLUENCE': { bg: 'bg-violet-950/20', text: 'text-violet-400', border: 'border-violet-500/40', label: 'Multi-TF', emoji: '🔀' },
+  'HALT_RESUME_MOMENTUM': { bg: 'bg-yellow-950/20', text: 'text-yellow-400', border: 'border-yellow-500/40', label: 'Halt Resume Mom', emoji: '⚡' },
+}
+
+function getAlertMeta(type: string) {
+  return ALERT_TYPE_META[type] ?? { bg: 'bg-gray-950/20', text: 'text-gray-400', border: 'border-gray-500/40', label: type.replace(/_/g, ' '), emoji: '🔔' }
+}
+
+// ── Alert Strength Calculator ─────────────────────────────────────────────
+function calcAlertStrength(alert: AlertInstance): number {
+  const factors: number[] = []
+  // RVOL factor (0-1)
+  factors.push(Math.min(alert.rel_vol / 5, 1))
+  // Catalyst presence
+  if (alert.catalyst) factors.push(1)
+  // Priority tier
+  if (alert.priority_tier === 'Tier 1') factors.push(1)
+  else if (alert.priority_tier === 'Tier 2') factors.push(0.5)
+  else factors.push(0.2)
+  // VWAP distance (positive = above VWAP)
+  if (alert.vwap_dist_pct != null) factors.push(alert.vwap_dist_pct > 0 ? 0.8 : 0.3)
+  // Stop level defined
+  if (alert.stop_price != null && alert.stop_price > 0) factors.push(0.7)
+  return factors.length > 0 ? factors.reduce((a, b) => a + b, 0) / factors.length : 0.5
+}
+
+// ── Alert Strength Meter Component ────────────────────────────────────────
+function AlertStrengthMeter({ strength }: { strength: number }) {
+  const color = strength >= 0.7 ? 'bg-[#00ff00]' : strength >= 0.4 ? 'bg-amber-500' : 'bg-[#ff003c]'
+  const textColor = strength >= 0.7 ? 'text-[#00ff00]' : strength >= 0.4 ? 'text-amber-400' : 'text-[#ff003c]'
+  return (
+    <div className="flex items-center gap-1.5" title={`Strength: ${(strength * 100).toFixed(0)}%`}>
+      <div className="flex gap-px">
+        {[0.25, 0.5, 0.75, 1].map((threshold, i) => (
+          <div key={i} className={`w-1 h-2.5 ${strength >= threshold ? color : 'bg-[#262626]'}`} />
+        ))}
+      </div>
+      <span className={`text-[8px] font-mono ${textColor}`}>{(strength * 100).toFixed(0)}%</span>
+    </div>
+  )
+}
+
+// ── Quick Action Buttons Component ────────────────────────────────────────
+function QuickActions({ alert, onAction }: { alert: AlertInstance; onAction: (action: string, alert: AlertInstance) => void }) {
+  return (
+    <div className="flex gap-1">
+      <button
+        onClick={(e) => { e.stopPropagation(); onAction('watch', alert) }}
+        className="px-1.5 py-0.5 text-[8px] font-mono bg-blue-950/20 text-blue-400 border border-blue-500/30 hover:bg-blue-950/40 transition-colors rounded-none"
+        title="Add to watchlist"
+      >
+        <Eye size={9} className="inline mr-0.5" />Watch
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); onAction('long', alert) }}
+        className="px-1.5 py-0.5 text-[8px] font-mono bg-green-950/20 text-green-400 border border-green-500/30 hover:bg-green-950/40 transition-colors rounded-none"
+        title="Mark as long setup"
+      >
+        <TrendingUp size={9} className="inline mr-0.5" />Long
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); onAction('skip', alert) }}
+        className="px-1.5 py-0.5 text-[8px] font-mono bg-gray-950/20 text-gray-400 border border-gray-500/30 hover:bg-gray-950/40 transition-colors rounded-none"
+        title="Skip this alert"
+      >
+        <SkipForward size={9} className="inline mr-0.5" />Skip
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); onAction('short', alert) }}
+        className="px-1.5 py-0.5 text-[8px] font-mono bg-red-950/20 text-red-400 border border-red-500/30 hover:bg-red-950/40 transition-colors rounded-none"
+        title="Mark as short setup"
+      >
+        <TrendingDown size={9} className="inline mr-0.5" />Short
+      </button>
+    </div>
+  )
+}
+
+// ── Alert Filters Component ───────────────────────────────────────────────
+interface AlertFilters {
+  type: string
+  minRvol: number
+  feedback: string
+  hasCatalyst: boolean
+}
+
+function AlertFiltersBar({ filters, onChange }: { filters: AlertFilters; onChange: (f: AlertFilters) => void }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 p-2 bg-[#0a0a0a] border border-[#262626]">
+      <Filter size={10} className="text-gray-500" />
+      <select
+        value={filters.type}
+        onChange={e => onChange({ ...filters, type: e.target.value })}
+        className="bg-black border border-[#262626] text-[9px] font-mono text-gray-300 px-1.5 py-0.5 rounded-none"
+      >
+        <option value="">All Types</option>
+        <option value="NEAR_HOD_RADAR">HOD Breakout</option>
+        <option value="VOLUME_SPIKE">Volume Spike</option>
+        <option value="PREV_DAY_BREAKOUT">Prev Day Break</option>
+        <option value="VWAP_CROSSOVER">VWAP Cross</option>
+        <option value="VOLATILITY_HALT">Halt</option>
+        <option value="VOLATILITY_RESUME">Resume</option>
+      </select>
+      <select
+        value={filters.minRvol}
+        onChange={e => onChange({ ...filters, minRvol: Number(e.target.value) })}
+        className="bg-black border border-[#262626] text-[9px] font-mono text-gray-300 px-1.5 py-0.5 rounded-none"
+      >
+        <option value="0">Any RVOL</option>
+        <option value="2">RVOL ≥ 2x</option>
+        <option value="3">RVOL ≥ 3x</option>
+        <option value="5">RVOL ≥ 5x</option>
+      </select>
+      <select
+        value={filters.feedback}
+        onChange={e => onChange({ ...filters, feedback: e.target.value })}
+        className="bg-black border border-[#262626] text-[9px] font-mono text-gray-300 px-1.5 py-0.5 rounded-none"
+      >
+        <option value="">Any Rating</option>
+        <option value="helpful">Helpful Only</option>
+        <option value="noise">Noise Only</option>
+        <option value="unrated">Unrated</option>
+      </select>
+      <label className="flex items-center gap-1 text-[9px] font-mono text-gray-400 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={filters.hasCatalyst}
+          onChange={e => onChange({ ...filters, hasCatalyst: e.target.checked })}
+          className="w-3 h-3 accent-[#00ff00]"
+        />
+        Has Catalyst
+      </label>
+    </div>
+  )
+}
+
+// ── Export Button Component ───────────────────────────────────────────────
+function ExportButton({ alerts, filename, ticker }: { alerts: AlertInstance[]; filename: string; ticker: string }) {
+  const exportCSV = () => {
+    const headers = ['ID', 'Ticker', 'Type', 'Time', 'Price', 'RVOL', 'Catalyst', 'Rating', '1m Return', '5m Return', '15m Return', 'MFE', 'MAE', 'Priority']
+    const rows = alerts.map(a => [
+      a.id,
+      ticker,
+      a.alert_type,
+      a.alert_time,
+      a.trigger_price.toFixed(2),
+      a.rel_vol.toFixed(2),
+      a.catalyst ?? '',
+      a.feedback_score ?? '',
+      a.fwd_1m?.toFixed(2) ?? '',
+      a.fwd_5m?.toFixed(2) ?? '',
+      a.fwd_15m?.toFixed(2) ?? '',
+      a.mfe?.toFixed(2) ?? '',
+      a.mae?.toFixed(2) ?? '',
+      a.priority_tier ?? ''
+    ])
+    const csv = [headers, ...rows].map(r => r.join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${filename}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  return (
+    <button
+      onClick={exportCSV}
+      disabled={alerts.length === 0}
+      className="flex items-center gap-1 px-2 py-1 text-[9px] font-mono bg-[#111] text-gray-400 border border-[#262626] hover:text-white hover:border-[#444] transition-colors disabled:opacity-30 rounded-none"
+    >
+      <Download size={10} />
+      Export CSV ({alerts.length})
+    </button>
+  )
+}
+
+// ── Alert Fatigue Indicator ───────────────────────────────────────────────
+function AlertFatigueIndicator({ hourlyRate, avgRate }: { hourlyRate: number; avgRate: number }) {
+  const ratio = avgRate > 0 ? hourlyRate / avgRate : 1
+  const fatigue = ratio > 2 ? 'High' : ratio > 1.5 ? 'Medium' : 'Low'
+  const color = ratio > 2 ? 'text-[#ff003c]' : ratio > 1.5 ? 'text-amber-400' : 'text-[#00ff00]'
+  const bgColor = ratio > 2 ? 'bg-red-950/20 border-red-500/30' : ratio > 1.5 ? 'bg-amber-950/20 border-amber-500/30' : 'bg-green-950/20 border-green-500/30'
+
+  return (
+    <div className={`flex items-center gap-1.5 px-2 py-1 border ${bgColor} rounded-none`}>
+      <AlertTriangle size={10} className={color} />
+      <span className="font-mono text-[9px] text-gray-500">Fatigue:</span>
+      <span className={`font-mono text-[9px] font-bold ${color}`}>{fatigue}</span>
+      <span className="font-mono text-[8px] text-gray-600">({hourlyRate.toFixed(1)}/hr)</span>
+    </div>
+  )
+}
 
 function getMarkerConfig(type: string): { shape: 'arrowUp' | 'arrowDown' | 'circle' | 'square'; color: string } {
   switch (type) {
@@ -329,6 +535,14 @@ function AlertJournalContent() {
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [loading, setLoading] = useState(true)
 
+  // Alert filters state
+  const [filters, setFilters] = useState<AlertFilters>({
+    type: '',
+    minRvol: 0,
+    feedback: '',
+    hasCatalyst: false,
+  })
+
   // Load alarm metrics
   useEffect(() => {
     Promise.all([getAlarmMetrics(30), getBadActors(30)])
@@ -455,6 +669,48 @@ function AlertJournalContent() {
 
   const totalAlerts = summary?.tickers.reduce((acc, t) => acc + t.alerts.length, 0) ?? 0
 
+  // Filtered alerts based on current filters
+  const filteredAlerts = useMemo(() => {
+    if (!selectedTicker) return []
+    return selectedTicker.alerts.filter(alt => {
+      if (filters.type && alt.alert_type !== filters.type) return false
+      if (filters.minRvol > 0 && alt.rel_vol < filters.minRvol) return false
+      if (filters.feedback === 'helpful' && alt.feedback_score !== 'helpful') return false
+      if (filters.feedback === 'noise' && alt.feedback_score !== 'noise') return false
+      if (filters.feedback === 'unrated' && alt.feedback_score != null) return false
+      if (filters.hasCatalyst && !alt.catalyst) return false
+      return true
+    })
+  }, [selectedTicker, filters])
+
+  // Handle quick action button clicks
+  const handleQuickAction = useCallback((action: string, alert: AlertInstance) => {
+    // Map action to feedback score
+    const scoreMap: Record<string, 'helpful' | 'noise' | 'neutral'> = {
+      'long': 'helpful',
+      'watch': 'helpful',
+      'skip': 'noise',
+      'short': 'noise',
+    }
+    const score = scoreMap[action] ?? null
+    const note = action === 'watch' ? 'Added to watchlist' : action === 'long' ? 'Long setup identified' : action === 'short' ? 'Short setup identified' : 'Skipped'
+    
+    // Save feedback
+    saveAlertFeedback(alert.id, alert.alert_time, score, note)
+      .then(() => {
+        // Update local state
+        if (selectedTicker) {
+          const updatedAlerts = selectedTicker.alerts.map(a => 
+            a.id === alert.id ? { ...a, feedback_score: score, feedback_notes: note } : a
+          )
+          setSelectedTicker({ ...selectedTicker, alerts: updatedAlerts })
+        }
+        setSaveSuccess(true)
+        setTimeout(() => setSaveSuccess(false), 2000)
+      })
+      .catch(() => {})
+  }, [selectedTicker])
+
   // Load performance scorecard when tab switches
   useEffect(() => {
     if (activeTab === 'scorecard' && scorecard === null) {
@@ -562,6 +818,7 @@ function AlertJournalContent() {
       {!loading && summary && (() => {
         const activeMetrics = metrics.find(m => m.date === activeDate);
         const hourlyRate = activeMetrics ? activeMetrics.total_alarms / 6.5 : totalAlerts / 6.5;
+        const avgHourlyRate = metrics.length > 0 ? metrics.reduce((acc, m) => acc + m.total_alarms / 6.5, 0) / metrics.length : 6;
         
         // EEMUA 191 benchmarks color styling
         let rateColor = "text-[#00ff00] border-[#00ff00]/25 bg-emerald-950/20";
@@ -666,6 +923,9 @@ function AlertJournalContent() {
                   </span>
                 </div>
               )}
+
+              {/* Alert Fatigue Indicator */}
+              <AlertFatigueIndicator hourlyRate={hourlyRate} avgRate={avgHourlyRate} />
             </div>
           </div>
         );
@@ -845,13 +1105,25 @@ function AlertJournalContent() {
               {/* Alerts & feedback rating area */}
               <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
                 {/* Alert occurrences list */}
-                <div className="md:col-span-2 bg-[#050505] border border-[#262626] p-3 max-h-[300px] overflow-y-auto">
-                  <span className="font-mono text-[10px] text-gray-500 uppercase tracking-wider border-b border-[#262626] pb-2 mb-2 block">Alert Triggers</span>
-                  {selectedTicker.alerts.map(alt => {
+                <div className="md:col-span-2 bg-[#050505] border border-[#262626] p-3 max-h-[400px] overflow-y-auto">
+                  <div className="flex items-center justify-between border-b border-[#262626] pb-2 mb-2">
+                    <span className="font-mono text-[10px] text-gray-500 uppercase tracking-wider">Alert Triggers ({selectedTicker.alerts.length})</span>
+                    <ExportButton alerts={selectedTicker.alerts} filename={`alerts_${selectedTicker.symbol}_${activeDate}`} ticker={selectedTicker.symbol} />
+                  </div>
+                  
+                  {/* Filters */}
+                  <div className="mb-2">
+                    <AlertFiltersBar filters={filters} onChange={setFilters} />
+                  </div>
+
+                  {filteredAlerts.map(alt => {
                     const localTime = new Date(alt.alert_time).toLocaleTimeString('en-US', {
                       hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
                     })
                     const isSelected = selectedAlert?.id === alt.id
+                    const meta = getAlertMeta(alt.alert_type)
+                    const strength = calcAlertStrength(alt)
+                    
                     // Forward return colour helper
                     const fwdColor = (v: number | null) => {
                       if (v == null) return 'text-gray-600'
@@ -870,9 +1142,12 @@ function AlertJournalContent() {
                         }`}
                       >
                         <div className="flex items-center justify-between">
-                          <div className="space-y-1">
+                          <div className="space-y-1 flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-mono text-xs font-bold text-white">{alt.alert_type.replace(/_/g, ' ')}</span>
+                              {/* Color-coded alert type badge */}
+                              <span className={`px-1.5 py-0.5 text-[9px] font-mono font-bold border ${meta.bg} ${meta.text} ${meta.border} rounded-none`}>
+                                {meta.emoji} {meta.label}
+                              </span>
                               {/* Priority tier badge */}
                               <span className={`px-1 py-0.5 text-[9px] font-mono font-bold border rounded-none ${
                                 alt.priority_tier === 'Tier 1' ? 'text-[#ff003c] border-[#ff003c]/40 bg-red-950/20'
@@ -891,23 +1166,36 @@ function AlertJournalContent() {
                                   📦 Grouped
                                 </span>
                               )}
+                              {alt.catalyst && (
+                                <span className="px-1 py-0.5 text-[8px] font-mono font-bold text-cyan-400 border border-cyan-500/30 bg-cyan-950/10 rounded-none" title={alt.catalyst}>
+                                  ⚡ Catalyst
+                                </span>
+                              )}
                             </div>
-                            <div className="font-mono text-[10px] text-gray-500">
-                              {localTime} · ${alt.trigger_price.toFixed(2)}
-                              {alt.priority_score ? <span className="ml-1 text-gray-700">· Score: {alt.priority_score}</span> : null}
+                            <div className="flex items-center gap-2">
+                              <div className="font-mono text-[10px] text-gray-500">
+                                {localTime} · ${alt.trigger_price.toFixed(2)}
+                                {alt.priority_score ? <span className="ml-1 text-gray-700">· Score: {alt.priority_score}</span> : null}
+                              </div>
+                              <AlertStrengthMeter strength={strength} />
                             </div>
                           </div>
 
-                          {/* rating badge indicator */}
-                          {alt.feedback_score === 'helpful' ? (
-                            <ThumbsUp size={12} className="text-[#00ff00] fill-emerald-400/20" />
-                          ) : alt.feedback_score === 'noise' ? (
-                            <ThumbsDown size={12} className="text-[#ff003c] fill-rose-400/20" />
-                          ) : alt.feedback_score === 'neutral' ? (
-                            <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-[#111] text-gray-500 border border-[#262626] rounded-none">Neutral</span>
-                          ) : (
-                            <span className="h-1.5 w-1.5 bg-amber-500 animate-pulse" title="Unrated" />
-                          )}
+                          <div className="flex items-center gap-2">
+                            {/* Quick actions */}
+                            <QuickActions alert={alt} onAction={handleQuickAction} />
+                            
+                            {/* rating badge indicator */}
+                            {alt.feedback_score === 'helpful' ? (
+                              <ThumbsUp size={12} className="text-[#00ff00] fill-emerald-400/20" />
+                            ) : alt.feedback_score === 'noise' ? (
+                              <ThumbsDown size={12} className="text-[#ff003c] fill-rose-400/20" />
+                            ) : alt.feedback_score === 'neutral' ? (
+                              <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-[#111] text-gray-500 border border-[#262626] rounded-none">N</span>
+                            ) : (
+                              <span className="h-1.5 w-1.5 bg-amber-500 animate-pulse" title="Unrated" />
+                            )}
+                          </div>
                         </div>
 
                         {/* Forward returns mini-row */}
@@ -933,6 +1221,12 @@ function AlertJournalContent() {
                       </div>
                     )
                   })}
+                  
+                  {filteredAlerts.length === 0 && (
+                    <div className="text-center py-4 text-gray-500 font-mono text-[10px]">
+                      No alerts match current filters.
+                    </div>
+                  )}
                 </div>
 
                 {/* Feedback Review panel */}
