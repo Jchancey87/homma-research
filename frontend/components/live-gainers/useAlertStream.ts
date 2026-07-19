@@ -53,6 +53,16 @@ export function useAlertStream(): UseAlertStreamResult {
   const audioChimesEnabledRef = useRef(audioChimesEnabled)
   const toastStackEnabledRef  = useRef(toastStackEnabled)
   const audioCtxRef           = useRef<AudioContext | null>(null)
+  const timeoutsRef           = useRef<NodeJS.Timeout[]>([])
+
+  const safeTimeout = useCallback((fn: () => void, delay: number) => {
+    const id = setTimeout(() => {
+      timeoutsRef.current = timeoutsRef.current.filter(t => t !== id)
+      fn()
+    }, delay)
+    timeoutsRef.current.push(id)
+    return id
+  }, [])
 
   useEffect(() => { audioChimesEnabledRef.current = audioChimesEnabled }, [audioChimesEnabled])
   useEffect(() => { toastStackEnabledRef.current  = toastStackEnabled  }, [toastStackEnabled])
@@ -144,7 +154,7 @@ export function useAlertStream(): UseAlertStreamResult {
             confluenceScore: payload.priority_score,
           }
           setToasts(prev => [newToast, ...prev].slice(0, TOAST_STACK_CAP))
-          setTimeout(() => {
+          safeTimeout(() => {
             setToasts(prev => prev.filter(t => t.id !== id))
           }, TOAST_TTL_MS)
         }
@@ -165,7 +175,7 @@ export function useAlertStream(): UseAlertStreamResult {
         setRecentAlerts(prev => [recent, ...prev].slice(0, RECENT_ALERTS_CAP))
 
         setFlashingTickers(prev => ({ ...prev, [ticker]: true }))
-        setTimeout(() => {
+        safeTimeout(() => {
           setFlashingTickers(prev => ({ ...prev, [ticker]: false }))
         }, FLASH_TTL_MS)
       } catch (err) {
@@ -181,9 +191,17 @@ export function useAlertStream(): UseAlertStreamResult {
       // Leak fix: always close the connection on unmount / dep change /
       // strict-mode double-invoke. Without this, ghost /api/alerts/stream
       // connections leak across route changes.
+      eventSource.onmessage = null
+      eventSource.onerror = null
       eventSource.close()
+      timeoutsRef.current.forEach(clearTimeout)
+      timeoutsRef.current = []
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close().catch(err => console.error("Error closing AudioContext:", err))
+        audioCtxRef.current = null
+      }
     }
-  }, [playTierAudio])
+  }, [playTierAudio, safeTimeout])
 
   return {
     flashingTickers,

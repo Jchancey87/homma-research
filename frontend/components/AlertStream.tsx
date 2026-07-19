@@ -55,6 +55,16 @@ export default function AlertStream() {
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const alertIdCounterRef = useRef<number>(1000000)
+  const timeoutsRef = useRef<NodeJS.Timeout[]>([])
+
+  const safeTimeout = useCallback((fn: () => void, delay: number) => {
+    const id = setTimeout(() => {
+      timeoutsRef.current = timeoutsRef.current.filter(t => t !== id)
+      fn()
+    }, delay)
+    timeoutsRef.current.push(id)
+    return id
+  }, [])
 
   // Process incoming alert (from WebSocket or polling)
   const processAlert = useCallback((alertData: Record<string, unknown>) => {
@@ -84,7 +94,7 @@ export default function AlertStream() {
       next.add(id)
       return next
     })
-    setTimeout(() => {
+    safeTimeout(() => {
       setNewAlertIds(prev => {
         const next = new Set(Array.from(prev))
         next.delete(id)
@@ -93,7 +103,7 @@ export default function AlertStream() {
     }, 3000)
 
     setLastUpdate(new Date())
-  }, [])
+  }, [safeTimeout])
 
   // Fetch initial alerts via REST API
   const fetchInitialAlerts = useCallback(async () => {
@@ -171,7 +181,7 @@ export default function AlertStream() {
         
         if (newIds.size > 0) {
           setNewAlertIds(newIds)
-          setTimeout(() => setNewAlertIds(new Set()), 3000)
+          safeTimeout(() => setNewAlertIds(new Set()), 3000)
         }
         
         setAlerts(recentAlerts)
@@ -180,7 +190,7 @@ export default function AlertStream() {
         console.error('Polling error:', err)
       }
     }, 5000)
-  }, [])
+  }, [safeTimeout])
 
   // WebSocket connection
   const connectWebSocket = useCallback(() => {
@@ -243,6 +253,9 @@ export default function AlertStream() {
     return () => {
       clearTimeout(timer)
       if (wsRef.current) {
+        wsRef.current.onclose = null
+        wsRef.current.onerror = null
+        wsRef.current.onmessage = null
         wsRef.current.close()
       }
       if (pollIntervalRef.current) {
@@ -251,6 +264,8 @@ export default function AlertStream() {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current)
       }
+      timeoutsRef.current.forEach(clearTimeout)
+      timeoutsRef.current = []
     }
   }, [fetchInitialAlerts, connectWebSocket])
 

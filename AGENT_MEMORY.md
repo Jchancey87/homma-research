@@ -51,6 +51,7 @@
 * **Continuation Journal:** Card-based UI grouped by date. Left colored border reflects tracking outcomes (Runner, Win, Flat, Fade, Active). Custom SVG inline sparklines show 3-day closes. Details pane opens inline. Scorecard metrics rendered as visual stacked percentage edge bars instead of static tables.
 * **GainerTable Overhaul:** Columns reduced to 6: Rank, Ticker, Price, Change(%), Trend, Float. Rank always visible. Suffixes [RR]/[FT] as badges + tooltips in Ticker col. Price 16px, Rank 14px bold, Ticker 13px monospace, Change 14px bold, Float 12px. Float uses dot-badge + tooltip. Trend is emoji-badge + tooltip. Float cell includes expand chevron. Enabled SortKey trend sorting.
 * **Dashboard borders:** Remove all opacity modifiers from layout border classes (such as `/30`, `/50`, `/20`, `/25`, `/45`, `/40`). Maintain solid default border color (`--border-subtle`).
+* **Memory Leak Prevention:** Nullify EventSource/WebSocket handlers (`onclose`, `onerror`, `onmessage`) before closing on unmount. Track timeouts/intervals and clear them on component unmount. Explicitly close browser `AudioContext` on unmount.
 
 
 ### 7. Testing & DevOps
@@ -106,9 +107,9 @@
 
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Completed dashboard border opacity cleanup.
-* **Scope:** Removed `/30` opacity modifier from Panel.tsx, DashboardHeader.tsx, and GainerTable.tsx.
-* **Assumptions:** Default border color (--border-subtle) active without transparency modifiers.
+* **Goal:** Investigate Chrome memory leak (1.2GB -> 10GB). Identify and fix frontend memory leaks.
+* **Scope:** Analyze frontend polling, WebSockets, event listeners, Web Audio API, charts, sparkline re-renders, component cleanup.
+* **Assumptions:** Leak caused by uncleaned subscriptions, intervals, listeners, audio context, or state build-up during fast refresh.
 
 
 
