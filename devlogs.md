@@ -2,6 +2,22 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-07-19] Memory Leak Fix: WebSocket & AudioContext Resource Cleanup in Frontend
+
+### Summary
+* Fixed memory leaks in dashboard unmount cycle. Stopped Chrome memory swell (1.2GB -> 10GB). Closed unclosed Web Audio contexts, cancelled pending timeouts, detached WebSocket event listeners on unmount.
+
+### What Changed
+* [AlertStream.tsx](file:///home/jackc/projects/homma-research/frontend/components/AlertStream.tsx): Nullified WebSocket handlers (`onclose`, `onerror`, `onmessage`) before calling `.close()` in cleanup. Replaced raw `setTimeout` with tracked `safeTimeout` to prevent state updates on unmounted components.
+* [useAlertStream.ts](file:///home/jackc/projects/homma-research/frontend/components/live-gainers/useAlertStream.ts): Explicitly closed `AudioContext` in hook cleanup. Replaced raw `setTimeout` calls with `safeTimeout` tracker.
+* [AGENT_MEMORY.md](file:///home/jackc/projects/homma-research/AGENT_MEMORY.md): Added frontend memory leak prevention rules.
+
+### Acceptance
+* Frontend tsc compile check: `npx tsc --noEmit` -> OK.
+* Unit tests: `npm run test` -> 56/56 passed.
+* Committed, pushed master branch.
+* Ran local deployment script `/opt/trading-journal/deploy.sh` -> OK, frontend/backend/workers restarted via PM2.
+
 ## [2026-07-19] Dashboard Borders Opacity Cleanup
 
 ### Summary
