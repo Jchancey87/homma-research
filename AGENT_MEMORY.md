@@ -107,9 +107,9 @@
 
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Investigate Chrome memory leak (1.2GB -> 10GB). Identify and fix frontend memory leaks.
-* **Scope:** Analyze frontend polling, WebSockets, event listeners, Web Audio API, charts, sparkline re-renders, component cleanup.
-* **Assumptions:** Leak caused by uncleaned subscriptions, intervals, listeners, audio context, or state build-up during fast refresh.
+* **Goal:** Fix CSP connect-src WebSocket blocking.
+* **Scope:** Add wss://homma-research.homma.casa:5000 and wss://homma-research.homma.casa to connect-src in [next.config.mjs](file:///home/jackc/projects/homma-research/frontend/next.config.mjs).
+* **Assumptions:** CSP connect-src directive is missing wss: or specific wss origin.
 
 
 

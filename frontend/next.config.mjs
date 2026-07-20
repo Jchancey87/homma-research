@@ -2,7 +2,7 @@
 const securityHeaders = [
   {
     key: 'Content-Security-Policy',
-    value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://homma-research.homma.casa http://localhost:3000 http://127.0.0.1:3000 http://localhost:5000 http://127.0.0.1:5000; font-src 'self' data:; frame-ancestors 'none';",
+    value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://homma-research.homma.casa wss://homma-research.homma.casa:5000 wss://homma-research.homma.casa http://localhost:3000 http://127.0.0.1:3000 http://localhost:5000 http://127.0.0.1:5000 ws://localhost:5000 ws://127.0.0.1:5000; font-src 'self' data:; frame-ancestors 'none';",
   },
   {
     key: 'Strict-Transport-Security',

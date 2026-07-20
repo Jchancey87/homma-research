@@ -1681,3 +1681,14 @@ Optimized `/health` to use pool connection health check. Created `/api/market/da
   * Displayed dynamic columns: Resist/Space, Spark, Catalyst (All Live); PB, EMA9 Dist, Psych Dist (Near HOD); RVOL, Vol Ratio, 1m RVOL (High RVOL).
   * Rendered absolute `ATR (1m)` and `Spread (Cents)` in details drawer.
 * **Live Gainers Dashboard ([LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx))**: Passed correct `scannerType` to tables.
+
+---
+
+## [2026-07-20] Fix WebSocket Content Security Policy Directive
+
+### Summary
+* Fixed Content Security Policy (CSP) blocking WebSocket alerts client connection.
+
+### What Changed
+* **Frontend Config ([next.config.mjs](file:///home/jackc/projects/homma-research/frontend/next.config.mjs))**: Appended wss://homma-research.homma.casa:5000, wss://homma-research.homma.casa, ws://localhost:5000, and ws://127.0.0.1:5000 to CSP connect-src header list.
+* **Testing**: Built Next.js client successfully. Frontend lint clean.
