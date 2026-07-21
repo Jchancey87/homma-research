@@ -16,8 +16,8 @@ This project modifies the momentum screener alert logic, Telegram notification l
 ## Milestones
 | # | Name | Scope | Dependencies | Status |
 |---|---|---|---|---|
-| M1 | E2E Test Suite | Build E2E test infra and 49+ tests across Tiers 1-4. Publish `TEST_READY.md`. | None | IN_PROGRESS (Conv: f4572c1e-ae4c-47e1-921f-d3723d617215) |
-| M2 | Trigger Quality Optimizations | Body-close HOD breakouts, TOD-adjusted RVOL, ATR-based VWAP crossover, post-halt re-entry suppression. | None | IN_PROGRESS (Conv: 819cf0d3-df71-49f6-9f17-986b6f6e3987) |
+| M1 | E2E Test Suite | Build E2E test infra and 49+ tests across Tiers 1-4. Publish `TEST_READY.md`. | None | COMPLETED |
+| M2 | Trigger Quality Optimizations | Body-close HOD breakouts, TOD-adjusted RVOL, ATR-based VWAP crossover, post-halt re-entry suppression. | None | COMPLETED |
 | M3 | Actionable Telegram Alerts | Enrich breakout message details, preserve TradingView links. | None | IN_PROGRESS (Conv: 5409f2c7-7b86-4215-b02c-29fbd6df8f08) |
 | M4 | Performance scoring API | Calculate forward returns and MFE/MAE on-the-fly in `/api/alerts/daily-summary`. | None | IN_PROGRESS (Conv: 54e86b04-08ab-40a6-b59d-512872e9e62d) |
 | M5 | Performance Dashboard & Scorecard | Render metrics on the Alert Journal dashboard page, add performance summary scorecard. | M4 | PLANNED |

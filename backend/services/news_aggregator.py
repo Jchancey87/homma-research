@@ -304,6 +304,64 @@ class FMPNewsSource(NewsSource):
 
 
 # ---------------------------------------------------------------------------
+# StockTwits Social Source
+# ---------------------------------------------------------------------------
+
+class StockTwitsNewsSource(NewsSource):
+    """
+    Live social commentary and top-liked posts from StockTwits.
+    """
+
+    def get_news(self, ticker: str, hours_back: int = 24) -> list[dict]:
+        try:
+            from services.stocktwits_service import get_stocktwits_sentiment
+
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=hours_back)
+            st_data = get_stocktwits_sentiment(ticker)
+            top_messages = st_data.get('top_messages', [])
+            if not top_messages:
+                return []
+
+            results = []
+            for msg in top_messages:
+                pub_str = msg.get('created_at', '')
+                pub_dt = None
+                if pub_str:
+                    try:
+                        pub_dt = datetime.fromisoformat(pub_str.replace('Z', '+00:00')).astimezone(timezone.utc)
+                    except ValueError:
+                        pass
+
+                if pub_dt and pub_dt < cutoff:
+                    continue
+
+                body = msg.get('body', '')
+                if not body:
+                    continue
+
+                username = msg.get('username', 'user')
+                sentiment = msg.get('sentiment', 'Neutral')
+                likes = msg.get('likes', 0)
+
+                title = f"${ticker} StockTwits (@{username}): {body[:100]}"
+                desc = f"[{sentiment}] {body} ({likes} likes, {msg.get('followers', 0)} followers)"
+
+                results.append(_make_article(
+                    title=title,
+                    published=pub_dt.strftime('%Y-%m-%dT%H:%M:%SZ') if pub_dt else pub_str,
+                    source=f'stocktwits/@{username}',
+                    description=desc[:400],
+                ))
+
+            log.debug(f'[StockTwitsNewsSource] {ticker}: {len(results)} social posts in last {hours_back}h')
+            return results
+
+        except Exception as e:
+            log.warning(f'[StockTwitsNewsSource] {ticker}: fetch failed — {e}')
+            return []
+
+
+# ---------------------------------------------------------------------------
 # Aggregator — fan-out orchestrator
 # ---------------------------------------------------------------------------
 
@@ -362,16 +420,19 @@ class NewsAggregator:
 
 
 # ---------------------------------------------------------------------------
-# Default singleton — Massive primary, FMP secondary, yfinance fallback
+# Default singleton — FMP primary, StockTwits secondary, yfinance fallback
 # ---------------------------------------------------------------------------
 
 def get_default_aggregator() -> NewsAggregator:
     """
     Returns the production NewsAggregator.
     FMP is called first (reliable, official).
+    StockTwits is included for social sentiment commentary.
     yfinance is called last as a fallback.
     """
     return NewsAggregator(sources=[
         FMPNewsSource(),
+        StockTwitsNewsSource(),
         YFinanceNewsSource(),
     ])
+

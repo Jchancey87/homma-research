@@ -37,10 +37,11 @@ PERSIST_HOUR_ET  = 20        # 8 PM ET — trigger EOD persist
 PERSIST_MINUTE_ET = 0
 
 # Screening thresholds
-MIN_GAP_PCT    = 5.0          # % gain vs prev close
-MIN_PRICE      = 0.50         # floor price
-MAX_PRICE      = 100.00       # ceiling price
+MIN_GAP_PCT    = 10.0         # % gain vs prev close
+MIN_PRICE      = 1.00         # floor price
+MAX_PRICE      = 20.00        # ceiling price
 TOP_N          = 25           # rows returned to frontend
+
 ENRICH_WORKERS = 12           # parallel threads for minute-bar enrichment
 
 # ── In-process state ───────────────────────────────────────────────────────────

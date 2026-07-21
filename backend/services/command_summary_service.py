@@ -191,8 +191,8 @@ def compute_rvol_stats(
 
     Returns (median_rvol, avg_rvol_top5, rvol_status, is_high_rvol).
     """
-    min_p = 2.0 if price_filter else 0.10
-    max_p = 25.0 if price_filter else 100.0
+    min_p = 1.0 if price_filter else 0.10
+    max_p = 20.0 if price_filter else 100.0
     filtered = gainers
     if price_filter:
         filtered = [
@@ -216,8 +216,8 @@ def compute_float_theme(
     gainers: List[dict], *, price_filter: bool = True
 ) -> Tuple[str, Dict[str, int]]:
     """Compute dominant float theme and bucket counts."""
-    min_p = 2.0 if price_filter else 0.10
-    max_p = 25.0 if price_filter else 100.0
+    min_p = 1.0 if price_filter else 0.10
+    max_p = 20.0 if price_filter else 100.0
     filtered = gainers
     if price_filter:
         filtered = [
@@ -379,7 +379,7 @@ async def build_command_summary(
     stays unit-testable without mocking imports.
 
     Args:
-        price_filter:                $2-$25 vs full range
+        price_filter:                $1-$20 vs full range
         polygon_api_key:             Polygon key for VIX quote
         get_live_quotes_fn:          async fn(tickers, *, polygon_api_key)
         get_live_gainers_fn:         sync fn(force) — run via to_thread
@@ -387,8 +387,8 @@ async def build_command_summary(
         fetch_halt_rate_fn:          async fn() -> float
         fetch_rvol_float_fallback_fn: async fn(price_filter) -> (list, list)
     """
-    min_p = 2.0 if price_filter else 0.10
-    max_p = 25.0 if price_filter else 100.0
+    min_p = 1.0 if price_filter else 0.10
+    max_p = 20.0 if price_filter else 100.0
 
     # ── Parallel fan-out ────────────────────────────────────────────
     async def _indices_and_vix():
@@ -472,7 +472,7 @@ async def build_command_summary(
                 filtered = [
                     g for g in gainers_list
                     if g.get("last_price") is not None
-                    and 2.0 <= g["last_price"] <= 25.0
+                    and 1.0 <= g["last_price"] <= 20.0
                 ]
             adv_count = len(filtered)
             dec_count = int(adv_count * 0.25) or 1
@@ -504,7 +504,7 @@ async def build_command_summary(
     if price_filter:
         filtered_for_rvol = [
             g for g in gainers_list
-            if g.get("last_price") is not None and 2.0 <= g["last_price"] <= 25.0
+            if g.get("last_price") is not None and 1.0 <= g["last_price"] <= 20.0
         ]
     sorted_for_rvol = sorted(
         filtered_for_rvol, key=lambda x: x.get("gap_pct", 0) or 0, reverse=True

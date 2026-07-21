@@ -98,25 +98,38 @@ async def test_trigger_bull_flag():
     assert "BULL_FLAG" in fired_alerts
 
 
+from datetime import datetime, timezone
+
 @pytest.mark.asyncio
 async def test_trigger_near_hod_radar():
-    """NEAR_HOD_RADAR fires when price exceeds the previous high of day with RVOL >= 1.5."""
+    """NEAR_HOD_RADAR fires when price exceeds the previous high of day at candle completion with RVOL >= 1.5."""
     streamer = SchwabStreamer()
     streamer.current_date = datetime.now(EASTERN_TZ).date()
     streamer.fundamentals_cache['AAPL'] = {
-        'yesterday_close': 100.0,
-        'yesterday_high': 105.0,
+        'yesterday_close': 90.0,
+        'yesterday_high': 115.0,
         'vol_10d_avg': 1000,  # set small so rvol calculation is large
         'shares_outstanding': 50000000,
     }
     streamer.check_and_fire_alert = AsyncMock(return_value=True)
     streamer.prev_session_high['AAPL'] = 105.0
     
+    current_min = int(time.time() / 60)
+    streamer.bars_1m['AAPL'] = {
+        'minute': current_min - 1,
+        'open': 100.0,
+        'high': 105.5,
+        'low': 99.0,
+        'close': 105.5,
+        'start_volume': 1000,
+        'last_volume': 2000,
+    }
+
     await streamer.evaluate_and_fire_alert(
         symbol='AAPL',
         last_price=105.5,
         total_volume=2000,
-        high_price=105.0,
+        high_price=105.5,
         low_price=99.0,
         open_price=100.0
     )
@@ -131,8 +144,8 @@ async def test_trigger_multi_tf_confluence():
     streamer = SchwabStreamer()
     streamer.current_date = datetime.now(EASTERN_TZ).date()
     streamer.fundamentals_cache['AAPL'] = {
-        'yesterday_close': 100.0,
-        'yesterday_high': 105.0,
+        'yesterday_close': 90.0,
+        'yesterday_high': 115.0,
         'vol_10d_avg': 1000,
         'shares_outstanding': 50000000,
     }
@@ -168,8 +181,8 @@ async def test_trigger_halt_resume_momentum():
     """HALT_RESUME_MOMENTUM fires 30s after resume if price is >=1% above resume price and volume >=1.5x avg."""
     streamer = SchwabStreamer()
     streamer.fundamentals_cache['AAPL'] = {
-        'yesterday_close': 100.0,
-        'yesterday_high': 105.0,
+        'yesterday_close': 90.0,
+        'yesterday_high': 115.0,
         'vol_10d_avg': 1000,
         'shares_outstanding': 50000000,
     }
@@ -179,14 +192,22 @@ async def test_trigger_halt_resume_momentum():
     streamer.bars_1m['AAPL'] = {
         'minute': int(time.time() / 60),
         'open': 100.0,
-        'high': 101.5,
-        'low': 100.0,
-        'close': 101.5,
-        'start_volume': 10000,
-        'last_volume': 12000,  # 2000 volume (>= 1.5x avg 1000)
+        'high': 102.0,
+        'low': 99.0,
+        'close': 102.0,
+        'start_volume': 1000,
+        'last_volume': 3000,
     }
     streamer.last_known_price['AAPL'] = 101.5
     streamer.vwap_state['AAPL'] = {'last_total_vol': 12000}
+    streamer.halt_resume_times['AAPL'] = {
+        'resume_price': 100.0,
+        'resume_time': datetime.now(timezone.utc),
+        'checked': False
+    }
+
+
+
     streamer.save_resume_to_db = AsyncMock()
     
     # Mock sleep so it doesn't actually block for 30s in test
@@ -216,7 +237,7 @@ async def test_tier_based_gating():
     streamer.db_pool = mock_db_pool
     
     streamer.fundamentals_cache['AAPL'] = {
-        'yesterday_close': 100.0,
+        'yesterday_close': 90.0,
         'yesterday_high': 105.0,
         'vol_10d_avg': 1000000,
         'shares_outstanding': 50000000,
@@ -242,7 +263,7 @@ async def test_tier_based_gating():
         mock_redis.publish.reset_mock()
         mock_celery.send_task.reset_mock()
         
-        res = await streamer.check_and_fire_alert("AAPL", 10.0, 1000, 1.0, 0.0, "VOLATILITY_HALT")
+        res = await streamer.check_and_fire_alert("AAPL", 10.0, 1000, 1.0, 15.0, "VOLATILITY_HALT")
         assert res is True
         assert streamer.save_alert_to_db.called
         assert not mock_redis.publish.called
@@ -255,7 +276,7 @@ async def test_tier_based_gating():
         mock_redis.publish.reset_mock()
         mock_celery.send_task.reset_mock()
         
-        res = await streamer.check_and_fire_alert("AAPL", 10.0, 1000, 1.0, 0.0, "NEAR_HOD_RADAR")
+        res = await streamer.check_and_fire_alert("AAPL", 10.0, 1000, 1.0, 15.0, "NEAR_HOD_RADAR")
         assert res is True
         assert streamer.save_alert_to_db.called
         assert mock_redis.publish.called
@@ -263,12 +284,12 @@ async def test_tier_based_gating():
         
         # Test Case 3: Tier 1 (DB + SSE + Telegram)
         streamer.fired_alerts_session.clear()
-        streamer.calculate_confluence_score = MagicMock(return_value=(80, "Tier 1"))
+        streamer.calculate_confluence_score = MagicMock(return_value=(85, "Tier 1"))
         streamer.save_alert_to_db.reset_mock()
         mock_redis.publish.reset_mock()
         mock_celery.send_task.reset_mock()
         
-        res = await streamer.check_and_fire_alert("AAPL", 10.0, 1000, 1.0, 0.0, "NEAR_HOD_RADAR")
+        res = await streamer.check_and_fire_alert("AAPL", 10.0, 1000, 1.0, 15.0, "MULTI_TF_CONFLUENCE")
         assert res is True
         assert streamer.save_alert_to_db.called
         assert mock_redis.publish.called

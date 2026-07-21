@@ -392,7 +392,11 @@ export interface WatchlistItem {
   dilution_risk: string | null
   upcoming_catalyst: string | null
   catalyst_date: string | null
+  price?: number | null
+  change_pct?: number | null
+  volume?: number | null
 }
+
 
 export const getWatchlistGroups = () =>
   api.get<WatchlistGroup[]>('/api/watchlist/groups').then(r => r.data)

@@ -43,12 +43,13 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Screening criteria constants
 # ---------------------------------------------------------------------------
-MIN_GAP_PCT    = 5.0    # Show anything > 5% gap
+MIN_GAP_PCT    = 10.0   # Show anything >= 10% gain
 MAX_FLOAT_M    = 500.0  # < 500M shares
 MIN_RVOL       = 2.0    # > 2x RVOL
-MIN_PRICE      = 0.10   # >= $0.10
-MAX_PRICE      = 100.00 # <= $100
+MIN_PRICE      = 1.00   # >= $1.00
+MAX_PRICE      = 20.00  # <= $20.00
 MAX_MARKET_CAP = 10_000e6 # < $10B
+
 
 POLYGON_SNAPSHOT_LIMIT = 50   # tickers to pull from Polygon gainers snapshot
 

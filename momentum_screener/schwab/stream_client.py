@@ -539,12 +539,20 @@ class SchwabStreamer:
         if not fund:
             return False
 
-        # Apply momentum filters (price $1.00 - $30.00, float < 100M shares to match dashboard scanner)
-        price_ok = 1.00 <= last_price <= 30.00
-        float_ok = fund['shares_outstanding'] < 100_000_000 # Using shares out as float proxy
-
-        if not (price_ok and float_ok):
+        # Apply momentum filters (price $1.00 - $20.00, float < 100M shares, min 10% gain)
+        is_watchlist = symbol in self.watchlist_symbols
+        price_ok = 1.00 <= last_price <= 20.00
+        if not price_ok:
             return False
+
+        float_ok = fund['shares_outstanding'] < 100_000_000 # Using shares out as float proxy
+        prev_close = fund.get('yesterday_close')
+        pct_gain = ((last_price - prev_close) / prev_close * 100.0) if (prev_close and prev_close > 0) else gap_pct
+        gain_ok = pct_gain >= 10.0 or gap_pct >= 10.0
+
+        if not is_watchlist and not (float_ok and gain_ok):
+            return False
+
 
         # Determine adaptive price increase threshold based on price buckets
         min_pct_increase_config = config.get("alert_min_pct_increase", 0.03)
@@ -1034,7 +1042,7 @@ class SchwabStreamer:
             async with self.db_pool.acquire() as conn:
                 row = await conn.fetchrow("""
                     INSERT INTO screener_alerts (
-                        symbol, trigger_price, trigger_volume, rvol, gap_pct,
+                        symbol, trigger_price, trigger_volume, rel_vol, gap_pct,
                         short_int_float, float_shares, alert_type, priority_score, priority_tier,
                         vwap_dist_pct, hod_dist_pct, catalyst, stop_price, stop_risk_pct,
                         suppressed_reason, group_id
@@ -1180,9 +1188,20 @@ class SchwabStreamer:
                 bid_val = self.last_known_bid.get(symbol)
                 ask_val = self.last_known_ask.get(symbol)
 
-                # Skip if basic price and volume are not yet known
+                # Skip if basic price and volume are not yet known or outside bounds ($1-$20, min 10% gain)
                 if lp is None or vol is None:
                     continue
+
+                is_wl = symbol in self.watchlist_symbols
+                if not is_wl:
+                    if not (1.00 <= lp <= 20.00):
+                        continue
+
+                    fund_quote = self.fundamentals_cache.get(symbol)
+                    prev_c = fund_quote.get('yesterday_close') if fund_quote else None
+                    pct_gain_tick = ((lp - prev_c) / prev_c * 100.0) if (prev_c and prev_c > 0) else 0.0
+                    if pct_gain_tick < 10.0:
+                        continue
 
                 # Publish price tick for live_screener streaming fast-path
                 try:

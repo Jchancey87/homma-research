@@ -197,3 +197,23 @@ async def test_command_summary_liquidity_shape(client):
 async def test_command_summary_price_filter_param(client):
     resp = await client.get("/api/market/command-summary?price_filter=false")
     assert resp.status_code == 200
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_stocktwits_sentiment_endpoint(client):
+    resp = await client.get("/api/market/stocktwits/AAPL")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ticker"] == "AAPL"
+    assert "watchers_count" in body
+    assert "bullish_count" in body
+    assert "bearish_count" in body
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_stocktwits_trending_endpoint(client):
+    resp = await client.get("/api/market/stocktwits/trending")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert isinstance(body, list)
+

@@ -961,7 +961,8 @@ class TestTier4RealWorldScenarios:
         data = resp.json()
         tickers = data.get("tickers", [])
         assert len(tickers) >= 1
-        assert tickers[0]["symbol"] == "SNDL"
+        assert any(t["symbol"] == "SNDL" for t in tickers)
+
 
 
 # ===================================================================

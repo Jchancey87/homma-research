@@ -243,6 +243,8 @@ def send_telegram_alert_task(alert_data: dict) -> dict:
     try:
         from services.news_aggregator import get_default_aggregator
         from llm.llm_client import get_headline_sentiment
+        from services.stocktwits_service import get_stocktwits_sentiment
+
         aggregator = get_default_aggregator()
         articles = aggregator.get_news(symbol, hours_back=6)
         if articles:
@@ -250,8 +252,17 @@ def send_telegram_alert_task(alert_data: dict) -> dict:
             if headlines:
                 sentiment = get_headline_sentiment(headlines)
                 sentiment_line = f"\n- *Sentiment:* {sentiment}"
+
+        st = get_stocktwits_sentiment(symbol)
+        watchers = st.get("watchers_count", 0)
+        ratio = st.get("bullish_ratio")
+        if watchers > 0 or ratio is not None:
+            ratio_str = f"{int(ratio * 100)}% Bullish" if ratio is not None else "Neutral"
+            watchers_str = f"{watchers / 1000:.1f}k" if watchers >= 1000 else str(watchers)
+            sentiment_line += f"\n- *StockTwits:* {ratio_str} ({watchers_str} watchers)"
     except Exception as e:
         logger.error("Failed to run sentiment for alert on %s: %s", symbol, e)
+
 
     message = _format_alert_message(alert_data)
     if sentiment_line:

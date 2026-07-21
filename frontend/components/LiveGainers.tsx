@@ -41,7 +41,7 @@ function fmtAge(isoUtc: string | null): string {
 const PRICE_FILTER_KEY = 'price-filter-enabled'
 const PRICE_FILTER_EVENT = 'price-filter-changed'
 const PRICE_MIN = 1.0
-const PRICE_MAX = 30.0
+const PRICE_MAX = 20.0
 
 const EMPTY_WATCHLIST: WatchlistItem[] = []
 
@@ -62,6 +62,8 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = EMP
 
   // Real-time Breakout Alerts & Notifications (Phase 3)
   const {
+    wsConnected,
+    prices,
     flashingTickers,
     toasts,
     dismissToast,
@@ -75,6 +77,8 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = EMP
   const [modalGainer, setModalGainer] = useState<LiveGainerRow | null>(null)
   const [watchlist, setWatchlist]     = useState<WatchlistItem[]>(initialWatchlist)
   const [watchlistLoading, setWatchlistLoading] = useState(false)
+  const wsConnectedRef = useRef(wsConnected)
+  useEffect(() => { wsConnectedRef.current = wsConnected }, [wsConnected])
   const [priceFilterEnabled, setPriceFilterEnabled] = useState(true)
 
   useEffect(() => {
@@ -123,7 +127,7 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = EMP
     const startPolling = () => {
       if (timerRef.current) clearInterval(timerRef.current)
       timerRef.current = setInterval(() => {
-        if (document.visibilityState === 'visible') {
+        if (document.visibilityState === 'visible' && !wsConnectedRef.current) {
           fetchData()
         }
       }, 3000)
@@ -216,13 +220,17 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = EMP
   const isActive   = session !== 'closed'
 
   const filteredGainers = useMemo(() => {
-    const list = snap?.gainers ?? []
+    let list = snap?.gainers ?? []
+    list = list.map(g => {
+      const p = prices[g.ticker]
+      return p ? { ...g, last_price: p.price, volume: p.volume ?? g.volume } : g
+    })
     if (!priceFilterEnabled) return list
     return list.filter(g => {
       const p = g.last_price
       return p != null && p >= PRICE_MIN && p <= PRICE_MAX
     })
-  }, [snap, priceFilterEnabled])
+  }, [snap, priceFilterEnabled, prices])
 
   return (
     <div className="space-y-2.5">
@@ -297,9 +305,9 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = EMP
             className={`px-3 py-1.5 sm:py-0 flex items-center gap-1 hover:bg-[#1C2330] border-r border-border-subtle transition-colors ${
               priceFilterEnabled ? 'text-info-custom font-bold bg-info-custom/5' : 'text-text-muted hover:text-text-primary'
             }`}
-            title="Toggle $1-$30 Price Filter [F3]"
+            title="Toggle $1-$20 Price Filter [F3]"
           >
-            <span>[F3] FILTER $1-$30: {priceFilterEnabled ? 'ON' : 'OFF'}</span>
+            <span>[F3] FILTER $1-$20: {priceFilterEnabled ? 'ON' : 'OFF'}</span>
           </button>
 
           {/* Refresh F5 */}

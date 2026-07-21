@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSharedWebSocket } from './live-gainers/useAlertStream'
 import { getAlertsDailySummary } from '@/lib/api'
 import { ChevronRight, Loader2, AlertCircle, Wifi, WifiOff } from 'lucide-react'
 
@@ -34,13 +35,6 @@ interface AlertStreamItem {
   catalyst: string | null
 }
 
-// WebSocket URL - uses wss in production, ws in development
-const getWsUrl = () => {
-  if (typeof window === 'undefined') return ''
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const wsHost = window.location.hostname
-  return `${protocol}//${wsHost}:5000/ws/alerts`
-}
 
 export default function AlertStream() {
   const router = useRouter()
@@ -48,12 +42,11 @@ export default function AlertStream() {
   const [loading, setLoading] = useState(true)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
   const [newAlertIds, setNewAlertIds] = useState<Set<number>>(new Set())
-  const [wsConnected, setWsConnected] = useState(false)
+  
+  const { connected: wsConnected, subscribe } = useSharedWebSocket()
   
   const prevAlertIdsRef = useRef<Set<number>>(new Set())
-  const wsRef = useRef<WebSocket | null>(null)
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const alertIdCounterRef = useRef<number>(1000000)
   const timeoutsRef = useRef<NodeJS.Timeout[]>([])
 
@@ -192,95 +185,40 @@ export default function AlertStream() {
     }, 5000)
   }, [safeTimeout])
 
-  // WebSocket connection
-  const connectWebSocket = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return
-
-    try {
-      const wsUrl = getWsUrl()
-      if (!wsUrl) return
-
-      const ws = new WebSocket(wsUrl)
-      wsRef.current = ws
-
-      ws.onopen = () => {
-        console.log('WebSocket connected')
-        setWsConnected(true)
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current)
-          pollIntervalRef.current = null
-        }
+  // Shared WebSocket connection handling
+  useEffect(() => {
+    const unsubscribe = subscribe((data) => {
+      if (data.type !== 'pong' && data.type !== 'ping' && data.type !== 'price' && data.symbol) {
+        processAlert(data)
       }
+    })
+    return () => { unsubscribe() }
+  }, [subscribe, processAlert])
 
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data)
-          if (data.type !== 'pong' && data.symbol) {
-            processAlert(data)
-          }
-        } catch (e) {
-          console.error('Failed to parse WebSocket message:', e)
-        }
-      }
-
-      ws.onclose = () => {
-        console.log('WebSocket disconnected')
-        setWsConnected(false)
-        startPolling()
-        reconnectTimeoutRef.current = setTimeout(() => {
-          connectWebSocket()
-        }, 5000)
-      }
-
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error)
-        ws.close()
-      }
-    } catch (e) {
-      console.error('Failed to create WebSocket:', e)
+  useEffect(() => {
+    if (!wsConnected) {
       startPolling()
+    } else {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current)
+        pollIntervalRef.current = null
+      }
     }
-  }, [processAlert, startPolling])
+  }, [wsConnected, startPolling])
 
   // Initialize
   useEffect(() => {
     fetchInitialAlerts()
-    
-    const timer = setTimeout(() => {
-      connectWebSocket()
-    }, 1000)
 
     return () => {
-      clearTimeout(timer)
-      if (wsRef.current) {
-        wsRef.current.onclose = null
-        wsRef.current.onerror = null
-        wsRef.current.onmessage = null
-        wsRef.current.close()
-      }
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current)
-      }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current)
       }
       timeoutsRef.current.forEach(clearTimeout)
       timeoutsRef.current = []
     }
-  }, [fetchInitialAlerts, connectWebSocket])
+  }, [fetchInitialAlerts])
 
-  // Keep alive ping
-  useEffect(() => {
-    if (!wsConnected) return
-    
-    const pingInterval = setInterval(() => {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: 'ping' }))
-      }
-    }, 30000)
-
-    return () => clearInterval(pingInterval)
-  }, [wsConnected])
 
   const formatTime = (timeStr: string) => {
     const date = new Date(timeStr)

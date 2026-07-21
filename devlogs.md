@@ -2,6 +2,19 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-07-21] StockTwits API & Social Sentiment Integration
+
+### Summary
+* Added StockTwits integration for leading gainers, social sentiment, watchers count, and trending status.
+* Built [stocktwits_service.py](file:///home/jackc/projects/homma-research/backend/services/stocktwits_service.py): fetches symbol stream, watchers count, bullish/bearish ratio, and trending symbols with 120s TTL cache.
+* Added [StockTwitsNewsSource](file:///home/jackc/projects/homma-research/backend/services/news_aggregator.py) to convert top social posts into normalized articles.
+* Enhanced [context_service.py](file:///home/jackc/projects/homma-research/backend/services/context_service.py): added `stocktwits_sentiment` to Deep Context payload.
+* Enhanced [alerts.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/tasks/alerts.py): appends StockTwits bullish ratio & watcher count to Telegram breakout alerts.
+* Created REST endpoints in [market.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/routers/market.py): `GET /api/market/stocktwits/{ticker}` and `GET /api/market/stocktwits/trending`.
+* Created [test_stocktwits_service.py](file:///home/jackc/projects/homma-research/backend/tests/test_stocktwits_service.py) and added endpoint tests in [test_market.py](file:///home/jackc/projects/homma-research/backend/tests/test_market.py). Verified all tests pass cleanly.
+
+
+
 ## [2026-07-19] Memory Leak Fix: WebSocket & AudioContext Resource Cleanup in Frontend
 
 ### Summary
@@ -1692,3 +1705,44 @@ Optimized `/health` to use pool connection health check. Created `/api/market/da
 ### What Changed
 * **Frontend Config ([next.config.mjs](file:///home/jackc/projects/homma-research/frontend/next.config.mjs))**: Appended wss://homma-research.homma.casa:5000, wss://homma-research.homma.casa, ws://localhost:5000, and ws://127.0.0.1:5000 to CSP connect-src header list.
 * **Testing**: Built Next.js client successfully. Frontend lint clean.
+
+---
+
+## [2026-07-21] Fix Alert Stream DB Insert Mismatch
+
+### Summary
+* Fix live alert stream DB write error from column mismatch.
+
+### What Changed
+* **Schwab Streamer Client ([stream_client.py](file:///home/jackc/projects/homma-research/momentum_screener/schwab/stream_client.py))**:
+  * Fix `rvol` to `rel_vol` in `save_alert_to_db` SQL `INSERT`.
+* **Backend Tests ([test_bugs_fixes.py](file:///home/jackc/projects/homma-research/backend/tests/test_bugs_fixes.py))**:
+  * Initialize `streamer.bars_1m['AAPL']` in `test_evaluate_and_fire_alert_computes_gap_pct_with_yesterday_close` to simulate candle completion matching body-close rules.
+
+---
+
+## [2026-07-21] WebSocket Multiplexing & $1-$20 Universal Price Filter Tightening
+
+### Summary
+* Multiplexed live prices + alerts over WebSocket `/ws/alerts`. Tightened global price filter to $1.00 - $20.00 across backend, streamer, and frontend.
+
+### What Changed
+* **WebSocket Alerts ([websocket_alerts.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/websocket_alerts.py))**: Multiplexed `screener:alerts` and `screener:quotes` Redis channels into structured WS messages (`type: "alert"` vs `type: "price"`).
+* **Price Filter Upper Bound**: Updated price bounds to `$1.00-$20.00` across `stream_client.py` (streamer candidate filter), `scheduler.py` (gapper scanner), `market.py` (breadth scanner), `command_summary_service.py` (regime/breadth summary), `LiveGainers.tsx` (PRICE_MAX=20.0 and [F3] toggle), and `daily-charts/page.tsx` (filter).
+* **Frontend Real-time Overlays ([LiveGainers.tsx](file:///home/jackc/projects/homma-research/frontend/components/LiveGainers.tsx), [WatchlistQuickAccess.tsx](file:///home/jackc/projects/homma-research/frontend/components/WatchlistQuickAccess.tsx), [useAlertStream.ts](file:///home/jackc/projects/homma-research/frontend/components/live-gainers/useAlertStream.ts))**: Overlaid WS price ticks on gainer rows and watchlist items, pausing 3s REST polling while WS connected.
+* **Testing & Deployment**: 25/25 backend tests pass. Production Next.js build clean. Deployed to `/opt/trading-journal/` and restarted all PM2 services.
+
+---
+
+## [2026-07-21] Hard Minimum 10% Day Gain Floor Across All Streamers & Scanners
+
+### Summary
+* Enforced hard 10% minimum day gain threshold across all streaming, alert, and screener modules. Zero quote ticks or alert resources wasted on stocks up < 10%.
+
+### What Changed
+* **Schwab Streamer ([stream_client.py](file:///home/jackc/projects/homma-research/momentum_screener/schwab/stream_client.py))**: Filtered out ticks and alerts for tickers with day gain < 10.0% (`((lp - prev_close)/prev_close * 100 < 10.0)`). Watchlist tickers bypass filter.
+* **Live Screener ([live_screener.py](file:///home/jackc/projects/homma-research/backend/services/live_screener.py))**: Set `MIN_GAP_PCT = 10.0`.
+* **Ingest Gainers ([ingest_gainers.py](file:///home/jackc/projects/homma-research/backend/jobs/ingest_gainers.py))**: Set `MIN_GAP_PCT = 10.0`.
+* **Scheduler Scanner ([scheduler.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/scheduler.py))**: Set `gap_ok = change >= 10.0`.
+* **Ross Cameron Filters ([filters.py](file:///home/jackc/projects/homma-research/momentum_screener/screener/filters.py))**: Set `ROSS_MIN_GAP_PCT = 10.0`.
+* **Testing & Deployment**: 25/25 backend tests pass. Deployed to `/opt/trading-journal/` and restarted all 5 PM2 services.

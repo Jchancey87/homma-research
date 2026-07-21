@@ -61,6 +61,17 @@ async def test_evaluate_and_fire_alert_computes_gap_pct_with_yesterday_close():
     
     streamer.check_and_fire_alert = AsyncMock()
     
+    import time
+    streamer.bars_1m['AAPL'] = {
+        'minute': int(time.time() / 60) - 1,
+        'open': 102.0,
+        'high': 102.0,
+        'low': 102.0,
+        'close': 102.0,
+        'start_volume': 4000000,
+        'last_volume': 4000000,
+    }
+    
     streamer.completed_bars_1m['AAPL'] = [
         {'volume': 50000, 'open': 102.0, 'close': 104.0}
     ]

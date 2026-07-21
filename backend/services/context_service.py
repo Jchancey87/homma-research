@@ -21,19 +21,31 @@ def build_context_payload(ticker: str) -> dict:
 
     Returns:
         Structured dict containing technical levels, float structure,
-        relative strength, and historical gainer history from the journal.
+        relative strength, historical gainer history, and StockTwits sentiment.
     """
     payload = {
-        'ticker':             ticker,
-        'technical_levels':   _get_technical_levels(ticker),
-        'price_range_52w':    _get_52w_range(ticker),
-        'float_structure':    _get_float_structure(ticker),
-        'relative_strength':  _get_relative_strength(ticker),
-        'options_sentiment':  _get_options_sentiment(ticker),
-        'journal_history':    _get_journal_history(ticker),
-        'sector_context':     _get_sector_context(ticker),
+        'ticker':                ticker,
+        'technical_levels':      _get_technical_levels(ticker),
+        'price_range_52w':       _get_52w_range(ticker),
+        'float_structure':       _get_float_structure(ticker),
+        'relative_strength':     _get_relative_strength(ticker),
+        'options_sentiment':     _get_options_sentiment(ticker),
+        'stocktwits_sentiment':  _get_stocktwits_sentiment(ticker),
+        'journal_history':       _get_journal_history(ticker),
+        'sector_context':        _get_sector_context(ticker),
     }
     return payload
+
+
+def _get_stocktwits_sentiment(ticker: str) -> dict:
+    """Fetch StockTwits social sentiment, watchers count, and top posts."""
+    try:
+        from services.stocktwits_service import get_stocktwits_sentiment
+        return get_stocktwits_sentiment(ticker)
+    except Exception as e:
+        log.warning(f'[Context] StockTwits sentiment fetch failed: {e}')
+        return {}
+
 
 
 # ---------------------------------------------------------------------------

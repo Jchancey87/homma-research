@@ -196,7 +196,7 @@ async def test_alert_grouping_and_already_in_play_suppression():
             last_price=10.0,
             total_volume=10000,
             rvol=3.0,
-            gap_pct=5.0,
+            gap_pct=15.0,
             alert_type="VOLUME_SPIKE"
         )
         assert res1 is True
@@ -211,9 +211,10 @@ async def test_alert_grouping_and_already_in_play_suppression():
             last_price=10.1,  # 1% price increase (not 5%)
             total_volume=12000,
             rvol=3.5,
-            gap_pct=5.0,
+            gap_pct=15.0,
             alert_type="NEAR_HOD_RADAR"
         )
+
         assert res2 is True
         # Verify it did not add to fired_alerts_session (it was suppressed)
         assert len(streamer.fired_alerts_session[symbol]) == 1
@@ -231,7 +232,7 @@ async def test_alert_grouping_and_already_in_play_suppression():
             last_price=10.6,
             total_volume=15000,
             rvol=4.0,
-            gap_pct=5.0,
+            gap_pct=15.0,
             alert_type="NEAR_HOD_RADAR"
         )
         assert res3 is True

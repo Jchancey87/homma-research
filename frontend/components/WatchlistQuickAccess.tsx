@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getWatchlist, getWatchlistPrices, WatchlistItem, WatchlistPrice, markWatchlistViewed } from '@/lib/api'
 import { ExternalLink, Bookmark, Flame } from 'lucide-react'
+import { useAlertStream } from './live-gainers/useAlertStream'
+import { useRef } from 'react'
 
 function parseTags(raw: string): string[] {
   try { return JSON.parse(raw) } catch { return [] }
@@ -28,6 +30,10 @@ export default function WatchlistQuickAccess({ initialItems = [], initialPrices 
   const [items,  setItems]  = useState<WatchlistItem[]>(initialItems)
   const [prices, setPrices] = useState<Record<string, WatchlistPrice>>(initialPrices)
   const [loading, setLoading] = useState(initialItems.length === 0)
+  
+  const { wsConnected, prices: wsPrices } = useAlertStream()
+  const wsConnectedRef = useRef(wsConnected)
+  useEffect(() => { wsConnectedRef.current = wsConnected }, [wsConnected])
 
   useEffect(() => {
     if (initialItems.length === 0) {
@@ -45,7 +51,7 @@ export default function WatchlistQuickAccess({ initialItems = [], initialPrices 
     const startPolling = () => {
       if (intervalId) clearInterval(intervalId)
       intervalId = setInterval(() => {
-        if (document.visibilityState === 'visible') {
+        if (document.visibilityState === 'visible' && !wsConnectedRef.current) {
           getWatchlistPrices()
             .then(p => setPrices(p))
             .catch(() => {})
@@ -110,7 +116,7 @@ export default function WatchlistQuickAccess({ initialItems = [], initialPrices 
 
       {items.map(item => {
         const tags  = parseTags(item.tags).slice(0, 2)
-        const price = prices[item.ticker]
+        const price = wsPrices[item.ticker] ? { ...prices[item.ticker], price: wsPrices[item.ticker].price } : prices[item.ticker]
         const isMoving = price?.chg_pct != null && Math.abs(price.chg_pct) >= 5
 
         return (

@@ -115,8 +115,8 @@ export default function DashboardHeader({
     }
 
     fetchMarketState()
-    // Poll every 10 seconds to keep market session indicator fresh
-    const pollInterval = setInterval(fetchMarketState, 10000)
+    // Poll every 30 seconds to keep market session indicator fresh
+    const pollInterval = setInterval(fetchMarketState, 30000)
     return () => clearInterval(pollInterval)
   }, [])
 

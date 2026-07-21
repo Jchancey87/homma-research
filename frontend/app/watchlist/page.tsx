@@ -105,6 +105,22 @@ function WatchlistRow({
         )}
       </td>
 
+      {/* Price / Change */}
+      <td className="px-4 py-3 align-top w-28 font-mono">
+        {item.price != null ? (
+          <div className="flex flex-col">
+            <span className="text-sm font-bold text-gray-900 dark:text-white">${item.price.toFixed(2)}</span>
+            {item.change_pct != null && (
+              <span className={`text-[11px] font-bold ${item.change_pct >= 0 ? 'text-[#00ff00]' : 'text-[#ff003c]'}`}>
+                {item.change_pct >= 0 ? '+' : ''}{item.change_pct.toFixed(2)}%
+              </span>
+            )}
+          </div>
+        ) : (
+          <span className="text-xs text-gray-500">—</span>
+        )}
+      </td>
+
       {/* Notes */}
       <td className="px-4 py-3 align-top min-w-0 max-w-xs">
         {item.notes ? (
@@ -174,21 +190,21 @@ function WatchlistRow({
       </td>
 
       {/* Actions */}
-      <td className="px-4 py-3 align-top w-20">
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-end">
+      <td className="px-4 py-3 align-top w-24">
+        <div className="flex items-center gap-1.5 justify-end">
           <button
             id={`research-${item.ticker}`}
             onClick={() => onResearch(item.ticker)}
             title="Open Research"
-            className="p-1.5 rounded-lg text-gray-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+            className="p-1.5 rounded text-gray-400 hover:text-emerald-400 hover:bg-emerald-500/10 border border-gray-800 hover:border-emerald-500/30 transition-colors"
           >
             <ExternalLink size={14} />
           </button>
           <button
             id={`remove-${item.ticker}`}
             onClick={() => onRemove(item.ticker)}
-            title="Remove"
-            className="p-1.5 rounded-lg text-gray-500 hover:text-red-650 dark:hover:text-red-400 hover:bg-red-500/10 transition-colors"
+            title="Delete from Watchlist"
+            className="p-1.5 rounded text-red-400 hover:text-red-300 hover:bg-red-500/20 border border-red-500/30 transition-colors"
           >
             <Trash2 size={14} />
           </button>
@@ -197,6 +213,7 @@ function WatchlistRow({
     </tr>
   )
 }
+
 
 // ── Continuation Pick Row ─────────────────────────────────────────────────────
 
@@ -832,15 +849,17 @@ export default function WatchlistPage() {
                   <thead className="border-b border-gray-800 bg-[#0c0c0c]">
                     <tr className="text-[10px] text-gray-500 uppercase tracking-widest font-mono font-bold">
                       <th className="px-4 py-3">Ticker</th>
+                      <th className="px-4 py-3">Price / Chg</th>
                       <th className="px-4 py-3">Notes</th>
                       <th className="px-4 py-3 hidden md:table-cell">Tags</th>
                       <th className="px-4 py-3">Runway</th>
                       <th className="px-4 py-3">Dilution</th>
                       <th className="px-4 py-3">Catalyst Date</th>
                       <th className="px-4 py-3 hidden lg:table-cell">Added</th>
-                      <th className="px-4 py-3 text-right" />
+                      <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
                   </thead>
+
                   <tbody className="divide-y divide-gray-900 bg-[#000000]">
                     {filteredItems.map(item => (
                       <WatchlistRow

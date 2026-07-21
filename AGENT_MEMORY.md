@@ -15,6 +15,7 @@
 * **Scope:** Evaluate symbols in `self.watchlist_symbols` only.
 * **Triggers:** VWAP crossover uses hysteresis state ('above'/'below') ±2.0 buffer. NEAR_HOD_RADAR breakout triggers on live price tick exceeding previous session high. VWAP_RECLAIM and HOD_BREAKOUT removed. Suppress triggers for 2 mins post-halt. Cooldowns use `alerts.should_fire_alert`.
 * **Telegram format (RFC-004 QW-3):** [alerts.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/tasks/alerts.py) builds messages via `_format_alert_message(alert_data)`. Header/signal/RVOL driven by `ALERT_TYPE_META: dict` at module top. Each value: `emoji`, `header`, `signal`, `show_rvol`.
+* **Database Save Column:** Corrected database query in `save_alert_to_db` (`momentum_screener/schwab/stream_client.py`) to target the `rel_vol` column instead of the non-existent `rvol` column (which previously caused inserts to fail silently, starving the live alert stream).
 
 ### 3. Live Screener & Momentum
 * **Pipeline:** Two-tier refresh in `live_screener.py`. Fast path (2s): overlay WebSocket-streamed prices from `services/streaming_prices.py` (Redis `screener:quotes` channel) — zero REST calls. Slow path (60s): full 5-step pipeline (movers + quotes + enrichment). In `_fast_refresh()`, only overlays updates if streamed snapshot is strictly newer than the cached gainer row's last update (`_last_update_ts`), preventing stale websocket cache from reverting newer REST updates.
@@ -105,11 +106,22 @@
 * **CIK Caching:** SEC CIK resolution (`get_cik_from_ticker`) caches mappings to `sec_cik_map.json` in `Config.STORAGE_PATH` with a 24-hour TTL, preventing redundant 4MB downloads.
 * **FMP News Source:** `FMPNewsSource` integrated in [news_aggregator.py](file:///home/jackc/projects/homma-research/backend/services/news_aggregator.py) as the primary news source before yfinance scraper.
 
+### 19. StockTwits Integration & Social Sentiment
+* **Service:** [stocktwits_service.py](file:///home/jackc/projects/homma-research/backend/services/stocktwits_service.py) fetches public REST v2 symbol stream (`watchers_count`, `bullish_ratio`, top messages) & `get_trending_symbols()` with 120s TTL cache.
+* **News Aggregator:** [StockTwitsNewsSource](file:///home/jackc/projects/homma-research/backend/services/news_aggregator.py) converts top liked posts to normalized articles.
+* **LLM Context:** Included in `build_context_payload` in [context_service.py](file:///home/jackc/projects/homma-research/backend/services/context_service.py).
+* **Telegram Alerts:** Appends StockTwits bullish % & watcher count in [alerts.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/tasks/alerts.py).
+* **Router Endpoints:** `GET /api/market/stocktwits/{ticker}` and `GET /api/market/stocktwits/trending` in [market.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/routers/market.py).
+
+
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Fix CSP connect-src WebSocket blocking.
-* **Scope:** Add wss://homma-research.homma.casa:5000 and wss://homma-research.homma.casa to connect-src in [next.config.mjs](file:///home/jackc/projects/homma-research/frontend/next.config.mjs).
-* **Assumptions:** CSP connect-src directive is missing wss: or specific wss origin.
+* **Goal:** Implement multiplexed WebSocket streaming, tighten price filter ($1-$20), and enforce strict >=10% minimum day gain threshold.
+* **Scope:**
+  - Streamer & Backend: Enforced >=10.0% gain floor in `stream_client.py` (alerts + quote ticks), `live_screener.py` (`MIN_GAP_PCT=10.0`), `ingest_gainers.py`, `scheduler.py` (`gap_ok >= 10.0`), `filters.py` (`ROSS_MIN_GAP_PCT=10.0`). Non-watchlist tickers < 10% gain skip Redis streaming & alert checks.
+  - Price bounds: Tightened universal price range to $1.00 - $20.00.
+  - WS Multiplexing: `websocket_alerts.py` multiplexes alerts + price ticks.
+* **Assumptions:** Users only trade stocks up >=10% for the day in the $1-$20 range. All PM2 services restarted and verified.
 
 
 

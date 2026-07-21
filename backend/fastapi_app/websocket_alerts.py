@@ -28,25 +28,57 @@ async def redis_subscriber():
             decode_responses=True
         )
         pubsub = redis.pubsub()
-        await pubsub.subscribe('screener:alerts')
+        await pubsub.subscribe('screener:alerts', 'screener:quotes')
         
-        logger.info("Redis subscriber started for screener:alerts")
+        logger.info("Redis subscriber started for screener:alerts and screener:quotes")
         
         async for message in pubsub.listen():
             if message['type'] == 'message':
-                data = message['data']
-                # Broadcast to all connected WebSocket clients
-                disconnected = set()
-                for client in connected_clients:
-                    try:
-                        await client.send_text(data)
-                    except Exception:
-                        disconnected.add(client)
+                channel = message['channel']
+                raw_data = message['data']
                 
-                # Remove disconnected clients
-                connected_clients.difference_update(disconnected)
+                try:
+                    parsed_data = json.loads(raw_data)
+                    payload = None
+                    
+                    if channel == 'screener:alerts':
+                        msg_dict = {"type": "alert", "data": parsed_data}
+                        # Keep backward compatibility by embedding symbol and alert_type at root
+                        if isinstance(parsed_data, dict):
+                            if "symbol" in parsed_data:
+                                msg_dict["symbol"] = parsed_data["symbol"]
+                            if "alert_type" in parsed_data:
+                                msg_dict["alert_type"] = parsed_data["alert_type"]
+                        payload = json.dumps(msg_dict)
+                        
+                    elif channel == 'screener:quotes':
+                        if isinstance(parsed_data, dict):
+                            mapped_data = {
+                                "symbol": parsed_data.get("s"),
+                                "price": parsed_data.get("p"),
+                                "volume": parsed_data.get("v"),
+                                "high": parsed_data.get("h"),
+                                "low": parsed_data.get("l"),
+                                "open": parsed_data.get("o"),
+                                "time": parsed_data.get("t")
+                            }
+                            payload = json.dumps({"type": "price", "data": mapped_data})
+                            
+                    if payload:
+                        # Broadcast to all connected WebSocket clients
+                        disconnected = set()
+                        for client in connected_clients:
+                            try:
+                                await client.send_text(payload)
+                            except Exception:
+                                disconnected.add(client)
+                        
+                        # Remove disconnected clients
+                        connected_clients.difference_update(disconnected)
+                except json.JSONDecodeError:
+                    pass
         
-        await pubsub.unsubscribe('screener:alerts')
+        await pubsub.unsubscribe('screener:alerts', 'screener:quotes')
         await redis.close()
     except Exception as e:
         logger.error(f"Redis subscriber error: {e}")

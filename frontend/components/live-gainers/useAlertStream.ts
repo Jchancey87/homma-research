@@ -18,12 +18,114 @@ export interface AlertItem {
   floatShares?:  number
 }
 
+export interface PriceTick {
+  symbol: string
+  price: number
+  volume?: number
+  high?: number
+  low?: number
+  open?: number
+}
+
 const TOAST_TTL_MS       = 6_000
 const FLASH_TTL_MS       = 200
 const RECENT_ALERTS_CAP  = 50
 const TOAST_STACK_CAP    = 5
 
+// Shared WS module-level state
+let sharedWs: WebSocket | null = null
+let subscriberCount = 0
+let isConnected = false
+const messageListeners = new Set<(data: Record<string, unknown>) => void>()
+const statusListeners = new Set<(status: boolean) => void>()
+let reconnectTimer: NodeJS.Timeout | null = null
+
+export const getWsUrl = () => {
+  if (typeof window === 'undefined') return ''
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const wsHost = window.location.hostname
+  return `${protocol}//${wsHost}:5000/ws/alerts`
+}
+
+function initWs() {
+  if (typeof window === 'undefined') return
+  if (sharedWs) return
+  
+  const url = getWsUrl()
+  if (!url) return
+  
+  const ws = new WebSocket(url)
+  sharedWs = ws
+  
+  ws.onopen = () => {
+    console.log('WebSocket connected (shared)')
+    isConnected = true
+    statusListeners.forEach(l => l(true))
+    if (reconnectTimer) clearTimeout(reconnectTimer)
+  }
+  
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      messageListeners.forEach(l => l(data))
+    } catch {
+      // Empty catch
+    }
+  }
+  
+  ws.onclose = () => {
+    console.log('WebSocket disconnected (shared)')
+    sharedWs = null
+    isConnected = false
+    statusListeners.forEach(l => l(false))
+    if (subscriberCount > 0) {
+      reconnectTimer = setTimeout(initWs, 5000)
+    }
+  }
+  
+  ws.onerror = (err) => {
+    console.error('WebSocket error:', err)
+    ws.close()
+  }
+}
+
+export function useSharedWebSocket() {
+  const [connected, setConnected] = useState(isConnected)
+  
+  useEffect(() => {
+    subscriberCount++
+    if (subscriberCount === 1) {
+      initWs()
+    }
+    
+    const handleStatus = (status: boolean) => setConnected(status)
+    statusListeners.add(handleStatus)
+    
+    return () => {
+      statusListeners.delete(handleStatus)
+      subscriberCount--
+      if (subscriberCount === 0) {
+        if (sharedWs) {
+          sharedWs.close()
+          sharedWs = null
+        }
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer)
+        }
+      }
+    }
+  }, [])
+  
+  const subscribe = useCallback((callback: (data: Record<string, unknown>) => void) => {
+    messageListeners.add(callback)
+    return () => { messageListeners.delete(callback) }
+  }, [])
+  
+  return { connected, subscribe, ws: sharedWs }
+}
+
 interface UseAlertStreamResult {
+  wsConnected:           boolean
   flashingTickers:       Record<string, boolean>
   toasts:                AlertItem[]
   dismissToast:          (id: string) => void
@@ -31,24 +133,18 @@ interface UseAlertStreamResult {
   setAudioChimesEnabled: (v: boolean) => void
   toastStackEnabled:     boolean
   setToastStackEnabled:  (v: boolean) => void
+  prices:                Record<string, PriceTick>
+  recentAlerts:          AlertItem[]
 }
 
-/**
- * Subscribe to /api/alerts/stream SSE. Owns the audio chime toggle, the
- * toast-stack toggle, the flashing-ticker map, and the toast queue.
- *
- * SSE leak fix: the `eventSource.close()` call in the effect cleanup
- * guarantees the connection is torn down on unmount / dep change / strict-
- * mode double-invoke, eliminating the ghost /api/alerts/stream connections
- * previously observable after route changes.
- */
 export function useAlertStream(): UseAlertStreamResult {
+  const { connected, subscribe, ws } = useSharedWebSocket()
   const [audioChimesEnabled, setAudioChimesEnabled] = useState(false)
   const [toastStackEnabled,  setToastStackEnabled]  = useState(true)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [recentAlerts,       setRecentAlerts]       = useState<AlertItem[]>([])
   const [flashingTickers,    setFlashingTickers]    = useState<Record<string, boolean>>({})
   const [toasts,             setToasts]             = useState<AlertItem[]>([])
+  const [prices,             setPrices]             = useState<Record<string, PriceTick>>({})
+  const [recentAlerts,       setRecentAlerts]       = useState<AlertItem[]>([])
 
   const audioChimesEnabledRef = useRef(audioChimesEnabled)
   const toastStackEnabledRef  = useRef(toastStackEnabled)
@@ -70,7 +166,7 @@ export function useAlertStream(): UseAlertStreamResult {
   const playTierAudio = useCallback((tier: string) => {
     try {
       if (typeof window === 'undefined') return
-      if (tier === 'Tier 3') return // Tier 3 is silent
+      if (tier === 'Tier 3') return
 
       if (!audioCtxRef.current) {
         const AudioContextClass = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
@@ -83,14 +179,13 @@ export function useAlertStream(): UseAlertStreamResult {
       const now = ctx.currentTime
 
       if (tier === 'Tier 1') {
-        // Double-beep: beep 1 -> brief silence -> beep 2
         const playBeep = (startTime: number) => {
           const osc = ctx.createOscillator()
           const gain = ctx.createGain()
           osc.connect(gain)
           gain.connect(ctx.destination)
           osc.type = 'sine'
-          osc.frequency.setValueAtTime(880, startTime) // A5 note
+          osc.frequency.setValueAtTime(880, startTime)
           gain.gain.setValueAtTime(0.15, startTime)
           gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.1)
           osc.start(startTime)
@@ -99,13 +194,12 @@ export function useAlertStream(): UseAlertStreamResult {
         playBeep(now)
         playBeep(now + 0.15)
       } else if (tier === 'Tier 2') {
-        // Single warm tone: 554.37Hz sine wave decaying smoothly
         const osc = ctx.createOscillator()
         const gain = ctx.createGain()
         osc.connect(gain)
         gain.connect(ctx.destination)
         osc.type = 'sine'
-        osc.frequency.setValueAtTime(554.37, now) // C#5 warm tone
+        osc.frequency.setValueAtTime(554.37, now)
         gain.gain.setValueAtTime(0.12, now)
         gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4)
         osc.start(now)
@@ -117,30 +211,33 @@ export function useAlertStream(): UseAlertStreamResult {
   }, [])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    const eventSource = new EventSource('/api/alerts/stream')
-
-    eventSource.onmessage = (event) => {
-      try {
-        const payload   = JSON.parse(event.data) as {
-          symbol: string
-          price:  number
-          alert_type: string
-          volume?: number
-          rvol?:   number
-          gap_pct?: number
-          float_shares?: number
-          priority_tier?: string
-          priority_score?: number
-          strategy_label?: string
-          catalyst?: string
-        }
-        const ticker    = payload.symbol
-        const price     = payload.price
-        const alertType = payload.alert_type
+    const unsubscribe = subscribe((data: any) => {
+      if (data.type === 'ping' || data.type === 'pong') return
+      
+      if (data.type === 'price' && data.symbol) {
+        const sym = String(data.symbol)
+        setPrices(prev => ({
+          ...prev,
+          [sym]: {
+            symbol: sym,
+            price: Number(data.price || 0),
+            volume: Number(data.volume || 0),
+            high: Number(data.high || 0),
+            low: Number(data.low || 0),
+            open: Number(data.open || 0)
+          }
+        }))
+        return
+      }
+      
+      if (data.type === 'alert' || data.alert_type) {
+        const payload = data
+        const ticker    = String(payload.symbol || 'UNKNOWN')
+        const price     = Number(payload.price || payload.trigger_price || 0)
+        const alertType = String(payload.alert_type || 'UNKNOWN')
 
         if (audioChimesEnabledRef.current) {
-          playTierAudio(payload.priority_tier || 'Tier 3')
+          playTierAudio(String(payload.priority_tier || 'Tier 3'))
         }
 
         if (toastStackEnabledRef.current) {
@@ -148,10 +245,10 @@ export function useAlertStream(): UseAlertStreamResult {
           const newToast: AlertItem = {
             id, ticker, price, alertType,
             time: new Date().toLocaleTimeString(),
-            priorityTier: payload.priority_tier,
-            strategyLabel: payload.strategy_label,
-            catalyst: payload.catalyst,
-            confluenceScore: payload.priority_score,
+            priorityTier: payload.priority_tier ? String(payload.priority_tier) : undefined,
+            strategyLabel: payload.strategy_label ? String(payload.strategy_label) : undefined,
+            catalyst: payload.catalyst ? String(payload.catalyst) : undefined,
+            confluenceScore: payload.priority_score ? Number(payload.priority_score) : undefined,
           }
           setToasts(prev => [newToast, ...prev].slice(0, TOAST_STACK_CAP))
           safeTimeout(() => {
@@ -163,14 +260,14 @@ export function useAlertStream(): UseAlertStreamResult {
           id: Math.random().toString(36).substring(2, 9),
           ticker, price, alertType,
           time: new Date().toLocaleTimeString(),
-          priorityTier: payload.priority_tier,
-          strategyLabel: payload.strategy_label,
-          catalyst: payload.catalyst,
-          confluenceScore: payload.priority_score,
-          volume:     payload.volume,
-          rvol:       payload.rvol,
-          gapPct:     payload.gap_pct,
-          floatShares: payload.float_shares,
+          priorityTier: payload.priority_tier ? String(payload.priority_tier) : undefined,
+          strategyLabel: payload.strategy_label ? String(payload.strategy_label) : undefined,
+          catalyst: payload.catalyst ? String(payload.catalyst) : undefined,
+          confluenceScore: payload.priority_score ? Number(payload.priority_score) : undefined,
+          volume:     payload.volume ? Number(payload.volume) : undefined,
+          rvol:       payload.rvol ? Number(payload.rvol) : undefined,
+          gapPct:     payload.gap_pct ? Number(payload.gap_pct) : undefined,
+          floatShares: payload.float_shares ? Number(payload.float_shares) : undefined,
         }
         setRecentAlerts(prev => [recent, ...prev].slice(0, RECENT_ALERTS_CAP))
 
@@ -178,22 +275,24 @@ export function useAlertStream(): UseAlertStreamResult {
         safeTimeout(() => {
           setFlashingTickers(prev => ({ ...prev, [ticker]: false }))
         }, FLASH_TTL_MS)
-      } catch (err) {
-        console.error('Failed to process SSE message:', err)
       }
-    }
+    })
+    return () => { unsubscribe() }
+  }, [subscribe, playTierAudio, safeTimeout])
 
-    eventSource.onerror = (err) => {
-      console.error('SSE Stream Error:', err)
-    }
+  // Keep alive ping
+  useEffect(() => {
+    if (!connected) return
+    const pingInterval = setInterval(() => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'ping' }))
+      }
+    }, 30000)
+    return () => clearInterval(pingInterval)
+  }, [connected, ws])
 
+  useEffect(() => {
     return () => {
-      // Leak fix: always close the connection on unmount / dep change /
-      // strict-mode double-invoke. Without this, ghost /api/alerts/stream
-      // connections leak across route changes.
-      eventSource.onmessage = null
-      eventSource.onerror = null
-      eventSource.close()
       timeoutsRef.current.forEach(clearTimeout)
       timeoutsRef.current = []
       if (audioCtxRef.current) {
@@ -201,9 +300,10 @@ export function useAlertStream(): UseAlertStreamResult {
         audioCtxRef.current = null
       }
     }
-  }, [playTierAudio, safeTimeout])
+  }, [])
 
   return {
+    wsConnected: connected,
     flashingTickers,
     toasts,
     dismissToast: (id: string) => setToasts(prev => prev.filter(t => t.id !== id)),
@@ -211,5 +311,7 @@ export function useAlertStream(): UseAlertStreamResult {
     setAudioChimesEnabled,
     toastStackEnabled,
     setToastStackEnabled,
+    prices,
+    recentAlerts,
   }
 }

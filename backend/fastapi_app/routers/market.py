@@ -190,12 +190,12 @@ async def get_momentum_breadth(
 ):
     """
     Compute small-cap market momentum, RVOL factors, float theme, and halt tracker.
-    Supports dynamic $2-$25 filtering.
+    Supports dynamic $1-$20 filtering.
     """
     # 1. Small-Cap Market Breadth (Advance/Decline)
-    # Price limits: if price_filter is true, $2.00 to $25.00, else $0.10 to $100.00
-    min_p = 2.0 if price_filter else 0.10
-    max_p = 25.0 if price_filter else 100.00
+    # Price limits: if price_filter is true, $1.00 to $20.00, else $0.10 to $100.00
+    min_p = 1.0 if price_filter else 0.10
+    max_p = 20.0 if price_filter else 100.00
 
     adv_count = 0
     dec_count = 0
@@ -257,7 +257,7 @@ async def get_momentum_breadth(
             live_data = await asyncio.to_thread(get_live_gainers, False)
             gainers_list = live_data.get("gainers", [])
             if price_filter:
-                gainers_list = [g for g in gainers_list if g.get("last_price") is not None and 2.0 <= g["last_price"] <= 25.0]
+                gainers_list = [g for g in gainers_list if g.get("last_price") is not None and 1.0 <= g["last_price"] <= 20.0]
             adv_count = len(gainers_list)
             dec_count = int(adv_count * 0.25) or 1
         except Exception:
@@ -287,7 +287,7 @@ async def get_momentum_breadth(
         
         # Filter by price
         if price_filter:
-            gainers_list = [g for g in gainers_list if g.get("last_price") is not None and 2.0 <= g["last_price"] <= 25.0]
+            gainers_list = [g for g in gainers_list if g.get("last_price") is not None and 1.0 <= g["last_price"] <= 20.0]
         
         # Get top 5 sorted by gap_pct (which is % change proxy)
         gainers_list = sorted(gainers_list, key=lambda x: x.get("gap_pct", 0) or 0, reverse=True)
@@ -309,8 +309,8 @@ async def get_momentum_breadth(
                 rows = await db_market.top_rvol_float_on_date(
                     db,
                     max_date,
-                    min_price=2.0 if price_filter else None,
-                    max_price=25.0 if price_filter else None,
+                    min_price=1.0 if price_filter else None,
+                    max_price=20.0 if price_filter else None,
                     limit=5,
                 )
 
@@ -432,8 +432,8 @@ async def command_summary(
             rows = await db_market.top_rvol_float_on_date(
                 db,
                 max_date,
-                min_price=2.0 if pf else None,
-                max_price=25.0 if pf else None,
+                min_price=1.0 if pf else None,
+                max_price=20.0 if pf else None,
                 limit=5,
             )
             rvol_list = [r["rvol_15m"] for r in rows if r.get("rvol_15m") is not None]
@@ -635,3 +635,24 @@ async def dashboard_overview(
     }
 
     return _clean_nans(response_data)
+
+
+# ---------------------------------------------------------------------------
+# StockTwits Endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/stocktwits/trending")
+async def stocktwits_trending():
+    """Get top trending symbols on StockTwits."""
+    from services.stocktwits_service import get_trending_symbols
+    return await asyncio.to_thread(get_trending_symbols)
+
+
+@router.get("/stocktwits/{ticker}")
+async def stocktwits_sentiment(ticker: str):
+    """Get StockTwits sentiment metrics, watchers count, and top posts for a ticker."""
+    from services.stocktwits_service import get_stocktwits_sentiment
+    from validation import normalize_ticker
+    sym = normalize_ticker(ticker)
+    return await asyncio.to_thread(get_stocktwits_sentiment, sym)
+

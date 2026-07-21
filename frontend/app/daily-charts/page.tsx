@@ -198,7 +198,7 @@ function DailyChartsContent() {
       return valB - valA
     })
     const filtered = priceFilterEnabled
-      ? list.filter(g => g.close_price != null && g.close_price >= 2.0 && g.close_price <= 25.0)
+      ? list.filter(g => g.close_price != null && g.close_price >= 1.0 && g.close_price <= 20.0)
       : list
     return filtered.slice(0, 9)
   }, [summary, priceFilterEnabled])
@@ -306,7 +306,7 @@ function DailyChartsContent() {
                 : 'bg-black border-[#262626] text-gray-500 hover:text-gray-300'
             }`}
           >
-            <span>$2-$25 Filter</span>
+            <span>$1-$20 Filter</span>
             {priceFilterEnabled ? (
               <span className="w-1.5 h-1.5 bg-[#00ff00] animate-pulse" />
             ) : (
@@ -366,7 +366,7 @@ function DailyChartsContent() {
             </span>
           )}
           <span className="text-gray-500">
-            Showing top {displayGainers.length} by gap % {priceFilterEnabled ? '(filtered $2-$25)' : ''}
+            Showing top {displayGainers.length} by gap % {priceFilterEnabled ? '(filtered $1-$20)' : ''}
           </span>
           <span className="ml-auto text-gray-650 text-[10px] uppercase">
             Click any chart to open full research panel

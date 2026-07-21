@@ -70,8 +70,32 @@ async def delete_group(group_id: int, db: asyncpg.Connection = Depends(get_db)):
 
 @router.get("")
 async def list_watchlist(db: asyncpg.Connection = Depends(get_db), group_id: Optional[int] = None):
-    """Return watchlist tickers, optionally filtered by group_id."""
-    return await db_watchlist.list_watchlist(db, group_id=group_id)
+    """Return watchlist tickers enriched with live prices, optionally filtered by group_id."""
+    items = await db_watchlist.list_watchlist(db, group_id=group_id)
+    if not items:
+        return []
+    tickers = [item["ticker"] for item in items]
+    try:
+        quotes = await get_live_quotes(tickers, polygon_api_key=settings.polygon_api_key)
+        for item in items:
+            t_upper = item["ticker"].upper()
+            q = quotes.get(t_upper) or quotes.get(item["ticker"])
+            if q:
+                item["price"] = q.last_price
+                item["change_pct"] = q.change_pct
+                item["volume"] = q.volume
+            else:
+                item["price"] = None
+                item["change_pct"] = None
+                item["volume"] = None
+    except Exception as e:
+        log.error(f"Error fetching live quotes for watchlist: {e}")
+        for item in items:
+            item["price"] = None
+            item["change_pct"] = None
+            item["volume"] = None
+    return items
+
 
 
 # ---------------------------------------------------------------------------

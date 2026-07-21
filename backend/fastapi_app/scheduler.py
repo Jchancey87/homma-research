@@ -190,14 +190,14 @@ async def _premarket_gappers_summary() -> None:
             float_shares = val.get("float_shares")
 
             # Filters:
-            # Price $1-$30
-            price_ok = 1.00 <= price <= 30.00
+            # Price $1-$20
+            price_ok = 1.00 <= price <= 20.00
             # Float <100M
             float_ok = float_shares is None or float_shares < 100_000_000
             # Volume >50k
             volume_ok = volume > 50_000
-            # Gap >4%
-            gap_ok = change > 4.0
+            # Gap >=10%
+            gap_ok = change >= 10.0
 
             if price_ok and float_ok and volume_ok and gap_ok:
                 gappers.append((sym, price, change, volume, float_shares))
