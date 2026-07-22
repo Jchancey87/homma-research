@@ -91,15 +91,12 @@ async function ContinuationPicksPanel() {
 
 export default function DashboardPage() {
   return (
-    <div className="space-y-2 max-w-[1920px] mx-auto">
+    <div className="space-y-2.5 max-w-[1920px] mx-auto p-2 sm:p-4">
 
       {/* ── Dashboard Header ── */}
       <DashboardHeader />
 
-      {/* ── Macro Ticker Strip ── */}
-      <MacroStrip />
-
-      {/* ── Command Summary Strip (4 Market Overview Cards) ── */}
+      {/* ── Command Summary Strip (4 Overview Cards) ── */}
       <CommandSummaryStrip />
 
 
