@@ -7,7 +7,6 @@ import AlertStream from '@/components/AlertStream'
 import EconomicCalendar from '@/components/EconomicCalendar'
 import HelpGuide from '@/components/HelpGuide'
 import DashboardHeader from '@/components/DashboardHeader'
-import MacroStrip from '@/components/ui/MacroStrip'
 import { Panel, PanelLabel } from '@/components/Panel'
 import { getContinuationPicks, ContinuationPick } from '@/lib/api'
 import {
