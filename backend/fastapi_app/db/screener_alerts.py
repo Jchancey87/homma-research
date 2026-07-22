@@ -32,7 +32,9 @@ async def list_recent_alerts(
     rows = await conn.fetch(
         """
         SELECT id, symbol, alert_time, trigger_price, trigger_volume,
-               rel_vol, gap_pct, float_shares, alert_type
+               rel_vol, gap_pct, float_shares, alert_type, priority_score, priority_tier,
+               vwap_dist_pct, hod_dist_pct, catalyst, stop_price, stop_risk_pct,
+               suppressed_reason, group_id
         FROM screener_alerts
         ORDER BY alert_time DESC
         LIMIT $1

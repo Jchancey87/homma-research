@@ -144,6 +144,48 @@ class SchwabStreamer:
         else:
             return VOLUME_TOD_PROFILE['post_4pm']
 
+    def _get_cumulative_volume_fraction(self, now_et=None) -> float:
+        """Calculate exact expected cumulative volume fraction at current ET time based on the intraday U-curve volume profile.
+        Prevents initial open 1-minute volume spike distortion by replacing naive linear elapsed time division with piecewise cumulative curve.
+        """
+        if now_et is None:
+            now_et = datetime.now(pytz.timezone('America/New_York'))
+        h, m = now_et.hour, now_et.minute
+        
+        # Pre-market (4:00 AM - 9:30 AM ET)
+        if h < 8:
+            return 0.02
+        elif h < 9:
+            return 0.05 + ((m / 60.0) * 0.03)
+        elif h == 9 and m < 30:
+            return 0.08 + ((m / 30.0) * 0.07)
+            
+        # Regular Market Hours (9:30 AM - 4:00 PM ET)
+        if h < 16:
+            mins = (h - 9) * 60 + m - 30
+            if mins <= 0:
+                return 0.05
+            elif mins <= 30:   # 9:30 - 10:00 AM (Opening Rush ~20%)
+                frac = 0.05 + (mins / 30.0) * 0.20
+            elif mins <= 60:   # 10:00 - 10:30 AM (~13%)
+                frac = 0.25 + ((mins - 30) / 30.0) * 0.13
+            elif mins <= 90:   # 10:30 - 11:00 AM (~9%)
+                frac = 0.38 + ((mins - 60) / 30.0) * 0.09
+            elif mins <= 150:  # 11:00 AM - 12:00 PM (~12%)
+                frac = 0.47 + ((mins - 90) / 60.0) * 0.12
+            elif mins <= 210:  # 12:00 PM - 1:00 PM (~8%)
+                frac = 0.59 + ((mins - 150) / 60.0) * 0.08
+            elif mins <= 270:  # 1:00 PM - 2:00 PM (~8%)
+                frac = 0.67 + ((mins - 210) / 60.0) * 0.08
+            elif mins <= 330:  # 2:00 PM - 3:00 PM (~10%)
+                frac = 0.75 + ((mins - 270) / 60.0) * 0.10
+            else:              # 3:00 PM - 4:00 PM (Power Hour ~15%)
+                frac = 0.85 + ((mins - 330) / 60.0) * 0.15
+            return max(0.01, min(1.0, frac))
+            
+        # Post-market (4:00 PM ET onwards)
+        return 1.0
+
     def _volume_spike_threshold(self, now_et=None):
         """Dynamic VOLUME_SPIKE multiplier: tighter during high-volume periods, looser in low-volume windows."""
         if now_et is None:
@@ -806,20 +848,11 @@ class SchwabStreamer:
         if v_state['cum_vol'] > 0:
             vwap = v_state['cum_vp'] / v_state['cum_vol']
 
-        # Calculate Relative Volume (RVOL)
-        # Using a simple daily elapsed time factor
+        # Calculate Relative Volume (RVOL) using intraday cumulative volume profile curve
         now_et = datetime.now(pytz.timezone('America/New_York'))
-        mkt_start = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
-        mkt_end = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
-        
-        if now_et < mkt_start:
-            elapsed_pct = self._volume_tod_multiplier(now_et)
-        elif now_et > mkt_end:
-            elapsed_pct = 1.0
-        else:
-            elapsed_pct = (now_et - mkt_start).total_seconds() / (6.5 * 3600)
-            
-        rvol = total_volume / max(fund['vol_10d_avg'] * elapsed_pct, 1)
+        cum_frac = self._get_cumulative_volume_fraction(now_et)
+        vol_baseline = max(fund.get('vol_10d_avg', 0) * cum_frac, 5000)
+        rvol = min(total_volume / vol_baseline, 99.9)
 
         # Gap calculation
         gap_pct = 0.0
@@ -1289,15 +1322,9 @@ class SchwabStreamer:
         rvol = 0.0
         if total_volume > 0:
             now_et = datetime.now(pytz.timezone('America/New_York'))
-            mkt_start = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
-            mkt_end = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
-            if now_et < mkt_start:
-                elapsed_pct = self._volume_tod_multiplier(now_et)
-            elif now_et > mkt_end:
-                elapsed_pct = 1.0
-            else:
-                elapsed_pct = (now_et - mkt_start).total_seconds() / (6.5 * 3600)
-            rvol = total_volume / max(fund['vol_10d_avg'] * elapsed_pct, 1)
+            cum_frac = self._get_cumulative_volume_fraction(now_et)
+            vol_baseline = max(fund.get('vol_10d_avg', 0) * cum_frac, 5000)
+            rvol = min(total_volume / vol_baseline, 99.9)
 
         gap_pct = 0.0
         prev_close = fund.get('yesterday_close')
