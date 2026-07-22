@@ -768,12 +768,31 @@ export const getMomentumBreadth = (priceFilter = true) =>
 
 // ── Command Summary (Market Regime Card) ────────────────────────────────────
 
+export interface VolumeAnomaly {
+  ticker: string
+  rvol: number
+  gap_pct: number
+  float_shares?: number | null
+}
+
+export interface MacroItem {
+  value: number | null
+  chg_pct: number | null
+}
+
 export interface CommandSummaryData {
   regime: {
     tag: 'risk_on' | 'neutral' | 'risk_off'
     label: string
     indices: Record<string, { ticker: string; price: number | null; chg_pct: number | null; volume: number | null }>
-    vix: { value: number | null; direction: string } | null
+    vix: {
+      value: number | null
+      direction: string
+      vix3m?: number | null
+      term_slope?: number | null
+      percentile_rank?: number | null
+      regime?: string | null
+    } | null
   }
   breadth: {
     ad_ratio_str: string
@@ -785,6 +804,14 @@ export interface CommandSummaryData {
     status: string
     up_down_vol_ratio: number | null
     above_40sma_pct: number | null
+    above_20sma_pct?: number | null
+    above_50sma_pct?: number | null
+    above_200sma_pct?: number | null
+    breadth_score?: number | null
+    new_highs?: number | null
+    new_lows?: number | null
+    net_new_highs?: number | null
+    high_low_index?: number | null
   }
   liquidity: {
     median_rvol: number | null
@@ -804,6 +831,16 @@ export interface CommandSummaryData {
     halt_tickers: string[]
     halt_rate_per_hour: number | null
     signals: string[]
+    anomaly_count?: number
+    top_anomalies?: VolumeAnomaly[]
+    confluence_score?: number
+  }
+  macro?: {
+    us10y?: MacroItem
+    dxy?: MacroItem
+    crude?: MacroItem
+    gold?: MacroItem
+    put_call_ratio?: number | null
   }
   fetched_at: string
   cache_ttl_s: number

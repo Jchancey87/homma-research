@@ -52,8 +52,7 @@
 * **Continuation Journal:** Card-based UI grouped by date. Left colored border reflects tracking outcomes (Runner, Win, Flat, Fade, Active). Custom SVG inline sparklines show 3-day closes. Details pane opens inline. Scorecard metrics rendered as visual stacked percentage edge bars instead of static tables.
 * **GainerTable Overhaul:** Columns reduced to 6: Rank, Ticker, Price, Change(%), Trend, Float. Rank always visible. Suffixes [RR]/[FT] as badges + tooltips in Ticker col. Price 16px, Rank 14px bold, Ticker 13px monospace, Change 14px bold, Float 12px. Float uses dot-badge + tooltip. Trend is emoji-badge + tooltip. Float cell includes expand chevron. Enabled SortKey trend sorting.
 * **Dashboard borders:** Remove all opacity modifiers from layout border classes (such as `/30`, `/50`, `/20`, `/25`, `/45`, `/40`). Maintain solid default border color (`--border-subtle`).
-* **Memory Leak Prevention:** Nullify EventSource/WebSocket handlers (`onclose`, `onerror`, `onmessage`) before closing on unmount. Track timeouts/intervals and clear them on component unmount. Explicitly close browser `AudioContext` on unmount.
-
+* **Market Overview Containers (RFC-011):** Expanded `/market/command-summary` response with VIX term structure (VIX3M, slope, percentile rank, regime), multi-TF SMA participation (20/50/200), 52W net high/lows, macro tickers (10Y, DXY, Crude, Gold), volume anomaly detection. Modularized `CommandSummaryStrip.tsx` into 4 distinct cards (`MarketRegimeCard`, `SmallCapBreadthCard`, `LiquidityFloatCard`, `RiskAnomaliesCard`) with shared SVG widgets (`MiniGauge`, `BreadthStack`, `NetHistogram`, `MacroStrip`).
 
 ### 7. Testing & DevOps
 * **Venv Testing:** Execute backend tests using `/opt/trading-journal/backend/venv/bin/pytest`.
@@ -115,19 +114,32 @@
 
 
 
+### 20. Bloomberg Terminal Typography & High-Density UI
+* **Font Stack & Styling:** Imported 'Inter', 'Roboto Condensed', 'IBM Plex Mono', 'Source Code Pro' in `globals.css`. Configured Tailwind tokens (`fontFamily`, `letterSpacing`, `colors`). Enforced `font-tabular` (`font-variant-numeric: tabular-nums lining-nums`) across price, change %, RVOL, float, and ticker cells. Border-radius strictly zero (`0px !important`).
+* **High-Density Screener Component:** Built `BloombergScreenerTable.tsx` supporting density toggles (`4px Ultra`, `5px Compact`, `8px Normal`), ticker letter-spacing (`0.03em`), and live tick animations.
+
+### 21. Intraday Cumulative RVOL Curve & High-Density Alert Stream
+* **Cumulative Volume Fraction Curve:** Implemented `_get_cumulative_volume_fraction(now_et)` in `stream_client.py` using a minute-accurate piecewise cumulative intraday volume U-profile (9:30 AM = 0.05, 10:00 AM = 0.25, 12:00 PM = 0.59, 4:00 PM = 1.00) with a 5,000-share baseline floor and 99.9x cap. Replaced legacy linear session division `(now - open) / 23400`.
+* **High-Density Alert Stream Container:** Overhauled `AlertStream.tsx` into a high-density, Bloomberg-style alert table with Tier filtering (`ALL` | `T1` | `T2` | `T3`), pause/play stream controls, search filter, mute/unmute audio toggle, tabular metrics grid (Price, Gap %, RVOL, Float, Stop levels, HOD/VWAP distances, Catalyst tags), and expandable action drawers.
+
+### 22. 3-Screener Grid & Warrior Pattern Detection Engine
+* **3-Screener Layout (`LiveGainers.tsx`):** Categorized 3 terminal panels left-to-right:
+  - **Left Column**: `Pure Day Gainers` (all movers up >=10% in $1-$20 range sorted by day gain).
+  - **Middle Column**: `Focused Watch (HOD & Psych)` (coiling near HOD `atr_hod < 1.2` or `hod_dist_pct < 2.0%`, sorted by psychological dollar level distance `psych_dist_cents`).
+  - **Right Column**: `Directly In-Play (Warrior Scanner)` (active momentum runners with high RVOL `>= 2.0`, volume ratio, tape acceleration, and active pattern badges).
+* **Warrior Pattern Engine (`pattern_detector.py`):** Pure Python pattern recognition module detecting Bull Flags (impulse pole + tight consolidation holding 9 EMA + breakout volume), VWAP Reclaims (cross back above VWAP with volume surge), Micro Pullbacks (1-3 red candles pulling back into 9 EMA in uptrend), and Psychological Level Breakouts ($1, $2.50, $5, $10, $20). Metrics attached to live gainer payloads as `active_patterns` and `pattern_score`.
+
+
+
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Adapt Bloomberg Terminal high-density financial typography, tabular alignment, compact row specs, high-contrast dark theme tokens, and reusable Bloomberg-inspired table UI component specs to our web app.
-* **Scope:**
-  - Font Stack & CSS: Font imports ('Inter', 'IBM Plex Mono'/'Source Code Pro'), tabular numbers (`font-variant-numeric: tabular-nums lining-nums`), ticker letter-spacing (`0.02em` - `0.04em`), compact table padding (`4px-6px`), Bloomberg high-contrast dark colors (`#0D0E12` / `#131722` bg, `#1E222D` borders, `#089981` green, `#F23645` red).
-  - Modular styling & components: Standard CSS/Tailwind utilities & React table component (`BloombergScreenerTable.tsx`) demonstrating financial density for screener data (Ticker, Price, % Change, RVOL, Float, Volume).
-* **Assumptions:** Maintain trade-station sharp edges (`border-radius: 0px !important`), preserve existing layout tokens while elevating density and financial readability.
-
-
+* **Goal:** Session completed cleanly. All Bloomberg Terminal UI specs, RVOL intraday curve fixes, AlertStream container redesign, 3-screener layout, and Warrior pattern detector implemented, tested, committed, pushed, and deployed to production.
+* **Scope:** Completed.
+* **Assumptions:** All PM2 processes online (`fastapi-backend`, `celery-worker`, `celery-beat`, `nextjs-frontend`, `schwab-streamer`).
 
 
 
 ## 🗑️ Rot & Pruning Log
-* Pruned completed watchlist enrichment goals.
+* Pruned completed Bloomberg Terminal UI and RVOL session goals.
 
 
 

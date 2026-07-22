@@ -4,17 +4,16 @@ import LiveGainers from '@/components/LiveGainers'
 import CommandSummaryStrip from '@/components/CommandSummaryStrip'
 import RepeatRunnerAlert from '@/components/RepeatRunnerAlert'
 import AlertStream from '@/components/AlertStream'
-import FloatBucketSummary from '@/components/FloatBucketSummary'
-import SectorRotation from '@/components/SectorRotation'
 import EconomicCalendar from '@/components/EconomicCalendar'
 import HelpGuide from '@/components/HelpGuide'
 import DashboardHeader from '@/components/DashboardHeader'
+import MacroStrip from '@/components/ui/MacroStrip'
 import { Panel, PanelLabel } from '@/components/Panel'
 import { getContinuationPicks, ContinuationPick } from '@/lib/api'
 import {
   TrendingUp, RotateCcw,
-  BarChart2, ArrowRight, CalendarDays,
-  Layers, Bell, Zap,
+  ArrowRight, CalendarDays,
+  Bell, Zap,
 } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -97,7 +96,10 @@ export default function DashboardPage() {
       {/* ── Dashboard Header ── */}
       <DashboardHeader />
 
-      {/* ── Command Summary Strip (Market Regime Card) ── */}
+      {/* ── Macro Ticker Strip ── */}
+      <MacroStrip />
+
+      {/* ── Command Summary Strip (4 Market Overview Cards) ── */}
       <CommandSummaryStrip />
 
 
@@ -135,35 +137,21 @@ export default function DashboardPage() {
         </Panel>
       </div>
 
-      {/* ── Row 3: Float buckets + Sector rotation + AI picks (stacked on mobile, 3-cols on xl) ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-        <Panel>
-          <PanelLabel icon={Layers} label="Float in Play" />
-          <Suspense fallback={<div className="space-y-2 animate-pulse">{[1,2,3].map(i=><div key={i} className="h-8 bg-[#111] rounded-none" />)}</div>}>
-            <FloatBucketSummary />
+      {/* ── Row 3: AI Continuation Picks + Economic Calendar ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
+        <div className="lg:col-span-2">
+          <Suspense fallback={<Panel><div className="animate-pulse h-32 bg-[#111] rounded-none" /></Panel>}>
+            <ContinuationPicksPanel />
           </Suspense>
-        </Panel>
+        </div>
 
         <Panel>
-          <PanelLabel icon={BarChart2} label="Sector Rotation" />
-          <Suspense fallback={<div className="space-y-2 animate-pulse">{[1,2,3,4].map(i=><div key={i} className="h-7 bg-[#111] rounded-none" />)}</div>}>
-            <SectorRotation />
+          <PanelLabel icon={CalendarDays} label="This Week's Calendar" />
+          <Suspense fallback={<div className="h-8 bg-[#111] rounded-none animate-pulse" />}>
+            <EconomicCalendar />
           </Suspense>
         </Panel>
-
-        <Suspense fallback={<Panel><div className="animate-pulse h-32 bg-[#111] rounded-none" /></Panel>}>
-          <ContinuationPicksPanel />
-        </Suspense>
       </div>
-
-
-      {/* ── Economic calendar (full width, compact) ── */}
-      <Panel>
-        <PanelLabel icon={CalendarDays} label="This Week's Calendar" />
-        <Suspense fallback={<div className="h-8 bg-[#111] rounded-none animate-pulse" />}>
-          <EconomicCalendar />
-        </Suspense>
-      </Panel>
 
       {/* ── Help Guide ── */}
       <HelpGuide />

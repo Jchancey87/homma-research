@@ -8,6 +8,9 @@ from services.command_summary_service import (
     compute_ad_metrics,
     compute_sector_clusters,
     compute_up_down_vol_ratio,
+    compute_vix_details,
+    compute_new_highs_lows,
+    compute_volume_anomalies,
     regime_tag,
     risk_tag,
 )
@@ -113,3 +116,50 @@ class TestSectorClusters:
     def test_empty(self):
         result = compute_sector_clusters([])
         assert result == {}
+
+
+# ── compute_vix_details ──────────────────────────────────────────────────────
+
+class TestVixDetails:
+    def test_contango_normal(self):
+        v3m, slope, pctile, regime = compute_vix_details(15.0, 16.5)
+        assert v3m == 16.5
+        assert slope == 10.0
+        assert pctile == 30.0
+        assert regime == "NORMAL_VOL"
+
+    def test_backwardation_crisis(self):
+        v3m, slope, pctile, regime = compute_vix_details(32.0, 28.0)
+        assert slope == pytest.approx(-12.5)
+        assert regime == "CRISIS_VOL"
+
+
+# ── compute_new_highs_lows ────────────────────────────────────────────────---
+
+class TestNewHighsLows:
+    def test_basic(self):
+        gainers = [
+            {"close_location": 0.95, "gap_pct": 20.0},
+            {"close_location": 0.05, "gap_pct": -12.0},
+            {"close_location": 0.50, "gap_pct": 5.0},
+        ]
+        hi, lo, net, idx = compute_new_highs_lows(gainers)
+        assert hi == 1
+        assert lo == 1
+        assert net == 0
+        assert idx == 50.0
+
+
+# ── compute_volume_anomalies ─────────────────────────────────────────────────
+
+class TestVolumeAnomalies:
+    def test_anomalies(self):
+        gainers = [
+            {"ticker": "ABCD", "rvol_15m": 5.2, "gap_pct": 12.0, "float_shares": 1_000_000},
+            {"ticker": "XYZ", "rvol_15m": 1.2, "gap_pct": 4.0},
+        ]
+        count, top, score = compute_volume_anomalies(gainers, halt_count=2, vix_val=22.0)
+        assert count == 1
+        assert top[0]["ticker"] == "ABCD"
+        assert score >= 2
+
