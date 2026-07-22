@@ -27,7 +27,7 @@ export function SessionBadge({ session, label }: { session: string; label: strin
 export function GapCell({ gap }: { gap: number }) {
   const color = gap >= 0 ? 'text-green-custom' : 'text-red-custom'
   return (
-    <td className="py-[3px] px-1.5 text-right font-mono tabular-nums select-none">
+    <td className="py-[3px] px-1.5 text-right font-tabular select-none" style={{ fontVariantNumeric: 'tabular-nums lining-nums' }}>
       <span className={`font-bold text-[12px] ${color}`}>
         {gap >= 0 ? '+' : ''}{gap.toFixed(1)}%
       </span>
@@ -38,7 +38,7 @@ export function GapCell({ gap }: { gap: number }) {
 // ── Price cell ──────────────────────────────────────────────────────────────
 
 export function PriceCell({ last, prev }: { last: number | null; prev: number | null }) {
-  if (last == null) return <td className="py-[3px] px-1.5 text-right font-mono text-text-muted text-[12px] tabular-nums select-none">—</td>
+  if (last == null) return <td className="py-[3px] px-1.5 text-right font-tabular text-text-muted text-[12px] select-none" style={{ fontVariantNumeric: 'tabular-nums lining-nums' }}>—</td>
   const up = prev == null || last >= prev
   
   let rangeClass = up ? 'text-text-primary' : 'text-red-custom'
@@ -56,7 +56,7 @@ export function PriceCell({ last, prev }: { last: number | null; prev: number | 
   }
 
   return (
-    <td className="py-[3px] px-1.5 text-right font-mono text-[12px] tabular-nums select-none">
+    <td className="py-[3px] px-1.5 text-right font-tabular text-[12px] select-none" style={{ fontVariantNumeric: 'tabular-nums lining-nums' }}>
       <div className="inline-flex items-center justify-end w-full group/tooltip relative">
         <span className={`${rangeClass} ${containerStyle}`}>
           ${last.toFixed(2)}

@@ -265,14 +265,14 @@ export function GainerTable({
                       onClick={() => handleRowClick(g.ticker)}
                     >
                       {/* 1. Rank */}
-                      <td className="py-[3px] pr-2 font-bold text-text-secondary text-[12px] tabular-nums select-none text-right">
+                      <td className="py-[3px] pr-2 font-bold text-text-secondary text-[12px] font-tabular select-none text-right" style={{ fontVariantNumeric: 'tabular-nums lining-nums' }}>
                         {originalRank}
                       </td>
 
                       {/* 2. Ticker with inline badging */}
-                      <td className="py-[3px] px-1.5 font-mono text-[12px]">
+                      <td className="py-[3px] px-1.5 font-tabular text-[12px]">
                         <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-text-primary group-hover:text-green-custom transition-colors">
+                          <span className="font-ticker text-[13px] text-text-primary tracking-ticker group-hover:text-green-custom transition-colors">
                             {g.ticker}
                           </span>
                           <div className="flex items-center gap-0.5 shrink-0 select-none">

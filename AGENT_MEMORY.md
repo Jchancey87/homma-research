@@ -116,12 +116,12 @@
 
 
 ## 🔱 Branch: session (Active Intent & Scope)
-* **Goal:** Implement multiplexed WebSocket streaming, tighten price filter ($1-$20), and enforce strict >=10% minimum day gain threshold.
+* **Goal:** Adapt Bloomberg Terminal high-density financial typography, tabular alignment, compact row specs, high-contrast dark theme tokens, and reusable Bloomberg-inspired table UI component specs to our web app.
 * **Scope:**
-  - Streamer & Backend: Enforced >=10.0% gain floor in `stream_client.py` (alerts + quote ticks), `live_screener.py` (`MIN_GAP_PCT=10.0`), `ingest_gainers.py`, `scheduler.py` (`gap_ok >= 10.0`), `filters.py` (`ROSS_MIN_GAP_PCT=10.0`). Non-watchlist tickers < 10% gain skip Redis streaming & alert checks.
-  - Price bounds: Tightened universal price range to $1.00 - $20.00.
-  - WS Multiplexing: `websocket_alerts.py` multiplexes alerts + price ticks.
-* **Assumptions:** Users only trade stocks up >=10% for the day in the $1-$20 range. All PM2 services restarted and verified.
+  - Font Stack & CSS: Font imports ('Inter', 'IBM Plex Mono'/'Source Code Pro'), tabular numbers (`font-variant-numeric: tabular-nums lining-nums`), ticker letter-spacing (`0.02em` - `0.04em`), compact table padding (`4px-6px`), Bloomberg high-contrast dark colors (`#0D0E12` / `#131722` bg, `#1E222D` borders, `#089981` green, `#F23645` red).
+  - Modular styling & components: Standard CSS/Tailwind utilities & React table component (`BloombergScreenerTable.tsx`) demonstrating financial density for screener data (Ticker, Price, % Change, RVOL, Float, Volume).
+* **Assumptions:** Maintain trade-station sharp edges (`border-radius: 0px !important`), preserve existing layout tokens while elevating density and financial readability.
+
 
 
 

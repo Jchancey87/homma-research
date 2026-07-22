@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Roboto+Condensed:wght@400;600;700&family=Source+Code+Pro:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,20 +10,29 @@
   --panel-bg: #ffffff;
   --panel-border: #e2e8f0;
 
-  /* Redesign Dark Theme Tokens */
-  --bg-app: #080A0E;
-  --bg-panel: #0B0E13;
-  --bg-raised: #13171F;
-  --bg-hover: #19202A;
-  --border-subtle: #1C2330;
-  --border-strong: #2B3547;
-  --text-primary: #E2E8F0;
-  --text-secondary: #94A3B8;
-  --text-muted: #475569;
-  --green: #00E676;
-  --red: #FF1744;
-  --amber: #FF9100;
+  /* High-Density Bloomberg & Dark Theme Tokens */
+  --bg-app: #0D0E12;
+  --bg-panel: #131722;
+  --bg-raised: #181C28;
+  --bg-hover: #1E2433;
+  --border-subtle: #1E222D;
+  --border-strong: #2E3545;
+  --text-primary: #E0E3EB;
+  --text-bright: #FFFFFF;
+  --text-secondary: #9B9EAE;
+  --text-muted: #505668;
+  
+  /* Financial High-Contrast Color Palette */
+  --green: #089981;
+  --green-bright: #00FF66;
+  --red: #F23645;
+  --red-bright: #FF3344;
+  --amber: #F59E0B;
   --info: #2979FF;
+
+  /* Font Stack Definitions */
+  --font-sans-primary: 'Inter', 'Roboto Condensed', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono-tabular: 'IBM Plex Mono', 'Source Code Pro', Consolas, 'Liberation Mono', 'Courier New', ui-monospace, monospace;
 }
 
 html.dark {
@@ -39,8 +50,10 @@ html.dark {
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Consolas, "Roboto Mono", ui-monospace, monospace;
+  font-family: var(--font-sans-primary);
   transition: background-color 0.15s ease, color 0.15s ease;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -50,6 +63,109 @@ body {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Bloomberg Terminal Typography & Numeric Classes */
+.font-tabular {
+  font-family: var(--font-mono-tabular);
+  font-variant-numeric: tabular-nums lining-nums;
+  -webkit-font-feature-settings: "tnum" 1, "lnum" 1;
+  -moz-font-feature-settings: "tnum" 1, "lnum" 1;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+.font-ticker {
+  font-family: var(--font-mono-tabular);
+  letter-spacing: 0.03em;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+/* High-Density Financial Table Styling */
+.table-bloomberg {
+  width: 100%;
+  border-collapse: collapse;
+  background-color: var(--bg-panel);
+  color: var(--text-primary);
+  font-size: 0.75rem; /* 12px default density */
+}
+
+.table-bloomberg th {
+  background-color: #131722;
+  color: var(--text-secondary);
+  font-family: var(--font-sans-primary);
+  font-size: 0.6875rem; /* 11px condensed header */
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--border-subtle);
+  text-align: right;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.table-bloomberg th:first-child,
+.table-bloomberg th.text-left {
+  text-align: left;
+}
+
+.table-bloomberg td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+  font-family: var(--font-mono-tabular);
+  font-variant-numeric: tabular-nums lining-nums;
+  -webkit-font-feature-settings: "tnum" 1, "lnum" 1;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  text-align: right;
+  font-size: 0.75rem;
+}
+
+.table-bloomberg td:first-child,
+.table-bloomberg td.text-left {
+  text-align: left;
+}
+
+.table-bloomberg tr {
+  transition: background-color 0.1s ease;
+}
+
+.table-bloomberg tr:hover {
+  background-color: var(--bg-hover);
+}
+
+/* Financial Real-Time Status Colors */
+.text-gainer {
+  color: var(--green);
+}
+
+.text-pullback {
+  color: var(--red);
+}
+
+.text-gainer-flash {
+  color: var(--green-bright);
+  text-shadow: 0 0 6px rgba(0, 255, 102, 0.4);
+}
+
+.text-pullback-flash {
+  color: var(--red-bright);
+  text-shadow: 0 0 6px rgba(255, 51, 68, 0.4);
+}
+
+.badge-terminal {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  font-family: var(--font-mono-tabular);
+  font-size: 0.625rem; /* 10px */
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1;
 }
 
 @layer utilities {
@@ -86,4 +202,5 @@ html {
   scrollbar-width: thin;
   scrollbar-color: var(--border-subtle) var(--bg-app);
 }
+
 
