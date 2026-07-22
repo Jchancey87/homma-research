@@ -334,11 +334,12 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = EMP
 
       {/* 3-Column Terminal Panel Grid */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-2.5">
+        {/* Left: Pure Day Gainers */}
         <GainerTable
           scannerType="all_live"
           gainers={loading ? [] : filteredGainers}
           fullList={loading ? [] : filteredGainers}
-          title="All Live Gainers"
+          title="Pure Day Gainers"
           emptyMessage={
             session === 'closed'
               ? 'Market is closed. Check back during pre-market (4 AM ET) or regular hours.'
@@ -349,25 +350,29 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = EMP
           loading={loading}
           flashingTickers={flashingTickers}
         />
+
+        {/* Middle: Focused Watch (HOD & Psych Dollar Levels) */}
         <GainerTable
           scannerType="near_hod"
-          gainers={loading ? [] : filteredGainers.filter(g => g.atr_hod != null && g.atr_hod < 1.0)}
+          gainers={loading ? [] : filteredGainers.filter(g => (g.atr_hod != null && g.atr_hod < 1.2) || (g.psych_dist_cents != null && g.psych_dist_cents <= 35))}
           fullList={loading ? [] : filteredGainers}
-          title="Near HOD Radar"
-          emptyMessage="No Near HOD breakout setups coiling right now (AtrHoD < 1.0)."
+          title="Focused Watch (HOD & Psych)"
+          emptyMessage="No coiling setups near HOD or psychological levels right now."
           onOpenModal={setModalGainer}
           handleResearch={handleResearch}
           loading={loading}
-          defaultSortKey="atr_hod"
+          defaultSortKey="psych"
           defaultSortDir="asc"
           flashingTickers={flashingTickers}
         />
+
+        {/* Right: Directly In-Play (Warrior Breakouts & Squeezes) */}
         <GainerTable
           scannerType="high_rvol"
-          gainers={loading ? [] : filteredGainers.filter(g => g.rvol_15m != null && g.rvol_15m >= 2.0)}
+          gainers={loading ? [] : filteredGainers.filter(g => (g.rvol_15m != null && g.rvol_15m >= 2.0) || (g.rvol_1m != null && g.rvol_1m >= 2.0) || (g.active_patterns && g.active_patterns.length > 0))}
           fullList={loading ? [] : filteredGainers}
-          title="High RVOL Radar"
-          emptyMessage="No high relative volume setups active right now (RVOL >= 2.0)."
+          title="Directly In-Play (Warrior Scanner)"
+          emptyMessage="No directly in-play breakouts or high-RVOL momentum setups active right now."
           onOpenModal={setModalGainer}
           handleResearch={handleResearch}
           loading={loading}

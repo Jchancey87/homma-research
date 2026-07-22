@@ -171,6 +171,8 @@ export interface LiveGainerRow {
   nearest_resistance_name?: string | null
   nearest_resistance_val?: number | null
   nearest_resistance_dist?: number | null
+  active_patterns?: string[]
+  pattern_score?: number
 }
 
 export interface LiveGainerSnapshot {

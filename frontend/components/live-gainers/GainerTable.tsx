@@ -461,9 +461,13 @@ export function GainerTable({
                             )}
                           </td>
 
-                          {/* Micro RVOL */}
+                          {/* Pattern / Micro RVOL */}
                           <td className="py-[3px] px-1.5 text-right select-none font-mono text-[11px] font-bold">
-                            {g.rvol_1m != null ? (
+                            {g.active_patterns && g.active_patterns.length > 0 ? (
+                              <span className="text-gainer bg-gainer/15 border border-gainer/30 px-1 py-0.25 text-[9px] uppercase font-bold tracking-wider">
+                                {g.active_patterns[0].replace('_', ' ')}
+                              </span>
+                            ) : g.rvol_1m != null ? (
                               <span className={g.rvol_1m >= 2.0 ? 'text-purple-400 bg-purple-400/10 px-1.5 py-0.25 animate-pulse' : 'text-text-secondary'}>
                                 {g.rvol_1m.toFixed(1)}x
                               </span>

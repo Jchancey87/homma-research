@@ -521,6 +521,10 @@ def _compute_minute_metrics(ticker: str, last_price: Optional[float],
             avg_prev_vol = sum(pc.get('v') or 0 for pc in prev_candles) / len(prev_candles)
             rvol_1m = round(latest_vol / avg_prev_vol, 2) if avg_prev_vol > 0 else 0.0
 
+    # ── Pattern Detection (Bull Flag, VWAP Reclaim, Micro Pullback, Psych Breakout) ──
+    from services.pattern_detector import analyze_stock_patterns
+    pattern_res = analyze_stock_patterns(candles, vwap, curr_p or 0.0)
+
     metrics = {
         'mom_2m':            mom_2m,
         'price_2min_ago':    price_2min_ago,
@@ -539,7 +543,9 @@ def _compute_minute_metrics(ticker: str, last_price: Optional[float],
         'next_psych_level':  next_psych_level,
         'psych_dist_cents':  psych_dist_cents,
         'volume_ratio':      volume_ratio,
-        'rvol_1m':           rvol_1m
+        'rvol_1m':           rvol_1m,
+        'active_patterns':   pattern_res.get('active_patterns', []),
+        'pattern_score':     pattern_res.get('pattern_score', 0)
     }
 
     with _minute_cache_lock:
@@ -610,7 +616,7 @@ def _enrich_ticker(g: dict) -> dict:
     if mm.get('hod'):
         g['high_price'] = round(mm['hod'], 4)
 
-    # Ross indicators
+    # Ross & Pattern indicators
     g['consec_red_1m']     = mm.get('consec_red_1m', 0)
     g['ema9_1m']           = mm.get('ema9_1m')
     g['ema9_dist_pct']     = mm.get('ema9_dist_pct')
@@ -619,6 +625,8 @@ def _enrich_ticker(g: dict) -> dict:
     g['volume_ratio']      = mm.get('volume_ratio')
     g['rvol_1m']           = mm.get('rvol_1m', 1.0)
     g['atr_14']            = mm.get('atr_14')
+    g['active_patterns']   = mm.get('active_patterns', [])
+    g['pattern_score']     = mm.get('pattern_score', 0)
 
     # Daily metrics
     dm = _compute_daily_metrics(ticker)
