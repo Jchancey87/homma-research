@@ -269,12 +269,21 @@ export function GainerTable({
                         {originalRank}
                       </td>
 
-                      {/* 2. Ticker with inline badging */}
+                      {/* 2. Ticker with inline badging and company name hover box */}
                       <td className="py-[3px] px-1.5 font-tabular text-[12px]">
                         <div className="flex items-center gap-1.5">
-                          <span className="font-ticker text-[13px] text-text-primary tracking-ticker group-hover:text-green-custom transition-colors">
-                            {g.ticker}
-                          </span>
+                          <div className="relative group/ticker inline-flex items-center" title={g.company_name ? `${g.ticker} — ${g.company_name}` : g.ticker}>
+                            <span className="font-ticker text-[13px] text-text-primary tracking-ticker group-hover:text-green-custom transition-colors cursor-help">
+                              {g.ticker}
+                            </span>
+                            {g.company_name && (
+                              <div className="pointer-events-none absolute bottom-full left-0 mb-1 hidden group-hover/ticker:flex bg-[#0d1218] border border-border-strong text-white text-[11px] font-mono px-2.5 py-1 shadow-2xl whitespace-nowrap z-50 rounded-none items-center gap-1.5 normal-case">
+                                <span className="text-emerald-400 font-bold">{g.ticker}</span>
+                                <span className="text-gray-500">·</span>
+                                <span className="text-gray-200 font-medium">{g.company_name}</span>
+                              </div>
+                            )}
+                          </div>
                           <div className="flex items-center gap-0.5 shrink-0 select-none">
                             {lockedTicker === g.ticker && (
                               <span className="text-[8px] text-info-custom font-black shrink-0">

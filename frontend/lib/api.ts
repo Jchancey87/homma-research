@@ -119,6 +119,7 @@ export const getGainersByDate = (date: string) =>
 
 export interface LiveGainerRow {
   ticker:        string
+  company_name?: string | null
   gap_pct:       number
   last_price:    number | null
   open_price:    number | null

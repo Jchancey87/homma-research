@@ -59,7 +59,12 @@ export function LiveGainersModal({
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800/80">
           <div className="flex items-center gap-3">
-            <span className="text-xl font-bold text-white font-mono">{gainer.ticker}</span>
+            <div className="flex flex-col">
+              <span className="text-xl font-bold text-white font-mono leading-none" title={gainer.company_name || gainer.ticker}>{gainer.ticker}</span>
+              {gainer.company_name && (
+                <span className="text-[11px] font-mono text-gray-400 font-medium mt-0.5">{gainer.company_name}</span>
+              )}
+            </div>
             <div className="flex items-center gap-1">
               {gainer.is_follow_through && (
                 <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-blue-500/20 text-blue-400 border border-blue-500/30">

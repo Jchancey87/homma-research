@@ -129,9 +129,9 @@ def _fetch_tradingview_candidates() -> Dict[str, dict]:
     candidates = {}
 
     scans = [
-        ("regular",   "change",           "close",           "volume",           ["change","close","volume","market_cap_basic","float_shares_outstanding","sector"]),
-        ("premarket",  "premarket_change", "premarket_close", "premarket_volume", ["premarket_change","premarket_close","premarket_volume","market_cap_basic","float_shares_outstanding","sector"]),
-        ("postmarket", "postmarket_change","postmarket_close","postmarket_volume",["postmarket_change","postmarket_close","postmarket_volume","market_cap_basic","float_shares_outstanding","sector"]),
+        ("regular",   "change",           "close",           "volume",           ["change","close","volume","market_cap_basic","float_shares_outstanding","sector","description"]),
+        ("premarket",  "premarket_change", "premarket_close", "premarket_volume", ["premarket_change","premarket_close","premarket_volume","market_cap_basic","float_shares_outstanding","sector","description"]),
+        ("postmarket", "postmarket_change","postmarket_close","postmarket_volume",["postmarket_change","postmarket_close","postmarket_volume","market_cap_basic","float_shares_outstanding","sector","description"]),
     ]
 
     for label, change_col, price_col, vol_col, cols in scans:
@@ -164,6 +164,7 @@ def _fetch_tradingview_candidates() -> Dict[str, dict]:
                 mcap   = d[4]
                 flt    = d[5]
                 sector = d[6] if len(d) > 6 else None
+                desc   = d[7] if len(d) > 7 else None
                 if sym not in candidates or abs(change) > abs(candidates[sym]['change']):
                     candidates[sym] = {
                         'change':      change,
@@ -172,6 +173,7 @@ def _fetch_tradingview_candidates() -> Dict[str, dict]:
                         'float_shares': flt,
                         'market_cap':  mcap,
                         'sector':      sector,
+                        'company_name': desc,
                     }
         except Exception as e:
             log.warning(f"[Screener] TradingView {label} error: {e}")
@@ -267,10 +269,13 @@ def _build_gainer_rows(quotes: Dict[str, dict], candidate_meta: Dict[str, dict],
         spread_pct = round(((ask - bid) / bid) * 100, 2) if ask and bid and bid > 0 else None
         is_hod     = (last_price >= high_price * 0.995) if high_price and high_price > 0 else False
 
-        in_watchlist = sym in watchlist
+        ref  = data.get('reference', {}) or {}
+        inst = data.get('instrument', {}) or {}
+        company_name = ref.get('description') or inst.get('description') or meta.get('company_name')
 
         rows.append({
             'ticker':        sym,
+            'company_name':  company_name,
             'gap_pct':       gap_pct,
             'last_price':    round(last_price, 4) if last_price else None,
             'high_price':    round(high_price, 4) if high_price else None,
