@@ -42,9 +42,12 @@ let reconnectTimer: NodeJS.Timeout | null = null
 
 export const getWsUrl = () => {
   if (typeof window === 'undefined') return ''
+  if (process.env.NEXT_PUBLIC_WS_URL) return process.env.NEXT_PUBLIC_WS_URL
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const wsHost = window.location.hostname
-  return `${protocol}//${wsHost}:5000/ws/alerts`
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return `${protocol}//${window.location.hostname}:5000/ws/alerts`
+  }
+  return `${protocol}//${window.location.host}/ws/alerts`
 }
 
 function initWs() {

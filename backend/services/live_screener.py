@@ -269,6 +269,7 @@ def _build_gainer_rows(quotes: Dict[str, dict], candidate_meta: Dict[str, dict],
         spread_pct = round(((ask - bid) / bid) * 100, 2) if ask and bid and bid > 0 else None
         is_hod     = (last_price >= high_price * 0.995) if high_price and high_price > 0 else False
 
+        in_watchlist = sym in watchlist
         ref  = data.get('reference', {}) or {}
         inst = data.get('instrument', {}) or {}
         company_name = ref.get('description') or inst.get('description') or meta.get('company_name')
