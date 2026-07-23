@@ -354,10 +354,13 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = EMP
         {/* Middle: Focused Watch (HOD & Psych Dollar Levels) */}
         <GainerTable
           scannerType="near_hod"
-          gainers={loading ? [] : filteredGainers.filter(g => (g.atr_hod != null && g.atr_hod < 1.2) || (g.psych_dist_cents != null && g.psych_dist_cents <= 35))}
+          gainers={loading ? [] : filteredGainers.filter(g =>
+            (g.volume != null && g.volume >= 250000) &&
+            ((g.atr_hod != null && g.atr_hod < 1.2) || (g.psych_dist_cents != null && g.psych_dist_cents <= 35))
+          )}
           fullList={loading ? [] : filteredGainers}
           title="Focused Watch (HOD & Psych)"
-          emptyMessage="No coiling setups near HOD or psychological levels right now."
+          emptyMessage="No coiling setups near HOD or psychological levels with volume > 250k right now."
           onOpenModal={setModalGainer}
           handleResearch={handleResearch}
           loading={loading}
@@ -369,10 +372,15 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = EMP
         {/* Right: Directly In-Play (Warrior Breakouts & Squeezes) */}
         <GainerTable
           scannerType="high_rvol"
-          gainers={loading ? [] : filteredGainers.filter(g => (g.rvol_15m != null && g.rvol_15m >= 2.0) || (g.rvol_1m != null && g.rvol_1m >= 2.0) || (g.active_patterns && g.active_patterns.length > 0))}
+          gainers={loading ? [] : filteredGainers.filter(g => {
+            const hasVolume = g.volume != null && g.volume >= 250000
+            const hasAtr = g.atr_14 != null ? g.atr_14 > 0.05 : (g.high_price != null && g.low_price != null ? (g.high_price - g.low_price) > 0.05 : true)
+            const isInPlay = (g.rvol_15m != null && g.rvol_15m >= 2.0) || (g.rvol_1m != null && g.rvol_1m >= 2.0) || (g.active_patterns && g.active_patterns.length > 0)
+            return hasVolume && hasAtr && isInPlay
+          })}
           fullList={loading ? [] : filteredGainers}
           title="Directly In-Play (Warrior Scanner)"
-          emptyMessage="No directly in-play breakouts or high-RVOL momentum setups active right now."
+          emptyMessage="No directly in-play breakouts or high-RVOL momentum setups with volume > 250k and ATR > 0.05 active right now."
           onOpenModal={setModalGainer}
           handleResearch={handleResearch}
           loading={loading}

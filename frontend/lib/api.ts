@@ -154,6 +154,7 @@ export interface LiveGainerRow {
   ask?:          number | null
   bid?:          number | null
   high_price?:   number | null
+  low_price?:    number | null
   // Catalyst classification (2026-05)
   catalyst?:     string | null   // 'Confirmed Catalyst' | 'Technical / No News' | 'Speculative'
   // Ross Cameron scanner metrics
