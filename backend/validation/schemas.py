@@ -693,3 +693,43 @@ class SignalCreateBody(BaseModel):
     @classmethod
     def normalise_symbol(cls, v):
         return _upper_strip(str(v)) if v else v
+
+
+def validate_safe_url(url: str, allow_http: bool = True) -> bool:
+    """
+    Validate that a URL is well-formed and does not target internal/loopback IP addresses (SSRF protection).
+    """
+    import urllib.parse
+    import ipaddress
+
+    if not url or not isinstance(url, str):
+        return False
+
+    try:
+        parsed = urllib.parse.urlparse(url.strip())
+        valid_schemes = ("https", "http") if allow_http else ("https",)
+        if parsed.scheme not in valid_schemes:
+            return False
+
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+
+        hostname_lower = hostname.lower()
+        if hostname_lower in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+            return False
+
+        if hostname_lower.endswith((".local", ".internal", ".lan")):
+            return False
+
+        try:
+            ip = ipaddress.ip_address(hostname_lower)
+            if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_multicast or ip.is_unspecified:
+                return False
+        except ValueError:
+            pass
+
+        return True
+    except Exception:
+        return False
+

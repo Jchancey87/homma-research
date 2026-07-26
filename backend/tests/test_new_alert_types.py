@@ -105,34 +105,36 @@ async def test_trigger_near_hod_radar():
     """NEAR_HOD_RADAR fires when price exceeds the previous high of day at candle completion with RVOL >= 1.5."""
     streamer = SchwabStreamer()
     streamer.current_date = datetime.now(EASTERN_TZ).date()
+    streamer.watchlist_symbols.add('AAPL')
     streamer.fundamentals_cache['AAPL'] = {
-        'yesterday_close': 90.0,
-        'yesterday_high': 115.0,
+        'yesterday_close': 9.0,
+        'yesterday_high': 11.5,
         'vol_10d_avg': 1000,  # set small so rvol calculation is large
         'shares_outstanding': 50000000,
     }
     streamer.check_and_fire_alert = AsyncMock(return_value=True)
-    streamer.prev_session_high['AAPL'] = 105.0
+    streamer.prev_session_high['AAPL'] = 10.50
     
     current_min = int(time.time() / 60)
     streamer.bars_1m['AAPL'] = {
         'minute': current_min - 1,
-        'open': 100.0,
-        'high': 105.5,
-        'low': 99.0,
-        'close': 105.5,
+        'open': 10.00,
+        'high': 10.55,
+        'low': 9.90,
+        'close': 10.55,
         'start_volume': 1000,
-        'last_volume': 2000,
+        'last_volume': 10000,
     }
 
     await streamer.evaluate_and_fire_alert(
         symbol='AAPL',
-        last_price=105.5,
-        total_volume=2000,
-        high_price=105.5,
-        low_price=99.0,
-        open_price=100.0
+        last_price=10.55,
+        total_volume=10000,
+        high_price=10.55,
+        low_price=9.90,
+        open_price=10.00
     )
+    await asyncio.sleep(0.01)
     
     fired_alerts = [args[5] for args, kwargs in streamer.check_and_fire_alert.call_args_list]
     assert "NEAR_HOD_RADAR" in fired_alerts

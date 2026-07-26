@@ -25,8 +25,14 @@ except ImportError:
 
 from momentum_screener.schwab.auth import get_client
 from schwab.streaming import StreamClient
+from backend.services.alert_detection_service import (
+    QuoteTick,
+    SymbolState,
+    evaluate_alerts,
+)
 
 logger = logging.getLogger(__name__)
+
 
 # Decoupled database and configuration defaults from backend
 ALERT_MIN_PCT_INCREASE = float(os.getenv("ALERT_MIN_PCT_INCREASE", "0.03"))
@@ -825,217 +831,72 @@ class SchwabStreamer:
         if not fund:
             return
 
-        candle_history = self.completed_bars_1m.get(symbol, [])
-
         # Reset previous day breakout set if date changed (Eastern Time)
         today_et = datetime.now(pytz.timezone('US/Eastern')).date()
         if self.current_date != today_et:
             self.current_date = today_et
             self.prev_day_breakout_fired.clear()
 
-        # 1. Update VWAP
-        vwap = 0.0
-        v_state = self.vwap_state.setdefault(symbol, {'cum_vp': 0.0, 'cum_vol': 0, 'last_total_vol': 0})
-        v_state.setdefault('status', None)
-        
-        # Calculate volume delta
-        if v_state['last_total_vol'] > 0 and total_volume > v_state['last_total_vol']:
-            delta_vol = total_volume - v_state['last_total_vol']
-            v_state['cum_vp'] += last_price * delta_vol
-            v_state['cum_vol'] += delta_vol
-            
-        v_state['last_total_vol'] = total_volume
-        if v_state['cum_vol'] > 0:
-            vwap = v_state['cum_vp'] / v_state['cum_vol']
+        # Build current SymbolState from in-memory dicts
+        v_state = self.vwap_state.get(symbol, {'cum_vp': 0.0, 'cum_vol': 0, 'last_total_vol': 0, 'status': None})
+        bars_1m = self.bars_1m.get(symbol)
+        completed_bars = self.completed_bars_1m.get(symbol, [])
+        prev_session_high = self.prev_session_high.get(symbol, 0.0)
+        prev_day_fired = symbol in self.prev_day_breakout_fired
+        last_hod_time = self.last_hod_breakout_time.get(symbol, 0)
+        halt_resume_ts = self.halt_resume_times.get(symbol)
 
-        # Calculate Relative Volume (RVOL) using intraday cumulative volume profile curve
+        symbol_state = SymbolState(
+            symbol=symbol,
+            vwap_state=v_state,
+            bars_1m=bars_1m,
+            completed_bars_1m=completed_bars,
+            prev_session_high=prev_session_high,
+            prev_day_breakout_fired=prev_day_fired,
+            last_hod_breakout_time=last_hod_time,
+            halt_resume_ts=halt_resume_ts
+        )
+
+        tick = QuoteTick(
+            symbol=symbol,
+            last_price=last_price,
+            total_volume=total_volume,
+            high_price=high_price,
+            low_price=low_price,
+            open_price=open_price
+        )
+
         now_et = datetime.now(pytz.timezone('America/New_York'))
-        cum_frac = self._get_cumulative_volume_fraction(now_et)
-        vol_baseline = max(fund.get('vol_10d_avg', 0) * cum_frac, 5000)
-        rvol = min(total_volume / vol_baseline, 99.9)
 
-        # Gap calculation
-        gap_pct = 0.0
-        prev_close = fund.get('yesterday_close')
-        if open_price and prev_close:
-            gap_pct = ((open_price - prev_close) / prev_close) * 100.0
-
-        # Update 1-minute volume candle
-        current_min = int(time.time() / 60)
-        state = self.bars_1m.get(symbol)
-
-        # Post-halt suppression: skip momentum triggers for 2 min after volatility resume
-        post_halt_suppressed = False
-        resume_ts = self.halt_resume_times.get(symbol)
-        if resume_ts is not None and (time.time() - resume_ts) < 120:
-            post_halt_suppressed = True
-            logger.debug(f"Post-halt suppression active for {symbol} ({120 - (time.time() - resume_ts):.0f}s remaining)")
-
-        if not state:
-            self.bars_1m[symbol] = {
-                'minute': current_min,
-                'open': last_price,
-                'high': last_price,
-                'low': last_price,
-                'close': last_price,
-                'start_volume': total_volume,
-                'last_volume': total_volume,
-            }
-        else:
-            if current_min > state['minute']:
-                # Finalize previous candle values using the boundary tick
-                state['close'] = last_price
-                state['last_volume'] = max(state['last_volume'], total_volume)
-                
-                # Candle is completed!
-                candle_volume = state['last_volume'] - state['start_volume']
-                if candle_volume < 0:
-                    candle_volume = 0
-                
-                # Check if we have enough previous completed candles to evaluate
-                history = self.completed_bars_1m.setdefault(symbol, [])
-                if len(history) == 20:
-                    avg_vol = sum(c['volume'] for c in history) / 20.0
-                    price_rise_pct = 0.0
-                    if state['open'] > 0:
-                        price_rise_pct = (state['close'] - state['open']) / state['open']
-                    
-                    # Time-of-day adjusted volume spike threshold
-                    vol_spike_mult = self._volume_spike_threshold(now_et)
-                    if avg_vol > 0 and candle_volume >= vol_spike_mult * avg_vol and price_rise_pct >= 0.01:
-                        # Trigger VOLUME_SPIKE
-                        asyncio.create_task(self.check_and_fire_alert(
-                            symbol, state['close'], total_volume, rvol, gap_pct, "VOLUME_SPIKE"
-                        ))
-
-                # HOD Breakout: fire once per candle at completion, body-close > HOD reference
-                if not post_halt_suppressed:
-                    if symbol not in self.prev_session_high or self.prev_session_high[symbol] <= 0:
-                        if high_price > 0:
-                            self.prev_session_high[symbol] = high_price
-                        elif last_price > 0:
-                            self.prev_session_high[symbol] = last_price
-
-                    hod_ref = self.prev_session_high.get(symbol, 0.0)
-                    if hod_ref > 0.0 and state['close'] > hod_ref:
-                        old_high = hod_ref
-                        self.prev_session_high[symbol] = max(
-                            self.prev_session_high.get(symbol, 0.0),
-                            state['high']
-                        )
-                        if rvol >= 1.5:
-                            asyncio.create_task(self.check_and_fire_alert(
-                                symbol, state['close'], total_volume, rvol, gap_pct,
-                                "NEAR_HOD_RADAR", high_price=old_high, low_price=low_price
-                            ))
-
-                # Append current completed candle to history (with high/low for True Range)
-                history.append({
-                    'volume': candle_volume,
-                    'open': state['open'],
-                    'close': state['close'],
-                    'high': state['high'],
-                    'low': state['low']
-                })
-                if len(history) > 20:
-                    history.pop(0)
-                
-                # Start new candle
-                self.bars_1m[symbol] = {
-                    'minute': current_min,
-                    'open': last_price,
-                    'high': last_price,
-                    'low': last_price,
-                    'close': last_price,
-                    'start_volume': total_volume,
-                    'last_volume': total_volume,
-                }
-            else:
-                # Update current candle
-                state['high'] = max(state['high'], last_price)
-                state['low'] = min(state['low'], last_price)
-                state['close'] = last_price
-                state['last_volume'] = total_volume
-
-        # Trigger 2: VWAP Crossing (True Range-based dynamic hysteresis to prevent chatter)
-        # Uses proper True Range from completed candles (high-low range, not open-close approx).
-        if vwap > 0 and not post_halt_suppressed:
-            if len(candle_history) >= 5:
-                recent = candle_history[-14:] if len(candle_history) >= 14 else candle_history
-                # True Range: max(high-low, abs(high-prev_close), abs(low-prev_close))
-                # Use close of prior candle as prev_close proxy
-                true_ranges = []
-                for i, c in enumerate(recent):
-                    hi, lo = c.get('high', c['close']), c.get('low', c['close'])
-                    prev_close = recent[i-1]['close'] if i > 0 else c['open']
-                    tr = max(hi - lo, abs(hi - prev_close), abs(lo - prev_close))
-                    true_ranges.append(tr)
-                atr_val = sum(true_ranges) / len(true_ranges)
-                # ATR buffer as % of VWAP, floored at 0.5% capped at 3%
-                atr_buffer = max(0.005, min(0.03, atr_val / vwap))
-            else:
-                atr_buffer = 0.015  # default 1.5% until we have enough candle history
-
-            if v_state.get('status') is None:
-                if last_price <= vwap * (1.0 - atr_buffer):
-                     v_state['status'] = 'below'
-                elif last_price >= vwap * (1.0 + atr_buffer):
-                     v_state['status'] = 'above'
-            else:
-                if v_state['status'] == 'below' and last_price >= vwap * (1.0 + atr_buffer):
-                    if rvol >= 2.0:
-                        await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "VWAP_CROSSOVER", high_price=high_price, low_price=low_price)
-                    v_state['status'] = 'above'
-                elif v_state['status'] == 'above' and last_price <= vwap * (1.0 - atr_buffer):
-                    v_state['status'] = 'below'
-
-        # Trigger 3: Previous Day High Breakout
-        yesterday_high = fund.get('yesterday_high', 0.0)
-        if yesterday_high > 0.0 and last_price > yesterday_high and symbol not in self.prev_day_breakout_fired:
-            fired = await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "PREV_DAY_BREAKOUT", high_price=high_price, low_price=low_price)
-            if fired:
-                self.prev_day_breakout_fired.add(symbol)
-
-        # Trigger: RUNNING_UP
-        if len(candle_history) >= 5:
-            lowest_close = min(c['close'] for c in candle_history[-5:])
-            if last_price >= lowest_close * 1.03:
-                avg_vol = sum(c['volume'] for c in candle_history[-20:]) / len(candle_history[-20:])
-                curr_bar = self.bars_1m.get(symbol, {})
-                curr_vol = curr_bar.get('last_volume', total_volume) - curr_bar.get('start_volume', total_volume)
-                if curr_vol >= 1.5 * avg_vol and avg_vol > 0:
-                    if last_price < high_price:
-                        await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "RUNNING_UP", high_price=high_price, low_price=low_price)
-
-        # Trigger: BULL_FLAG
-        if len(candle_history) >= 9:
-            move_start = candle_history[-9]['close']
-            move_end = candle_history[-5]['close']
-            strong_move = move_start > 0 and (move_end - move_start) / move_start >= 0.05
-            if strong_move:
-                consolidation = candle_history[-4:-1]
-                declining_vol = consolidation[2]['volume'] <= consolidation[1]['volume'] <= consolidation[0]['volume']
-                max_p = max(max(c['open'], c['close']) for c in consolidation)
-                min_p = min(min(c['open'], c['close']) for c in consolidation)
-                price_range_ok = min_p > 0 and (max_p - min_p) / min_p <= 0.02
-                if declining_vol and price_range_ok:
-                    consolidation_high = max_p
-                    curr_bar = self.bars_1m.get(symbol, {})
-                    curr_vol = curr_bar.get('last_volume', total_volume) - curr_bar.get('start_volume', total_volume)
-                    avg_vol = sum(c['volume'] for c in candle_history[-20:]) / len(candle_history[-20:])
-                    if last_price > consolidation_high and curr_vol >= 1.5 * avg_vol and avg_vol > 0:
-                        await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "BULL_FLAG", high_price=high_price, low_price=low_price)
+        # Delegate pure alert candidate evaluation to alert_detection_service
+        candidates, new_state = evaluate_alerts(tick, symbol_state, fund, now_et=now_et)
 
 
+        # Update in-memory state dicts from returned SymbolState
+        self.vwap_state[symbol] = new_state.vwap_state
+        if new_state.bars_1m:
+            self.bars_1m[symbol] = new_state.bars_1m
+        self.completed_bars_1m[symbol] = new_state.completed_bars_1m
+        self.prev_session_high[symbol] = new_state.prev_session_high
+        if new_state.prev_day_breakout_fired:
+            self.prev_day_breakout_fired.add(symbol)
 
-        # Trigger: MULTI_TF_CONFLUENCE
-        if len(candle_history) >= 5:
-            open_5m = candle_history[-5]['open']
-            close_5m = candle_history[-1]['close']
-            if open_5m > 0 and (close_5m - open_5m) / open_5m >= 0.01:
-                last_hod = self.last_hod_breakout_time.get(symbol, 0)
-                if time.time() - last_hod <= 60:
-                    await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "MULTI_TF_CONFLUENCE", high_price=high_price, low_price=low_price)
+        # Dispatch side effects for all generated alert candidates
+        for candidate in candidates:
+            fired = await self.check_and_fire_alert(
+                candidate.symbol,
+                candidate.price,
+                candidate.total_volume,
+                candidate.rvol,
+                candidate.gap_pct,
+                candidate.alert_type,
+                high_price=candidate.high_price,
+                low_price=candidate.low_price
+            )
+            if fired and candidate.alert_type == "NEAR_HOD_RADAR":
+                self.last_hod_breakout_time[symbol] = time.time()
+
+
 
         # Trigger 4: VWAP Support Hold & Bounce (Disabled: vwap bounces are noise)
         # if vwap > 0:

@@ -62,7 +62,9 @@ class Settings:
     # App meta
     app_title: str = "Homma Research API"
     app_version: str = "2.0.0"
-    cors_origins: list = ["*"]  # tighten in production
+    cors_origins: list = [
+        o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5000,http://127.0.0.1:5000").split(",") if o.strip()
+    ]
 
     # Upload limits
     max_upload_bytes: int = 10 * 1024 * 1024

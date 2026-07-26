@@ -11,6 +11,6 @@ normaliser (uppercase + strip).
 object (pytz-backed, ``America/New_York`` IANA name).
 """
 from validation.constants import EASTERN_TZ
-from validation.schemas import normalize_ticker
+from validation.schemas import normalize_ticker, validate_safe_url
 
-__all__ = ["EASTERN_TZ", "normalize_ticker"]
+__all__ = ["EASTERN_TZ", "normalize_ticker", "validate_safe_url"]

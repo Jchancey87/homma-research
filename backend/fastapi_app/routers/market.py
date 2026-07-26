@@ -85,37 +85,16 @@ async def market_breadth():
         if _breadth_cache["data"] and (now - _breadth_cache["fetched_at"]) < BREADTH_TTL:
             return _breadth_cache["data"]
 
-    indices: dict = {}
-    spy_chg: Optional[float] = None
-    vix: Optional[float] = None
-
     quotes = await get_live_quotes(INDICES, polygon_api_key=settings.polygon_api_key)
-    for ticker in INDICES:
-        nq = quotes.get(ticker)
-        if nq is None or nq.last_price is None:
-            continue
-        if ticker == "SPY":
-            spy_chg = nq.change_pct
-        indices[ticker] = {
-            "ticker":  ticker,
-            "price":   nq.last_price,
-            "chg_pct": nq.change_pct,
-            "volume":  nq.volume,
-        }
-
-    data = {
-        "indices":    indices,
-        "vix":        vix,
-        "bias":       _bias_label(spy_chg, vix),
-        "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "cache_ttl_s": BREADTH_TTL,
-    }
+    from services.market_service import fetch_breadth_data
+    data = await fetch_breadth_data(quotes)
 
     async with _breadth_lock:
         _breadth_cache["data"] = data
         _breadth_cache["fetched_at"] = time.time()
 
     return data
+
 
 
 # ---------------------------------------------------------------------------

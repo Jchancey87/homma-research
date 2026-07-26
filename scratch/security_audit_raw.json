@@ -1,0 +1,338 @@
+{
+  "git_tracked_secrets": [
+    "backend/models/schema.sql",
+    "backend/scripts/migrate_add_catalyst.sql",
+    "backend/sql/alarm_management_migration.sql",
+    "backend/sql/alerts_confluence_migration.sql",
+    "backend/sql/alerts_cooldown_migration.sql",
+    "backend/sql/alerts_cooldown_multi_type.sql",
+    "backend/sql/alerts_cooldown_update.sql",
+    "backend/sql/alerts_feedback_migration.sql",
+    "backend/sql/init_timeseries.sql",
+    "backend/sql/migrate_alert_config.sql",
+    "db_backup.sql",
+    "momentum_screener/db/schema_schwab.sql"
+  ],
+  "hardcoded_secrets": [
+    {
+      "file": "backend/tests/test_sentiment_alerts.py",
+      "line": 9,
+      "code": "mock_config.LLM_API_KEY = \"fake_key\"",
+      "issue": "Potential hardcoded secret key"
+    },
+    {
+      "file": "backend/tests/test_sentiment_alerts.py",
+      "line": 23,
+      "code": "mock_config.LLM_API_KEY = \"fake_key\"",
+      "issue": "Potential hardcoded secret key"
+    },
+    {
+      "file": "backend/tests/test_news_classifier.py",
+      "line": 76,
+      "code": "mock_cfg.LLM_API_KEY = \"test-key\"",
+      "issue": "Potential hardcoded secret key"
+    },
+    {
+      "file": "backend/tests/test_news_classifier.py",
+      "line": 88,
+      "code": "mock_cfg.LLM_API_KEY = \"test-key\"",
+      "issue": "Potential hardcoded secret key"
+    },
+    {
+      "file": "backend/tests/test_news_classifier.py",
+      "line": 108,
+      "code": "mock_cfg.LLM_API_KEY = \"test-key\"",
+      "issue": "Potential hardcoded secret key"
+    },
+    {
+      "file": "backend/tests/test_live_quotes_service.py",
+      "line": 197,
+      "code": "out = await get_live_quotes([\"AAPL\", \"MSFT\"], polygon_api_key=\"key123\")",
+      "issue": "Potential hardcoded secret key"
+    },
+    {
+      "file": "backend/tests/test_live_quotes_service.py",
+      "line": 217,
+      "code": "out = await get_live_quotes([\"AAPL\", \"MSFT\"], polygon_api_key=\"key123\")",
+      "issue": "Potential hardcoded secret key"
+    },
+    {
+      "file": "backend/tests/test_live_quotes_service.py",
+      "line": 242,
+      "code": "out = await get_live_quotes([\"AAPL\", \"MSFT\"], polygon_api_key=\"key123\")",
+      "issue": "Potential hardcoded secret key"
+    },
+    {
+      "file": "backend/tests/test_live_quotes_service.py",
+      "line": 301,
+      "code": "out = await get_live_quotes([\"AAPL\"], polygon_api_key=\"key123\")",
+      "issue": "Potential hardcoded secret key"
+    },
+    {
+      "file": "scripts/export_handoffs.py",
+      "line": 22,
+      "code": "<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&f",
+      "issue": "Embedded DB/service credentials in URL"
+    },
+    {
+      "file": "frontend/app/globals.css",
+      "line": 1,
+      "code": "@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;7",
+      "issue": "Embedded DB/service credentials in URL"
+    },
+    {
+      "file": "handoffs/html/011_schwab_streamer_troubleshooting.html",
+      "line": 9,
+      "code": "<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&f",
+      "issue": "Embedded DB/service credentials in URL"
+    },
+    {
+      "file": "handoffs/html/006_schwab_momentum_screener_handoff.html",
+      "line": 9,
+      "code": "<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&f",
+      "issue": "Embedded DB/service credentials in URL"
+    },
+    {
+      "file": "handoffs/html/012_schwab_yfinance_gainer_enrichment_handoff.html",
+      "line": 9,
+      "code": "<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&f",
+      "issue": "Embedded DB/service credentials in URL"
+    },
+    {
+      "file": "handoffs/html/questdb_postgres_handoff.html",
+      "line": 9,
+      "code": "<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&f",
+      "issue": "Embedded DB/service credentials in URL"
+    },
+    {
+      "file": "handoffs/html/013_sigmap_antigravity_mcp_handoff.html",
+      "line": 9,
+      "code": "<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&f",
+      "issue": "Embedded DB/service credentials in URL"
+    },
+    {
+      "file": "handoffs/html/010_no_news_pump_classifier_handoff.html",
+      "line": 9,
+      "code": "<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700;800&f",
+      "issue": "Embedded DB/service credentials in URL"
+    }
+  ],
+  "sql_injection_risks": [
+    {
+      "file": "backend/scratch/inspect_tables.py",
+      "line": 23,
+      "code": "cur = conn.execute(f\"SELECT COUNT(*) FROM {table}\")",
+      "issue": "f-string inside asyncpg query call"
+    },
+    {
+      "file": "backend/jobs/job_watchdog.py",
+      "line": 25,
+      "code": "\"SELECT id FROM llm_jobs WHERE status = 'running' AND updated_at < %s\",",
+      "issue": "Dynamic string construction in SQL query"
+    },
+    {
+      "file": "backend/jobs/job_watchdog.py",
+      "line": 33,
+      "code": "\"UPDATE llm_jobs SET status='error', output=%s, updated_at=%s WHERE id=%s\",",
+      "issue": "Dynamic string construction in SQL query"
+    },
+    {
+      "file": "backend/jobs/ingest_minute_candles.py",
+      "line": 86,
+      "code": "\"INSERT INTO stock_fundamentals (symbol, company_name) VALUES (%s, %s) ON CONFLICT DO NOTHING\",",
+      "issue": "Dynamic string construction in SQL query"
+    },
+    {
+      "file": "backend/services/live_screener.py",
+      "line": 700,
+      "code": "row = conn.execute(\"SELECT MAX(date) as d FROM daily_gainers WHERE date < %s\", (today_et,)).fetchone()",
+      "issue": "Dynamic string construction in SQL query"
+    },
+    {
+      "file": "backend/services/live_screener.py",
+      "line": 1015,
+      "code": "\"SELECT * FROM daily_gainers WHERE date=%s AND gap_pct>=%s ORDER BY gap_pct DESC LIMIT %s\",",
+      "issue": "Dynamic string construction in SQL query"
+    },
+    {
+      "file": "backend/services/pipe_service.py",
+      "line": 224,
+      "code": "\"SELECT ticker FROM daily_gainers WHERE date = %s ORDER BY gap_pct DESC LIMIT 9\",",
+      "issue": "Dynamic string construction in SQL query"
+    },
+    {
+      "file": "backend/services/pipe_service.py",
+      "line": 255,
+      "code": "\"SELECT * FROM pipe_filings WHERE ticker = %s AND anchor_date = %s LIMIT 1\",",
+      "issue": "Dynamic string construction in SQL query"
+    },
+    {
+      "file": "backend/scripts/migrate_tags.py",
+      "line": 48,
+      "code": "\"INSERT INTO chart_tags (chart_id, tag) VALUES (%s, %s) ON CONFLICT DO NOTHING\",",
+      "issue": "Dynamic string construction in SQL query"
+    },
+    {
+      "file": "backend/tests/test_reflection.py",
+      "line": 12,
+      "code": "conn.execute(\"DELETE FROM continuation_reflections WHERE date = %s\", (date_str,))",
+      "issue": "Dynamic string construction in SQL query"
+    },
+    {
+      "file": "backend/tests/test_reflection.py",
+      "line": 13,
+      "code": "conn.execute(\"DELETE FROM continuation_picks WHERE date = %s\", (date_str,))",
+      "issue": "Dynamic string construction in SQL query"
+    },
+    {
+      "file": "backend/tests/test_reflection.py",
+      "line": 34,
+      "code": "row = conn.execute(\"SELECT * FROM continuation_reflections WHERE date = %s\", (test_date,)).fetchone()",
+      "issue": "Dynamic string construction in SQL query"
+    },
+    {
+      "file": "backend/tests/test_reflection.py",
+      "line": 64,
+      "code": "row = conn.execute(\"SELECT * FROM continuation_reflections WHERE date = %s\", (test_date,)).fetchone()",
+      "issue": "Dynamic string construction in SQL query"
+    },
+    {
+      "file": "backend/fastapi_app/db/charts.py",
+      "line": 144,
+      "code": "f\"cc.id IN (SELECT chart_id FROM chart_tags WHERE tag = ${len(params) + 1})\"",
+      "issue": "Dynamic string construction in SQL query"
+    },
+    {
+      "file": "backend/fastapi_app/tasks/llm_tasks.py",
+      "line": 24,
+      "code": "\"UPDATE llm_jobs SET status=%s, output=%s, model_used=%s, updated_at=%s WHERE id=%s\",",
+      "issue": "Dynamic string construction in SQL query"
+    },
+    {
+      "file": "backend/fastapi_app/tasks/llm_tasks.py",
+      "line": 47,
+      "code": "\"SELECT COALESCE(MAX(version), 0) as max_v FROM research_cache WHERE ticker=%s AND report_type=%s\",",
+      "issue": "Dynamic string construction in SQL query"
+    },
+    {
+      "file": "scripts/enrich_historical.py",
+      "line": 81,
+      "code": "\"DELETE FROM daily_gainers WHERE gap_pct > %s\", (MAX_SUSPECT_GAP,)",
+      "issue": "Dynamic string construction in SQL query"
+    },
+    {
+      "file": "scripts/enrich_historical.py",
+      "line": 87,
+      "code": "\"SELECT COUNT(*) AS count FROM daily_gainers WHERE gap_pct > %s\", (MAX_SUSPECT_GAP,)",
+      "issue": "Dynamic string construction in SQL query"
+    }
+  ],
+  "command_injection_risks": [],
+  "path_traversal_risks": [],
+  "ssrf_risks": [
+    {
+      "file": "backend/fastapi_app/tasks/alerts.py",
+      "line": 41,
+      "code": "response = httpx.post(url, json=payload, timeout=10.0)",
+      "issue": "HTTP request call using dynamic URL variable"
+    },
+    {
+      "file": "backend/fastapi_app/tasks/alerts.py",
+      "line": 279,
+      "code": "response = httpx.post(url, json=payload, timeout=10.0)",
+      "issue": "HTTP request call using dynamic URL variable"
+    }
+  ],
+  "unsafe_deserialization": [
+    {
+      "file": "backend/scratch/inspect_backup.py",
+      "line": 11,
+      "code": "data = pickle.load(f)",
+      "issue": "pickle deserialization"
+    }
+  ],
+  "xss_risks": [
+    {
+      "file": "frontend/app/layout.tsx",
+      "line": 15,
+      "code": "<script dangerouslySetInnerHTML={{ __html: `",
+      "issue": "dangerouslySetInnerHTML usage"
+    }
+  ],
+  "auth_router_analysis": [
+    {
+      "router": "charts.py",
+      "route_count": 0,
+      "routes": []
+    },
+    {
+      "router": "continuation.py",
+      "route_count": 0,
+      "routes": []
+    },
+    {
+      "router": "watchlist.py",
+      "route_count": 0,
+      "routes": []
+    },
+    {
+      "router": "rss.py",
+      "route_count": 0,
+      "routes": []
+    },
+    {
+      "router": "chart.py",
+      "route_count": 0,
+      "routes": []
+    },
+    {
+      "router": "alerts.py",
+      "route_count": 0,
+      "routes": []
+    },
+    {
+      "router": "analysis.py",
+      "route_count": 0,
+      "routes": []
+    },
+    {
+      "router": "gainers.py",
+      "route_count": 0,
+      "routes": []
+    },
+    {
+      "router": "strategies.py",
+      "route_count": 0,
+      "routes": []
+    },
+    {
+      "router": "market.py",
+      "route_count": 0,
+      "routes": []
+    },
+    {
+      "router": "__init__.py",
+      "route_count": 0,
+      "routes": []
+    },
+    {
+      "router": "market_data.py",
+      "route_count": 0,
+      "routes": []
+    },
+    {
+      "router": "alert_config.py",
+      "route_count": 0,
+      "routes": []
+    },
+    {
+      "router": "observations.py",
+      "route_count": 0,
+      "routes": []
+    }
+  ],
+  "cors_and_network": [
+    "CORSMiddleware present in main.py"
+  ],
+  "file_permissions": []
+}

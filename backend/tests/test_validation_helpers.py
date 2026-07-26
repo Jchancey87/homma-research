@@ -119,3 +119,27 @@ def test_no_rogue_eastern_tz_construction_outside_constants():
         "use ``from validation import EASTERN_TZ`` instead:\n"
         + "\n".join(f"  {p}:{ln}: {line}" for p, ln, line in offenders)
     )
+
+
+# ---------------------------------------------------------------------------
+# validate_safe_url — SSRF & URL safety validator
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        ("https://api.telegram.org/bot123456/sendMessage", True),
+        ("https://financialmodelingprep.com/api/v3/profile/AAPL", True),
+        ("http://127.0.0.1:8000/internal", False),
+        ("http://localhost:5000/admin", False),
+        ("http://10.0.0.1/secret", False),
+        ("http://192.168.1.1/router", False),
+        ("http://169.254.169.254/latest/meta-data/", False),
+        ("ftp://example.com/file", False),
+        ("not-a-url", False),
+        ("", False),
+    ],
+)
+def test_validate_safe_url(url, expected):
+    from validation import validate_safe_url
+    assert validate_safe_url(url) == expected
+

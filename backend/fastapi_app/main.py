@@ -89,10 +89,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# If allow_credentials is True, allow_origins cannot contain "*".
-# We handle wildcard origins by using allow_origin_regex or parsing the request origin dynamically.
+# Handle CORS origins without allowing open wildcard matching with credentials.
 cors_origins = [o for o in settings.cors_origins if o != "*"]
-allow_origin_regex = "https?://.*" if "*" in settings.cors_origins else None
+allow_origin_regex = None
 
 app.add_middleware(
     CORSMiddleware,

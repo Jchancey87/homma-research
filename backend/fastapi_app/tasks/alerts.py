@@ -13,7 +13,7 @@ from celery.utils.log import get_task_logger
 from fastapi_app.celery_app import celery_app
 from fastapi_app.config import settings
 from services.alarm_metrics_service import compute_hourly_metrics, compute_daily_rollup, save_alarm_metrics
-from validation import EASTERN_TZ
+from validation import EASTERN_TZ, validate_safe_url
 
 logger = get_task_logger(__name__)
 
@@ -30,6 +30,9 @@ def send_telegram_message(message: str) -> bool:
         return False
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"
+    if not validate_safe_url(url):
+        logger.error("Refusing to dispatch Telegram message: URL validation failed for %s", url)
+        return False
     payload = {
         "chat_id": chat_id,
         "text": message,
@@ -268,6 +271,9 @@ def send_telegram_alert_task(alert_data: dict) -> dict:
     if sentiment_line:
         message += sentiment_line
     url = f"https://api.telegram.org/bot{token}/sendMessage"
+    if not validate_safe_url(url):
+        logger.error("Refusing to dispatch Telegram alert: URL validation failed for %s", url)
+        return {"status": "error", "message": "Invalid or unsafe webhook URL"}
     payload = {
         "chat_id": chat_id,
         "text": message,
