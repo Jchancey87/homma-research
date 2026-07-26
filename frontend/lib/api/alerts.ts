@@ -9,6 +9,7 @@ import {
   RSSFeedPoolItem,
   AlertReviewSummary,
   AlertReviewGridData,
+  AlertReviewTop10Data,
   AlertReviewDetailData,
 } from './types'
 
@@ -93,6 +94,11 @@ export const getAlertReviewSummary = (date?: string) =>
 
 export const getAlertReviewGrid = (date?: string) =>
   api.get<AlertReviewGridData>('/api/alerts/review/grid', {
+    params: date ? { date } : undefined
+  }).then(r => r.data)
+
+export const getAlertReviewTop10 = (date?: string) =>
+  api.get<AlertReviewTop10Data>('/api/alerts/review/top10', {
     params: date ? { date } : undefined
   }).then(r => r.data)
 

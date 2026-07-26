@@ -1,16 +1,18 @@
 """
 services/alert_review_service.py
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Deep module owning the Alert Review post-mortem calculations and grid payloads.
+Deep module owning the Alert Review post-mortem calculations for Top 10 Gainers.
+
+Filtering rules:
+  1. Exclude NEAR_HOD and NEAR_HOD_RADAR alert types.
+  2. Restrict scope strictly to Top 10 Gainers for the date.
 
 Public surface:
     compute_mfe_mae_for_candles(trigger_price, trigger_time, candles) -> dict
     get_alerts_for_date(db, date_val) -> list[dict]
     get_alert_review_summary(db, date_val) -> dict
-    get_alert_review_grid(db, date_val) -> dict
+    get_alert_review_top10(db, date_val) -> dict
     get_alert_review_detail(db, symbol, date_val) -> dict
-
-Per RFC-001, routers call this module directly without doing business logic or raw SQL.
 """
 from __future__ import annotations
 
@@ -25,6 +27,8 @@ from validation import EASTERN_TZ, normalize_ticker
 
 log = logging.getLogger(__name__)
 
+EXCLUDED_ALERT_TYPES = {"NEAR_HOD", "NEAR_HOD_RADAR"}
+
 
 def compute_mfe_mae_for_candles(
     trigger_price: float,
@@ -34,16 +38,6 @@ def compute_mfe_mae_for_candles(
     """
     Compute Maximum Favorable Excursion (MFE) and Maximum Adverse Excursion (MAE)
     for an alert over 5m, 15m, 30m, and EOD time horizons post-trigger.
-
-    Args:
-        trigger_price: Price when alert triggered.
-        trigger_time: Timestamp of alert trigger (tz-aware).
-        candles: List of 1-min candle dicts [{'time': datetime|int, 'open', 'high', 'low', 'close'}, ...]
-                 sorted ascending by time.
-
-    Returns:
-        Dict mapping horizon ('5m', '15m', '30m', 'eod') to
-        {'mfe_pct': float, 'mae_pct': float, 'close_pct': float}
     """
     default_result = {
         "5m": {"mfe_pct": 0.0, "mae_pct": 0.0, "close_pct": 0.0},
@@ -55,12 +49,10 @@ def compute_mfe_mae_for_candles(
     if not trigger_price or trigger_price <= 0 or not candles:
         return default_result
 
-    # Helper to convert candle time to datetime for comparison
     def get_candle_dt(c: dict) -> datetime:
         t = c["time"]
         if isinstance(t, (int, float)):
-            dt = datetime.fromtimestamp(t, tz=EASTERN_TZ)
-            return dt
+            return datetime.fromtimestamp(t, tz=EASTERN_TZ)
         if isinstance(t, datetime):
             if t.tzinfo is None:
                 return EASTERN_TZ.localize(t)
@@ -72,7 +64,6 @@ def compute_mfe_mae_for_candles(
     else:
         trig_dt = trigger_time.astimezone(EASTERN_TZ)
 
-    # Filter candles occurring at or after trigger_time
     post_candles = [c for c in candles if get_candle_dt(c) >= trig_dt]
     if not post_candles:
         return default_result
@@ -89,7 +80,6 @@ def compute_mfe_mae_for_candles(
         close_pct = round(((last_close - trigger_price) / trigger_price) * 100.0, 2)
         return {"mfe_pct": mfe_pct, "mae_pct": mae_pct, "close_pct": close_pct}
 
-    # Horizons
     dt_5m = trig_dt + timedelta(minutes=5)
     dt_15m = trig_dt + timedelta(minutes=15)
     dt_30m = trig_dt + timedelta(minutes=30)
@@ -107,7 +97,7 @@ def compute_mfe_mae_for_candles(
 
 
 async def get_alerts_for_date(db: asyncpg.Connection, date_val: _date) -> list[dict[str, Any]]:
-    """Fetch all screener_alerts for a given date."""
+    """Fetch screener_alerts for a date, excluding NEAR_HOD radar pings."""
     start_dt = EASTERN_TZ.localize(datetime.combine(date_val, datetime.min.time()))
     end_dt = EASTERN_TZ.localize(datetime.combine(date_val, datetime.max.time()))
 
@@ -119,6 +109,7 @@ async def get_alerts_for_date(db: asyncpg.Connection, date_val: _date) -> list[d
                    hod_dist_pct, catalyst, stop_price, stop_risk_pct, suppressed_reason, group_id
             FROM screener_alerts
             WHERE alert_time >= $1 AND alert_time <= $2
+              AND alert_type NOT IN ('NEAR_HOD', 'NEAR_HOD_RADAR')
             ORDER BY alert_time ASC
             """,
             start_dt,
@@ -153,14 +144,59 @@ async def get_alerts_for_date(db: asyncpg.Connection, date_val: _date) -> list[d
     return results
 
 
+async def get_top10_gainer_symbols(db: asyncpg.Connection, date_val: _date) -> list[dict[str, Any]]:
+    """Retrieve top 10 gainers for date_val."""
+    from fastapi_app.db.daily_gainers import top_gainers_on_date
+    try:
+        dg_rows = await top_gainers_on_date(db, date_val, limit=10)
+        if dg_rows:
+            return [
+                {
+                    "symbol": r["ticker"],
+                    "gap_pct": r.get("gap_pct"),
+                    "rvol": r.get("rvol_15m"),
+                }
+                for r in dg_rows
+            ]
+    except Exception as exc:
+        log.error("Failed to query top_gainers_on_date: %s", exc)
+
+    # Fallback: query screener_alerts for top 10 symbols by gap_pct
+    start_dt = EASTERN_TZ.localize(datetime.combine(date_val, datetime.min.time()))
+    end_dt = EASTERN_TZ.localize(datetime.combine(date_val, datetime.max.time()))
+    try:
+        rows = await db.fetch(
+            """
+            SELECT symbol, MAX(gap_pct) as gap_pct, MAX(rel_vol) as rvol
+            FROM screener_alerts
+            WHERE alert_time >= $1 AND alert_time <= $2
+            GROUP BY symbol
+            ORDER BY gap_pct DESC NULLS LAST
+            LIMIT 10
+            """,
+            start_dt,
+            end_dt,
+        )
+        return [{"symbol": r["symbol"], "gap_pct": r["gap_pct"], "rvol": r["rvol"]} for r in rows]
+    except Exception as exc:
+        log.error("Failed to fallback query top 10 symbols from alerts: %s", exc)
+
+    return []
+
+
 async def get_alert_review_summary(db: asyncpg.Connection, date_val: _date) -> dict[str, Any]:
-    """Compute page-level summary stats for alert review."""
-    alerts = await get_alerts_for_date(db, date_val)
-    if not alerts:
+    """Compute summary stats restricted strictly to Top 10 Gainers."""
+    top10 = await get_top10_gainer_symbols(db, date_val)
+    top10_symbols = {t["symbol"] for t in top10}
+
+    all_alerts = await get_alerts_for_date(db, date_val)
+    top10_alerts = [a for a in all_alerts if a["symbol"] in top10_symbols]
+
+    if not top10_alerts:
         return {
             "date": date_val.isoformat(),
             "total_alerts": 0,
-            "unique_symbols": 0,
+            "unique_symbols": len(top10_symbols),
             "tier_counts": {"Tier 1": 0, "Tier 2": 0, "Tier 3": 0},
             "alert_type_counts": {},
             "suppressed_count": 0,
@@ -168,7 +204,6 @@ async def get_alert_review_summary(db: asyncpg.Connection, date_val: _date) -> d
             "avg_mae_15m": 0.0,
         }
 
-    symbols = {a["symbol"] for a in alerts}
     tier_counts = {"Tier 1": 0, "Tier 2": 0, "Tier 3": 0}
     type_counts: dict[str, int] = {}
     suppressed_count = 0
@@ -176,13 +211,12 @@ async def get_alert_review_summary(db: asyncpg.Connection, date_val: _date) -> d
     valid_alerts = 0
     mae_15m_sum = 0.0
 
-    # Compute MFE/MAE per symbol using cached DB bars
     start_dt = EASTERN_TZ.localize(datetime.combine(date_val, datetime.min.time()))
     end_dt = EASTERN_TZ.localize(datetime.combine(date_val, datetime.max.time()))
 
-    for sym in symbols:
+    for sym in top10_symbols:
         db_bars = await _read_db_bars(db, sym, start_dt, end_dt)
-        sym_alerts = [a for a in alerts if a["symbol"] == sym]
+        sym_alerts = [a for a in top10_alerts if a["symbol"] == sym]
 
         for a in sym_alerts:
             t_tier = a.get("priority_tier")
@@ -216,8 +250,8 @@ async def get_alert_review_summary(db: asyncpg.Connection, date_val: _date) -> d
 
     return {
         "date": date_val.isoformat(),
-        "total_alerts": len(alerts),
-        "unique_symbols": len(symbols),
+        "total_alerts": len(top10_alerts),
+        "unique_symbols": len(top10_symbols),
         "tier_counts": tier_counts,
         "alert_type_counts": type_counts,
         "suppressed_count": suppressed_count,
@@ -226,19 +260,15 @@ async def get_alert_review_summary(db: asyncpg.Connection, date_val: _date) -> d
     }
 
 
-async def get_alert_review_grid(db: asyncpg.Connection, date_val: _date) -> dict[str, Any]:
-    """
-    Build two-section grid payload for /alert-review.
-    Section 1: alerted_symbols sorted by best 15m MFE.
-    Section 2: remaining_gainers (non-alerted gainers) sorted by gap_pct.
-    """
+async def get_alert_review_top10(db: asyncpg.Connection, date_val: _date) -> dict[str, Any]:
+    """Payload for top 10 gainers alert review."""
     summary = await get_alert_review_summary(db, date_val)
+    top10_gainers = await get_top10_gainer_symbols(db, date_val)
     all_alerts = await get_alerts_for_date(db, date_val)
 
     start_dt = EASTERN_TZ.localize(datetime.combine(date_val, datetime.min.time()))
     end_dt = EASTERN_TZ.localize(datetime.combine(date_val, datetime.max.time()))
 
-    # Group alerts by symbol
     alert_map: dict[str, list[dict]] = {}
     for a in all_alerts:
         sym = a["symbol"]
@@ -246,8 +276,11 @@ async def get_alert_review_grid(db: asyncpg.Connection, date_val: _date) -> dict
             alert_map[sym] = []
         alert_map[sym].append(a)
 
-    alerted_symbols = []
-    for sym, s_alerts in alert_map.items():
+    result_items = []
+    for item in top10_gainers:
+        sym = item["symbol"]
+        s_alerts = alert_map.get(sym, [])
+
         db_bars = await _read_db_bars(db, sym, start_dt, end_dt)
         alerts_with_mfe = []
         mfe_15m_list = []
@@ -269,62 +302,26 @@ async def get_alert_review_grid(db: asyncpg.Connection, date_val: _date) -> dict
         best_15m_mfe = max(mfe_15m_list) if mfe_15m_list else 0.0
         avg_15m_mfe = round(sum(mfe_15m_list) / len(mfe_15m_list), 2) if mfe_15m_list else 0.0
 
-        first_alert = s_alerts[0]
-        alerted_symbols.append({
+        result_items.append({
             "symbol": sym,
-            "gap_pct": first_alert.get("gap_pct"),
-            "rvol": first_alert.get("rel_vol"),
+            "gap_pct": item.get("gap_pct"),
+            "rvol": item.get("rvol"),
             "alert_count": len(s_alerts),
             "best_15m_mfe": best_15m_mfe,
             "avg_15m_mfe": avg_15m_mfe,
             "alerts": alerts_with_mfe,
         })
 
-    # Sort alerted symbols by best 15m MFE descending
-    alerted_symbols.sort(key=lambda x: x["best_15m_mfe"], reverse=True)
-
-    # Fetch top gainers to find non-alerted gainers
-    alerted_set = set(alert_map.keys())
-    remaining_gainers = []
-
-    try:
-        gainer_rows = await db.fetch(
-            """
-            SELECT DISTINCT symbol, gap_pct, rel_vol, trigger_price
-            FROM screener_alerts
-            WHERE alert_time >= $1 AND alert_time <= $2
-            """,
-            start_dt,
-            end_dt,
-        )
-        for gr in gainer_rows:
-            sym = gr["symbol"]
-            if sym not in alerted_set:
-                remaining_gainers.append({
-                    "symbol": sym,
-                    "gap_pct": gr["gap_pct"],
-                    "rvol": gr["rel_vol"],
-                    "alert_count": 0,
-                    "best_15m_mfe": 0.0,
-                    "avg_15m_mfe": 0.0,
-                    "alerts": [],
-                })
-    except Exception as exc:
-        log.error("Failed to query remaining gainers: %s", exc)
-
-    remaining_gainers.sort(key=lambda x: x["gap_pct"] or 0.0, reverse=True)
-
     return {
         "summary": summary,
-        "alerted_symbols": alerted_symbols,
-        "remaining_gainers": remaining_gainers,
+        "top10_gainers": result_items,
     }
 
 
 async def get_alert_review_detail(
     db: asyncpg.Connection, symbol: str, date_val: _date
 ) -> dict[str, Any]:
-    """Fetch full chart data + alerts with MFE/MAE for per-symbol detail page."""
+    """Fetch full chart data + non-NEAR_HOD alerts with MFE/MAE for detail view."""
     sym_val = normalize_ticker(symbol)
     start_dt = EASTERN_TZ.localize(datetime.combine(date_val, datetime.min.time()))
     end_dt = EASTERN_TZ.localize(datetime.combine(date_val, datetime.max.time()))

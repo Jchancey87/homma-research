@@ -696,10 +696,16 @@ export interface AlertReviewSummary {
   avg_mae_15m: number
 }
 
+export interface AlertReviewTop10Data {
+  summary: AlertReviewSummary
+  top10_gainers: AlertReviewSymbol[]
+}
+
 export interface AlertReviewGridData {
   summary: AlertReviewSummary
-  alerted_symbols: AlertReviewSymbol[]
-  remaining_gainers: AlertReviewSymbol[]
+  top10_gainers?: AlertReviewSymbol[]
+  alerted_symbols?: AlertReviewSymbol[]
+  remaining_gainers?: AlertReviewSymbol[]
 }
 
 export interface AlertReviewDetailData {

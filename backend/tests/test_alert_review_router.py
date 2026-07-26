@@ -43,19 +43,17 @@ def test_get_alert_review_summary_endpoint(mock_summary):
     assert data["mfe_15m_hit_rate"] == 66.7
 
 
-@patch("services.alert_review_service.get_alert_review_grid", new_callable=AsyncMock)
-def test_get_alert_review_grid_endpoint(mock_grid):
-    mock_grid.return_value = {
+@patch("services.alert_review_service.get_alert_review_top10", new_callable=AsyncMock)
+def test_get_alert_review_top10_endpoint(mock_top10):
+    mock_top10.return_value = {
         "summary": {"date": "2026-06-01", "total_alerts": 1},
-        "alerted_symbols": [{"symbol": "NVDA", "best_15m_mfe": 4.5}],
-        "remaining_gainers": [{"symbol": "TSLA", "gap_pct": 12.0}],
+        "top10_gainers": [{"symbol": "NVDA", "best_15m_mfe": 4.5}],
     }
 
-    res = client.get("/api/alerts/review/grid?date=2026-06-01")
+    res = client.get("/api/alerts/review/top10?date=2026-06-01")
     assert res.status_code == 200
     data = res.json()
-    assert len(data["alerted_symbols"]) == 1
-    assert len(data["remaining_gainers"]) == 1
+    assert len(data["top10_gainers"]) == 1
 
 
 @patch("services.alert_review_service.get_alert_review_detail", new_callable=AsyncMock)

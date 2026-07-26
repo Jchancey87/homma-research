@@ -171,13 +171,14 @@ async def get_alert_review_summary_endpoint(
     return await get_alert_review_summary(db, target_date)
 
 
+@router.get("/review/top10")
 @router.get("/review/grid")
-async def get_alert_review_grid_endpoint(
+async def get_alert_review_top10_endpoint(
     date: Optional[str] = None,
     db: asyncpg.Connection = Depends(get_db),
 ):
-    """Dashboard grid payload: alerted symbols (sorted by MFE) + remaining gainers."""
-    from services.alert_review_service import get_alert_review_grid
+    """Top 10 Gainers payload for alert review (excludes NEAR_HOD alerts)."""
+    from services.alert_review_service import get_alert_review_top10
     from validation import EASTERN_TZ
     target_date = datetime.now(EASTERN_TZ).date()
     if date:
@@ -185,7 +186,7 @@ async def get_alert_review_grid_endpoint(
             target_date = date_cls.fromisoformat(date)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date format. Must be YYYY-MM-DD.")
-    return await get_alert_review_grid(db, target_date)
+    return await get_alert_review_top10(db, target_date)
 
 
 @router.get("/review/detail")
