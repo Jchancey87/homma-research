@@ -290,13 +290,23 @@ def _compute_indicators(bars_df: pd.DataFrame, mini_mode: bool) -> tuple[dict, l
         df.index = df.index.tz_localize("UTC", ambiguous="infer", nonexistent="shift_forward")
     df["time"] = ((df.index - EPOCH).total_seconds()).astype(int)
 
+    # Compute VWAP (session cumulative)
+    typical_price = (df["high"] + df["low"] + df["close"]) / 3.0
+    cum_pv = (typical_price * df["volume"]).cumsum()
+    cum_vol = df["volume"].cumsum()
+    df["vwap"] = np.where(cum_vol > 0, cum_pv / cum_vol, typical_price)
+
+    # Compute standard EMAs: 9, 20, 55 per ADR-0006
+    for span in (9, 20, 55):
+        df[f"ema_{span}"] = df["close"].ewm(span=span, adjust=False).mean()
+
+    # Legacy spans kept for fallback
+    df["ema_21"] = df["ema_20"]
+
     if mini_mode:
-        df["ema_21"] = df["close"].ewm(span=21, adjust=False).mean()
-        df["ema_50"] = df["close"].ewm(span=50, adjust=False).mean()
-        df["ema_100"] = df["close"].ewm(span=100, adjust=False).mean()
-        df = df.dropna(subset=["ema_21"])
+        df = df.dropna(subset=["ema_20"])
     else:
-        for span in (8, 13, 21, 34, 55):
+        for span in (8, 13, 34):
             df[f"ema_{span}"] = df["close"].ewm(span=span, adjust=False).mean()
 
         vol_avg = df["volume"].rolling(20).mean()
@@ -349,26 +359,28 @@ def _compute_indicators(bars_df: pd.DataFrame, mini_mode: bool) -> tuple[dict, l
         for ti, v, col in zip(t, df["volume"], vol_colors)
     ]
 
-    if mini_mode:
-        return {
-            "ohlcv": ohlcv_records,
-            "volume": vol_records,
-            "ema_21": line_series("ema_21"),
-            "ema_50": line_series("ema_50"),
-            "ema_100": line_series("ema_100"),
-        }, []
-
-    return {
+    base_payload = {
         "ohlcv": ohlcv_records,
         "volume": vol_records,
+        "ema_9": line_series("ema_9"),
+        "ema_20": line_series("ema_20"),
+        "ema_55": line_series("ema_55"),
+        "vwap": line_series("vwap"),
+        "ema_21": line_series("ema_21"),  # legacy alias
+    }
+
+    if mini_mode:
+        return base_payload, []
+
+    base_payload.update({
         "rvol": line_series("rvol"),
         "ema_8": line_series("ema_8"),
         "ema_13": line_series("ema_13"),
-        "ema_21": line_series("ema_21"),
         "ema_34": line_series("ema_34"),
-        "ema_55": line_series("ema_55"),
         "adx": line_series("adx"),
         "plus_di": line_series("plus_di"),
         "minus_di": line_series("minus_di"),
         "atr": line_series("atr"),
-    }, []
+    })
+
+    return base_payload, []

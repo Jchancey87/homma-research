@@ -33,3 +33,17 @@ Read completely on startup before beginning any task.
 * **No external API calls in routers.** Schwab, FMP, SEC, Massive, yfinance — accessed through `services/schwab_client.py` (the facade) or a dedicated `services/<source>_service.py`.
 * **Analytics services own their own tests.** Pure transforms (no DB / no HTTP) get unit tests in `tests/test_<service>.py`. Integration tests in `tests/test_<router>.py` cover the HTTP surface only.
 * **Reference implementation:** see [services/chart_data_service.py](file:///home/jackc/projects/homma-research/backend/services/chart_data_service.py), [services/alerts_analytics.py](file:///home/jackc/projects/homma-research/backend/services/alerts_analytics.py), [services/continuation_analytics.py](file:///home/jackc/projects/homma-research/backend/services/continuation_analytics.py).
+
+## Agent skills
+
+### Issue tracker
+
+Issues tracked in GitHub Issues (`Jchancey87/homma-research`) via `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-label vocabulary. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout — `CONTEXT.md` + `docs/adr/` at repo root. See `docs/agents/domain.md`.

@@ -148,3 +148,64 @@ async def get_bad_actors(
     Retrieve top bad actors (ticker + alert type combos).
     """
     return await alarm_metrics_service.get_bad_actors(db, days, top_n)
+
+
+# ---------------------------------------------------------------------------
+# Alert Review Post-Mortem Endpoints (RFC-001 compliant)
+# ---------------------------------------------------------------------------
+
+@router.get("/review/summary")
+async def get_alert_review_summary_endpoint(
+    date: Optional[str] = None,
+    db: asyncpg.Connection = Depends(get_db),
+):
+    """Page-level summary statistics for alert review."""
+    from services.alert_review_service import get_alert_review_summary
+    from validation import EASTERN_TZ
+    target_date = datetime.now(EASTERN_TZ).date()
+    if date:
+        try:
+            target_date = date_cls.fromisoformat(date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Must be YYYY-MM-DD.")
+    return await get_alert_review_summary(db, target_date)
+
+
+@router.get("/review/grid")
+async def get_alert_review_grid_endpoint(
+    date: Optional[str] = None,
+    db: asyncpg.Connection = Depends(get_db),
+):
+    """Dashboard grid payload: alerted symbols (sorted by MFE) + remaining gainers."""
+    from services.alert_review_service import get_alert_review_grid
+    from validation import EASTERN_TZ
+    target_date = datetime.now(EASTERN_TZ).date()
+    if date:
+        try:
+            target_date = date_cls.fromisoformat(date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Must be YYYY-MM-DD.")
+    return await get_alert_review_grid(db, target_date)
+
+
+@router.get("/review/detail")
+async def get_alert_review_detail_endpoint(
+    symbol: str,
+    date: Optional[str] = None,
+    db: asyncpg.Connection = Depends(get_db),
+):
+    """Per-symbol detail chart + alert MFE/MAE analysis."""
+    from services.alert_review_service import get_alert_review_detail
+    from services.chart_data_service import ChartDataNotFoundError
+    from validation import EASTERN_TZ
+    target_date = datetime.now(EASTERN_TZ).date()
+    if date:
+        try:
+            target_date = date_cls.fromisoformat(date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Must be YYYY-MM-DD.")
+    try:
+        return await get_alert_review_detail(db, symbol, target_date)
+    except ChartDataNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+

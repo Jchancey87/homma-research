@@ -2,6 +2,19 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-07-26] Alert Review System (/alert-review) Implementation & EMA Standardization (ADR-0006)
+
+### Summary
+* Built Alert Review post-mortem system (/alert-review and /alert-review/[symbol]).
+* Created [alert_review_service.py](file:///home/jackc/projects/homma-research/backend/services/alert_review_service.py): MFE/MAE calculation (5m, 15m, 30m, EOD windows) against `price_history_1min`, grid payload builder, summary stats aggregator.
+* Standardized chart EMA periods to 9, 20, 55 + VWAP across all views ([ADR-0006](file:///home/jackc/projects/homma-research/docs/adr/0006-standardize-ema-periods.md)) in [chart_data_service.py](file:///home/jackc/projects/homma-research/backend/services/chart_data_service.py).
+* Created RFC-001 compliant thin endpoints in [alerts.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/routers/alerts.py): `GET /api/alerts/review/summary`, `GET /api/alerts/review/grid`, `GET /api/alerts/review/detail`.
+* Built frontend dashboard grid page [page.tsx](file:///home/jackc/projects/homma-research/frontend/app/alert-review/page.tsx), per-symbol detail page [page.tsx](file:///home/jackc/projects/homma-research/frontend/app/alert-review/[symbol]/page.tsx), [AlertReviewSummaryBar.tsx](file:///home/jackc/projects/homma-research/frontend/components/AlertReviewSummaryBar.tsx), [AlertReviewMiniChart.tsx](file:///home/jackc/projects/homma-research/frontend/components/AlertReviewMiniChart.tsx), [AlertReviewDetailChart.tsx](file:///home/jackc/projects/homma-research/frontend/components/AlertReviewDetailChart.tsx).
+* Added unit/router tests in [test_alert_review_service.py](file:///home/jackc/projects/homma-research/backend/tests/test_alert_review_service.py) and [test_alert_review_router.py](file:///home/jackc/projects/homma-research/backend/tests/test_alert_review_router.py). All 22 tests pass.
+* Updated [CONTEXT.md](file:///home/jackc/projects/homma-research/CONTEXT.md) with Alert Review, MFE, MAE terms. Created [0006-standardize-ema-periods.md](file:///home/jackc/projects/homma-research/docs/adr/0006-standardize-ema-periods.md).
+* Next.js build (`npm run build`) succeeded without errors.
+
+
 ## [2026-07-21] StockTwits API & Social Sentiment Integration
 
 ### Summary

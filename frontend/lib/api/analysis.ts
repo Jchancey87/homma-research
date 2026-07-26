@@ -20,9 +20,13 @@ export const getChart = (id: number) =>
 export interface ChartDataPayload {
   ohlcv: Array<{ time: number; open: number; high: number; low: number; close: number }>
   volume: Array<{ time: number; value: number }>
+  ema_9?: Array<{ time: number; value: number }>
+  ema_20?: Array<{ time: number; value: number }>
   ema_21?: Array<{ time: number; value: number }>
   ema_50?: Array<{ time: number; value: number }>
+  ema_55?: Array<{ time: number; value: number }>
   ema_100?: Array<{ time: number; value: number }>
+  vwap?: Array<{ time: number; value: number }>
 }
 
 export const getChartData = (ticker: string, date: string, mini = true) =>

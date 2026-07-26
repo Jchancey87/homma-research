@@ -4,7 +4,9 @@ Tests alert evaluation logic without DB, Redis, or network dependencies.
 """
 
 import time
+from datetime import datetime
 import pytest
+from validation import EASTERN_TZ
 from backend.services.alert_detection_service import (
     QuoteTick,
     SymbolState,
@@ -55,8 +57,9 @@ def test_vwap_crossover_hysteresis():
     fund = {"yesterday_close": 98.0, "vol_10d_avg": 2000000}
 
     # Tick at VWAP (100.0) with rvol high enough
+    now_et = EASTERN_TZ.localize(datetime(2026, 6, 1, 9, 35))
     tick_cross = QuoteTick(symbol="TSLA", last_price=105.0, total_volume=2000000)
-    candidates, updated_state = evaluate_alerts(tick_cross, state, fund)
+    candidates, updated_state = evaluate_alerts(tick_cross, state, fund, now_et=now_et)
 
     assert updated_state.vwap_state["status"] == "above"
     assert any(c.alert_type == "VWAP_CROSSOVER" for c in candidates)

@@ -60,18 +60,18 @@ def test_compute_indicators_mini_returns_ohlcv_volume_ema21():
     payload, records = _compute_indicators(df, mini_mode=True)
 
     assert records == []  # pure indicator path; insert list built elsewhere
-    assert set(payload.keys()) == {"ohlcv", "volume", "ema_21", "ema_50", "ema_100"}
+    assert {"ohlcv", "volume", "ema_9", "ema_20", "ema_55", "vwap"}.issubset(set(payload.keys()))
 
-    # EMA-21 series must have at least 1 point (drops NaN, but the warmup is 21)
-    assert len(payload["ema_21"]) >= 1
-    assert all("time" in pt and "value" in pt for pt in payload["ema_21"])
+    # EMA-20 series must have at least 1 point (drops NaN, warmup is 20)
+    assert len(payload["ema_20"]) >= 1
+    assert all("time" in pt and "value" in pt for pt in payload["ema_20"])
 
     # OHLCV must align 1:1 with input rows that survived dropna
-    assert len(payload["ohlcv"]) == len(payload["ema_21"])
+    assert len(payload["ohlcv"]) == len(payload["ema_20"])
     assert len(payload["volume"]) == len(payload["ohlcv"])
 
-    # No full-mode indicators should leak into mini mode
-    for full_only in ("rvol", "ema_8", "ema_13", "ema_34", "ema_55", "adx", "atr"):
+    # Heavy indicator series should not leak into mini mode
+    for full_only in ("rvol", "ema_8", "ema_13", "ema_34", "adx", "atr"):
         assert full_only not in payload
 
 
@@ -80,8 +80,8 @@ def test_compute_indicators_full_returns_all_indicators():
     payload, _ = _compute_indicators(df, mini_mode=False)
 
     expected_keys = {
-        "ohlcv", "volume",
-        "rvol", "ema_8", "ema_13", "ema_21", "ema_34", "ema_55",
+        "ohlcv", "volume", "vwap",
+        "rvol", "ema_8", "ema_9", "ema_13", "ema_20", "ema_21", "ema_34", "ema_55",
         "adx", "plus_di", "minus_di", "atr",
     }
     assert set(payload.keys()) == expected_keys

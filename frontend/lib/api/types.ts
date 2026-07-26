@@ -635,3 +635,77 @@ export interface AlertConfig {
   alert_type?: string
   [key: string]: unknown
 }
+
+export interface MfeMaeWindow {
+  mfe_pct: number
+  mae_pct: number
+  close_pct: number
+}
+
+export interface MfeMaeWindows {
+  '5m': MfeMaeWindow
+  '15m': MfeMaeWindow
+  '30m': MfeMaeWindow
+  eod: MfeMaeWindow
+}
+
+export interface AlertReviewItem {
+  id: number
+  symbol: string
+  alert_time: string
+  trigger_price: number
+  trigger_volume: number
+  rel_vol: number
+  gap_pct: number | null
+  alert_type: string
+  sent: boolean
+  priority_score: number
+  priority_tier: string
+  vwap_dist_pct: number | null
+  hod_dist_pct: number | null
+  catalyst: string | null
+  stop_price: number | null
+  stop_risk_pct: number | null
+  suppressed_reason: string | null
+  group_id: string | null
+  mfe_mae?: MfeMaeWindows | null
+}
+
+export interface AlertReviewSymbol {
+  symbol: string
+  gap_pct: number | null
+  rvol: number | null
+  alert_count: number
+  best_15m_mfe: number
+  avg_15m_mfe: number
+  alerts: AlertReviewItem[]
+}
+
+export interface AlertReviewSummary {
+  date: string
+  total_alerts: number
+  unique_symbols: number
+  tier_counts: {
+    'Tier 1': number
+    'Tier 2': number
+    'Tier 3': number
+  }
+  alert_type_counts: Record<string, number>
+  suppressed_count: number
+  mfe_15m_hit_rate: number
+  avg_mae_15m: number
+}
+
+export interface AlertReviewGridData {
+  summary: AlertReviewSummary
+  alerted_symbols: AlertReviewSymbol[]
+  remaining_gainers: AlertReviewSymbol[]
+}
+
+export interface AlertReviewDetailData {
+  symbol: string
+  date: string
+  chart: any
+  alerts: AlertReviewItem[]
+}
+

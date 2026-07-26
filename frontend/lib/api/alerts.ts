@@ -7,6 +7,9 @@ import {
   BadActorRow,
   RSSSource,
   RSSFeedPoolItem,
+  AlertReviewSummary,
+  AlertReviewGridData,
+  AlertReviewDetailData,
 } from './types'
 
 export const getAlertConfig = () =>
@@ -82,3 +85,19 @@ export const curateRSSItem = (id: number, data: { title: string; description: st
 
 export const rejectRSSItem = (id: number) =>
   api.post<{ message: string }>(`/api/rss/pool/${id}/reject`).then(r => r.data)
+
+export const getAlertReviewSummary = (date?: string) =>
+  api.get<AlertReviewSummary>('/api/alerts/review/summary', {
+    params: date ? { date } : undefined
+  }).then(r => r.data)
+
+export const getAlertReviewGrid = (date?: string) =>
+  api.get<AlertReviewGridData>('/api/alerts/review/grid', {
+    params: date ? { date } : undefined
+  }).then(r => r.data)
+
+export const getAlertReviewDetail = (symbol: string, date?: string) =>
+  api.get<AlertReviewDetailData>('/api/alerts/review/detail', {
+    params: { symbol, date }
+  }).then(r => r.data)
+

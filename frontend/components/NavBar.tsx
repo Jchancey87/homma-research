@@ -17,6 +17,7 @@ const primaryLinks = [
 
 const journalsLinks = [
   { href: '/alerts', label: 'Alerts' },
+  { href: '/alert-review', label: 'Alert Review' },
   { href: '/continuation', label: 'Continuation' },
   { href: '/observations', label: 'Observations' },
   { href: '/alert-config', label: 'Config' },
