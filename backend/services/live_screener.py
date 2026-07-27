@@ -84,6 +84,47 @@ def _compute_minute_metrics(ticker: str, last_price: Optional[float],
     return metrics
 
 
+def _enrich_fundamentals(tickers: List[str]) -> Dict[str, dict]:
+    """Batch fetch fundamentals from database for candidate symbols."""
+    if not tickers:
+        return {}
+    results = {}
+    try:
+        from database import get_connection
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT symbol, company_name, shares_outstanding, market_cap
+                FROM stock_fundamentals
+                WHERE symbol = ANY(%s)
+            """, (tickers,))
+            for r in cur.fetchall():
+                results[r['symbol']] = {
+                    'company_name': r.get('company_name'),
+                    'float_shares': r.get('shares_outstanding'),
+                    'market_cap': r.get('market_cap'),
+                }
+            cur.execute("""
+                SELECT DISTINCT ON (ticker) ticker, float_shares, sector, market_cap
+                FROM daily_gainers
+                WHERE ticker = ANY(%s)
+                ORDER BY ticker, date DESC
+            """, (tickers,))
+            for r in cur.fetchall():
+                sym = r['ticker']
+                if sym not in results:
+                    results[sym] = {}
+                if r.get('float_shares'):
+                    results[sym]['float_shares'] = r.get('float_shares')
+                if r.get('sector'):
+                    results[sym]['sector'] = r.get('sector')
+                if r.get('market_cap'):
+                    results[sym]['market_cap'] = r.get('market_cap')
+    except Exception as e:
+        log.warning(f"[Screener] Fundamentals enrichment DB lookup failed: {e}")
+    return results
+
+
 def refresh_cache(force: bool = False) -> dict:
     """Full pipeline refresh: candidate sourcing -> quotes -> metrics -> cache update."""
     existing = screener_cache.get_cache_snapshot()
@@ -94,39 +135,78 @@ def refresh_cache(force: bool = False) -> dict:
 
     try:
         raw_candidates = candidate_source.fetch_candidates(limit=150)
+        candidate_syms = [c.get('symbol') for c in raw_candidates if c.get('symbol')]
+        fundamentals = _enrich_fundamentals(candidate_syms)
+
         gainers = []
         for c in raw_candidates:
             sym = c.get('symbol')
             if not sym:
                 continue
-            last_p = c.get('last_price') or c.get('price') or 10.0
-            gap = c.get('gap_pct') or c.get('change') or 12.0
+
+            last_p = c.get('last_price') or c.get('lastPrice') or c.get('price') or c.get('last')
+            if last_p is None:
+                continue
+            last_p = float(last_p)
+
+            gap = None
+            if c.get('gap_pct') is not None:
+                gap = float(c['gap_pct'])
+            elif c.get('netPercentChange') is not None:
+                val = float(c['netPercentChange'])
+                gap = val * 100.0 if abs(val) < 5.0 else val
+            elif c.get('change') is not None:
+                val = float(c['change'])
+                gap = val * 100.0 if abs(val) < 5.0 else val
+            elif c.get('netChange') is not None and last_p > 0:
+                nc = float(c['netChange'])
+                prev = last_p - nc
+                if prev > 0:
+                    gap = (nc / prev) * 100.0
+
+            if gap is None:
+                continue
+            gap = float(gap)
+
             if last_p < MIN_PRICE or last_p > MAX_PRICE or gap < MIN_GAP_PCT:
                 continue
+
+            volume = int(c.get('totalVolume') or c.get('volume') or 100000)
+
+            if c.get('netChange') is not None:
+                prev_close = last_p - float(c['netChange'])
+            else:
+                prev_close = last_p / (1 + gap / 100) if (1 + gap / 100) > 0 else last_p
+
+            fund = fundamentals.get(sym, {})
+            co_name = fund.get('company_name') or c.get('description') or c.get('company_name') or sym
+            fl_shares = fund.get('float_shares') or c.get('float_shares')
+            mkt_cap = fund.get('market_cap') or c.get('market_cap')
+            sec = fund.get('sector') or c.get('sector') or 'Unknown'
 
             mm = _compute_minute_metrics(sym, last_p, last_p, None, None)
 
             gainers.append({
                 'ticker': sym,
-                'company_name': sym,
+                'company_name': co_name,
                 'gap_pct': round(gap, 2),
                 'last_price': round(last_p, 2),
                 'high_price': round(last_p, 2),
                 'low_price': round(last_p, 2),
                 'open_price': round(last_p, 2),
-                'prev_close': round(last_p / (1 + gap / 100), 2),
-                'volume': int(c.get('volume', 100000)),
-                'rvol_15m': 2.5,
-                'float_shares': 5000000,
-                'market_cap': 50000000,
-                'sector': 'Technology',
-                'ask': last_p + 0.01,
-                'bid': last_p - 0.01,
+                'prev_close': round(prev_close, 2),
+                'volume': volume,
+                'rvol_15m': round(float(c.get('rvol_15m', 2.5)), 2),
+                'float_shares': fl_shares,
+                'market_cap': mkt_cap,
+                'sector': sec,
+                'ask': round(last_p + 0.01, 2),
+                'bid': round(last_p - 0.01, 2),
                 'spread_pct': 0.2,
                 'is_hod': True,
                 'in_watchlist': False,
-                'news_headline': None,
-                'news_fresh': None,
+                'news_headline': c.get('news_headline'),
+                'news_fresh': c.get('news_fresh'),
                 'sparkline_intraday': mm.get('intraday_sparkline', []),
             })
 

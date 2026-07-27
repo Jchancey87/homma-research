@@ -75,3 +75,42 @@ def test_live_screener_orchestrator():
     assert session in ['pre_market', 'open', 'after_hours', 'closed']
     label = get_session_label('open')
     assert 'Market Open' in label
+
+
+def test_schwab_movers_field_mapping(monkeypatch):
+    """Verify raw Schwab mover responses map lastPrice and netPercentChange accurately."""
+    from backend.services.screener_source import ScreenerCandidateSource
+    from backend.services import live_screener
+
+    raw_movers = [
+        {
+            'symbol': 'SXTC',
+            'description': 'CHINA SXT PHARMACEUT A',
+            'lastPrice': 5.25,
+            'netChange': 1.25,
+            'netPercentChange': 0.3125,
+            'totalVolume': 2500000,
+        }
+    ]
+
+    class FakeCandidateSource:
+        def fetch_candidates(self, limit=150):
+            source = ScreenerCandidateSource()
+            monkeypatch.setattr('backend.services.screener_source.get_movers', lambda exch: raw_movers if exch == 'NYSE' else [])
+            return source.fetch_candidates(limit=limit)
+
+    monkeypatch.setattr(live_screener, 'candidate_source', FakeCandidateSource())
+    monkeypatch.setattr(live_screener, '_enrich_fundamentals', lambda syms: {
+        'SXTC': {'company_name': 'CHINA SXT PHARMACEUT A', 'float_shares': 2500000.0, 'sector': 'Healthcare'}
+    })
+
+    res = live_screener.refresh_cache(force=True)
+    gainers = res.get('gainers', [])
+    assert len(gainers) == 1
+    g = gainers[0]
+    assert g['ticker'] == 'SXTC'
+    assert g['last_price'] == 5.25
+    assert g['gap_pct'] == 31.25
+    assert g['volume'] == 2500000
+    assert g['float_shares'] == 2500000.0
+    assert g['sector'] == 'Healthcare'

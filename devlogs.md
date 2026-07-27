@@ -1758,3 +1758,17 @@ Optimized `/health` to use pool connection health check. Created `/api/market/da
 * **Scheduler Scanner ([scheduler.py](file:///home/jackc/projects/homma-research/backend/fastapi_app/scheduler.py))**: Set `gap_ok = change >= 10.0`.
 * **Ross Cameron Filters ([filters.py](file:///home/jackc/projects/homma-research/momentum_screener/screener/filters.py))**: Set `ROSS_MIN_GAP_PCT = 10.0`.
 * **Testing & Deployment**: 25/25 backend tests pass. Deployed to `/opt/trading-journal/` and restarted all 5 PM2 services.
+
+---
+
+## [2026-07-27] Live Screener Schwab Mover Attribute & Fundamentals Fix
+
+### Summary
+Fixed bug where all live day gainers showed default $10 price, 12% change, and 5M float. Parsed Schwab mover API fields (`lastPrice`, `netPercentChange`, `totalVolume`, `description`) and added DB fundamentals enrichment.
+
+### What Changed
+* **Screener Candidate Source ([screener_source.py](file:///home/jackc/projects/homma-research/backend/services/screener_source.py))**: Extracted `lastPrice` -> `last_price`, `netPercentChange` -> `gap_pct` (scaled x100), `totalVolume` -> `volume`, and `description` -> `company_name`.
+* **Live Screener Orchestrator ([live_screener.py](file:///home/jackc/projects/homma-research/backend/services/live_screener.py))**:
+  * Fixed candidate parsing to use normalized attributes instead of falling back to default static values ($10.00, 12.0%).
+  * Added `_enrich_fundamentals()` to query `stock_fundamentals` and `daily_gainers` DB tables for `float_shares`, `market_cap`, `sector`, and `company_name`.
+* **Unit Tests ([test_screener_subsystem.py](file:///home/jackc/projects/homma-research/backend/tests/test_screener_subsystem.py))**: Added `test_schwab_movers_field_mapping` test for raw Schwab mover attribute parsing and fundamental enrichment.
