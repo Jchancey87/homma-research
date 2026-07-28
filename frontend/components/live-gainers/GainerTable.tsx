@@ -370,9 +370,13 @@ export function GainerTable({
 
                           {/* Sparkline */}
                           <td className="py-[3px] px-1.5 text-center select-none">
-                            {((g.sparkline_intraday && g.sparkline_intraday.length > 0) || (g.sparkline_5d && g.sparkline_5d.length > 0)) ? (
+                            {((g.sparkline_1h && g.sparkline_1h.length > 1) || (g.sparkline_intraday && g.sparkline_intraday.length > 1) || (g.sparkline_5d && g.sparkline_5d.length > 1)) ? (
                               <Sparkline
-                                points={g.sparkline_intraday && g.sparkline_intraday.length > 0 ? g.sparkline_intraday : g.sparkline_5d}
+                                points={
+                                  (g.sparkline_1h && g.sparkline_1h.length > 1)
+                                    ? g.sparkline_1h
+                                    : ((g.sparkline_intraday && g.sparkline_intraday.length > 1) ? g.sparkline_intraday : g.sparkline_5d)
+                                }
                                 width={38}
                                 height={10}
                                 colorByLast5m={true}
@@ -621,14 +625,18 @@ export function GainerTable({
 
                                 {/* Right Column: Trend Sparkline & Actions */}
                                 <div className="flex flex-col justify-between gap-2.5">
-                                  {(g.sparkline_intraday && g.sparkline_intraday.length > 0) || (g.sparkline_5d && g.sparkline_5d.length > 0) ? (
+                                  {(g.sparkline_1h && g.sparkline_1h.length > 1) || (g.sparkline_intraday && g.sparkline_intraday.length > 1) || (g.sparkline_5d && g.sparkline_5d.length > 1) ? (
                                     <div className="space-y-0.5">
                                       <span className="text-[9px] font-bold text-text-muted uppercase tracking-wider select-none block">
                                         Trend Sparkline:
                                       </span>
                                       <div className="bg-[#12161c] p-1.5 border border-border-subtle inline-block">
                                         <Sparkline
-                                          points={g.sparkline_intraday && g.sparkline_intraday.length > 0 ? g.sparkline_intraday : g.sparkline_5d}
+                                          points={
+                                            (g.sparkline_1h && g.sparkline_1h.length > 1)
+                                              ? g.sparkline_1h
+                                              : ((g.sparkline_intraday && g.sparkline_intraday.length > 1) ? g.sparkline_intraday : g.sparkline_5d)
+                                          }
                                           width={80}
                                           height={20}
                                           colorByLast5m={true}

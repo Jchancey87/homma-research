@@ -61,13 +61,34 @@ def _compute_minute_metrics(ticker: str, last_price: Optional[float],
                              high_price: Optional[float],
                              bid: Optional[float], ask: Optional[float]) -> dict:
     """Fetch intraday minute metrics using ScreenerCache."""
-    cached = screener_cache.get_minute_cache(ticker, ttl_seconds=30.0)
+    cached = screener_cache.get_minute_cache(ticker, ttl_seconds=120.0)
     if cached is not None:
-        if last_price is not None and cached.get('intraday_sparkline'):
-            cached['intraday_sparkline'][-1] = last_price
+        if last_price is not None:
+            if cached.get('intraday_sparkline') and len(cached['intraday_sparkline']) > 0:
+                cached['intraday_sparkline'][-1] = last_price
+            if cached.get('sparkline_1h') and len(cached['sparkline_1h']) > 0:
+                cached['sparkline_1h'][-1] = last_price
         return cached
 
-    # Basic fallback metrics if missing
+    intraday_sparkline: List[float] = []
+    sparkline_1h: List[float] = []
+
+    try:
+        from services.schwab_client import get_price_history_every_minute
+        bars = get_price_history_every_minute(ticker)
+        if bars:
+            closes = [float(b['close']) for b in bars if b.get('close') is not None]
+            if closes:
+                intraday_sparkline = build_sparkline(closes, max_points=30)
+                sparkline_1h = build_sparkline(closes[-60:], max_points=30)
+    except Exception as e:
+        log.debug(f"[Screener] Sparkline candle fetch failed for {ticker}: {e}")
+
+    if not intraday_sparkline and last_price is not None:
+        intraday_sparkline = [last_price]
+    if not sparkline_1h and last_price is not None:
+        sparkline_1h = [last_price]
+
     metrics = {
         'mom_2m': None,
         'vwap': last_price,
@@ -76,8 +97,8 @@ def _compute_minute_metrics(ticker: str, last_price: Optional[float],
         'atr_sprd': None,
         'atr_vwap': None,
         'zen_v': None,
-        'intraday_sparkline': [last_price] if last_price else [],
-        'sparkline_1h': [],
+        'intraday_sparkline': intraday_sparkline,
+        'sparkline_1h': sparkline_1h,
         'hod': high_price or last_price,
     }
     screener_cache.store_minute_cache(ticker, metrics)
@@ -184,8 +205,6 @@ def refresh_cache(force: bool = False) -> dict:
             mkt_cap = fund.get('market_cap') or c.get('market_cap')
             sec = fund.get('sector') or c.get('sector') or 'Unknown'
 
-            mm = _compute_minute_metrics(sym, last_p, last_p, None, None)
-
             gainers.append({
                 'ticker': sym,
                 'company_name': co_name,
@@ -207,11 +226,21 @@ def refresh_cache(force: bool = False) -> dict:
                 'in_watchlist': False,
                 'news_headline': c.get('news_headline'),
                 'news_fresh': c.get('news_fresh'),
-                'sparkline_intraday': mm.get('intraday_sparkline', []),
             })
 
         gainers.sort(key=lambda x: -x['gap_pct'])
         top_gainers = gainers[:TOP_N]
+
+        # Batch compute minute metrics & sparklines ONLY for the final top gainers in parallel
+        from concurrent.futures import ThreadPoolExecutor
+        def _fetch_metrics(g):
+            mm = _compute_minute_metrics(g['ticker'], g['last_price'], g['high_price'], None, None)
+            g['sparkline_intraday'] = mm.get('intraday_sparkline', [])
+            g['sparkline_1h'] = mm.get('sparkline_1h', [])
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            list(executor.map(_fetch_metrics, top_gainers))
+
         return screener_cache.update_cache(top_gainers, session=session)
 
     except Exception as e:
