@@ -20,6 +20,8 @@ import threading
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
+from services.quote_schema import parse_redis_quote
+
 log = logging.getLogger(__name__)
 
 STALE_THRESHOLD_S = 60  # Ignore prices older than this
@@ -133,24 +135,22 @@ class StreamingPriceBridge:
                         continue
                     try:
                         data = json.loads(message['data'])
-                        sym = data.get('s')
-                        if not sym:
-                            continue
+                        tick = parse_redis_quote(data)
                         snap = PriceSnapshot(
-                            symbol=sym,
-                            last_price=data.get('p', 0.0),
-                            volume=int(data.get('v') or 0),
-                            high_price=data.get('h', 0.0),
-                            low_price=data.get('l', 0.0),
-                            open_price=data.get('o', 0.0),
-                            bid=data.get('b'),
-                            ask=data.get('a'),
-                            timestamp=data.get('t', time.time()),
+                            symbol=tick.symbol,
+                            last_price=tick.price,
+                            volume=tick.volume,
+                            high_price=tick.high,
+                            low_price=tick.low,
+                            open_price=tick.open,
+                            bid=tick.bid,
+                            ask=tick.ask,
+                            timestamp=tick.time,
                         )
                         with self._lock:
-                            self._prices[sym] = snap
+                            self._prices[tick.symbol] = snap
                     except (json.JSONDecodeError, TypeError, ValueError) as exc:
-                        log.debug("[StreamingPriceBridge] Bad message: %s", exc)
+                        log.warning("[StreamingPriceBridge] Bad message: %s", exc)
 
             except Exception as exc:
                 self._connected = False

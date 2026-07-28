@@ -24,6 +24,7 @@ except ImportError:
     pass
 
 from momentum_screener.schwab.auth import get_client
+from typing import TypedDict
 from schwab.streaming import StreamClient
 from backend.services.alert_detection_service import (
     QuoteTick,
@@ -84,6 +85,19 @@ except ImportError:
             logger.warning(f"Celery not installed. Task {name} dispatch skipped. Args: {args}")
     celery_app = DummyCelery()
 
+class FundamentalsEntry(TypedDict, total=False):
+    shares_outstanding: int
+    market_cap: int
+    pe_ratio: float
+    dividend_yield: float
+    vol_10d_avg: int
+    high_52wk: float
+    low_52wk: float
+    float_category: str
+    short_int_float: float
+    yesterday_high: float
+    yesterday_close: float
+
 class SchwabStreamer:
     """
     Stateful Schwab Level 1 WebSocket Streamer Daemon.
@@ -97,7 +111,7 @@ class SchwabStreamer:
         self.subscribed_symbols = set()
         
         # In-memory states
-        self.fundamentals_cache = {}  # symbol -> dict
+        self.fundamentals_cache: dict[str, FundamentalsEntry] = {}  # symbol -> dict
         self.vwap_state = {}          # symbol -> {'cum_vp': float, 'cum_vol': int, 'last_price': float, 'last_total_vol': int}
         self.price_history_1m = {}    # symbol -> list of float prices (rolling 1m window)
         self.completed_bars_1m = {}   # symbol -> list of dict of completed 1m candles
@@ -316,7 +330,8 @@ class SchwabStreamer:
                                         'high_52wk': 0.0,
                                         'low_52wk': 0.0,
                                         'float_category': 'Unknown',
-                                        'yesterday_high': yesterday_highs.get(sym, 0.0)
+                                        'yesterday_high': yesterday_highs.get(sym, 0.0),
+                                        'yesterday_close': yesterday_closes.get(sym, 0.0)
                                     }
                                     continue
                                 
@@ -378,7 +393,8 @@ class SchwabStreamer:
                                     'high_52wk': high_52w,
                                     'low_52wk': low_52w,
                                     'float_category': float_cat,
-                                    'yesterday_high': yesterday_highs.get(sym, 0.0)
+                                    'yesterday_high': yesterday_highs.get(sym, 0.0),
+                                    'yesterday_close': yesterday_closes.get(sym, 0.0)
                                 }
                                 logger.info(f"Successfully loaded and cached fundamentals for {sym}")
                 except Exception as e:
@@ -492,7 +508,7 @@ class SchwabStreamer:
             except Exception as e:
                 logger.error(f"Error in dynamic subscription task: {e}")
                 
-            await asyncio.sleep(300) # run every 5 minutes
+            await asyncio.sleep(60) # run every 60 seconds
 
     def calculate_confluence_score(self, symbol: str, alert_type: str, rvol: float = 0.0, now_et=None) -> tuple[int, str]:
         """Compute confluence score (0-100). Returns (score, tier)."""
@@ -1094,7 +1110,7 @@ class SchwabStreamer:
                     fund_quote = self.fundamentals_cache.get(symbol)
                     prev_c = fund_quote.get('yesterday_close') if fund_quote else None
                     pct_gain_tick = ((lp - prev_c) / prev_c * 100.0) if (prev_c and prev_c > 0) else 0.0
-                    if pct_gain_tick < 10.0:
+                    if pct_gain_tick < 10.0 and symbol not in self.subscribed_symbols:
                         continue
 
                 # Publish price tick for live_screener streaming fast-path

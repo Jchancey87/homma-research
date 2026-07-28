@@ -8,6 +8,7 @@ import logging
 from typing import Set
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import redis.asyncio as aioredis
+from services.quote_schema import parse_redis_quote, serialize_ws_quote
 
 logger = logging.getLogger(__name__)
 
@@ -53,16 +54,11 @@ async def redis_subscriber():
                         
                     elif channel == 'screener:quotes':
                         if isinstance(parsed_data, dict):
-                            mapped_data = {
-                                "symbol": parsed_data.get("s"),
-                                "price": parsed_data.get("p"),
-                                "volume": parsed_data.get("v"),
-                                "high": parsed_data.get("h"),
-                                "low": parsed_data.get("l"),
-                                "open": parsed_data.get("o"),
-                                "time": parsed_data.get("t")
-                            }
-                            payload = json.dumps({"type": "price", "data": mapped_data})
+                            try:
+                                tick = parse_redis_quote(parsed_data)
+                                payload = json.dumps(serialize_ws_quote(tick))
+                            except ValueError as e:
+                                logger.warning(f"Invalid quote tick: {e}")
                             
                     if payload:
                         # Broadcast to all connected WebSocket clients
@@ -76,7 +72,7 @@ async def redis_subscriber():
                         # Remove disconnected clients
                         connected_clients.difference_update(disconnected)
                 except json.JSONDecodeError:
-                    pass
+                    logger.warning("Bad Redis message: %s", raw_data[:200])
         
         await pubsub.unsubscribe('screener:alerts', 'screener:quotes')
         await redis.close()

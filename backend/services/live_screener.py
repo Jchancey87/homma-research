@@ -261,7 +261,7 @@ def get_live_gainers(force: bool = False) -> dict:
         res['streaming_symbols_count'] = symbol_count
         res['redis_connected'] = True
     except Exception as e:
-        log.debug(f"[Screener] streaming price overlay skipped: {e}")
+        log.warning(f"[Screener] streaming price overlay skipped: {e}")
         res['fast_mode_active'] = False
         res['streaming_symbols_count'] = 0
         res['redis_connected'] = False

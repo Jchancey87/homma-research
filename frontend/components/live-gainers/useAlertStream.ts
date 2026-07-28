@@ -21,10 +21,13 @@ export interface AlertItem {
 export interface PriceTick {
   symbol: string
   price: number
-  volume?: number
-  high?: number
-  low?: number
-  open?: number
+  volume: number
+  high: number
+  low: number
+  open: number
+  bid?: number
+  ask?: number
+  time?: number
 }
 
 const TOAST_TTL_MS       = 6_000
@@ -223,11 +226,14 @@ export function useAlertStream(): UseAlertStreamResult {
           ...prev,
           [sym]: {
             symbol: sym,
-            price: Number(data.price || 0),
-            volume: Number(data.volume || 0),
-            high: Number(data.high || 0),
-            low: Number(data.low || 0),
-            open: Number(data.open || 0)
+            price: Number(data.price ?? 0),
+            volume: Number(data.volume ?? 0),
+            high: Number(data.high ?? 0),
+            low: Number(data.low ?? 0),
+            open: Number(data.open ?? 0),
+            bid: data.bid != null ? Number(data.bid) : undefined,
+            ask: data.ask != null ? Number(data.ask) : undefined,
+            time: data.time != null ? Number(data.time) : undefined,
           }
         }))
         return

@@ -236,7 +236,21 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = EMP
     let list = snap?.gainers ?? []
     list = list.map(g => {
       const p = prices[g.ticker]
-      return p ? { ...g, last_price: p.price, volume: p.volume ?? g.volume } : g
+      if (!p) return g
+      const updated = { 
+        ...g, 
+        last_price: p.price, 
+        volume: p.volume ?? g.volume,
+        high_price: p.high && p.high > (g.high_price ?? 0) ? p.high : g.high_price,
+        low_price: p.low && (p.low < (g.low_price ?? Infinity)) ? p.low : g.low_price,
+      }
+      if (p.bid != null) updated.bid = p.bid
+      if (p.ask != null) updated.ask = p.ask
+      const prevClose = g.prev_close
+      if (prevClose && prevClose > 0) {
+        updated.gap_pct = Math.round(((p.price - prevClose) / prevClose) * 10000) / 100
+      }
+      return updated
     })
     if (!priceFilterEnabled) return list
     return list.filter(g => {

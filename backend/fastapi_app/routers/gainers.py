@@ -284,6 +284,18 @@ async def sector_rotation(db: asyncpg.Connection = Depends(get_db)):
 # GET /gainers/live
 # ---------------------------------------------------------------------------
 
+@router.get("/streaming/health")
+def streaming_health():
+    from services.streaming_prices import get_bridge, STALE_THRESHOLD_S
+    bridge = get_bridge()
+    return {
+        "bridge_connected": bridge.is_connected,
+        "symbols_tracked": bridge.symbol_count(),
+        "non_stale_symbols": len(bridge.get_all_prices()),
+        "stale_threshold_s": STALE_THRESHOLD_S,
+    }
+
+
 @router.get("/live")
 async def live_screener(force: Optional[int] = Query(None)):
     """Live screener data from Schwab API."""
