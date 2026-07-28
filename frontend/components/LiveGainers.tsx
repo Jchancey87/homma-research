@@ -30,9 +30,22 @@ import { ToastStack } from './ToastStack'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-function fmtAge(isoUtc: string | null): string {
+function fmtAge(isoUtc: string | number | null): string {
   if (!isoUtc) return ''
-  const seconds = Math.floor((Date.now() - new Date(isoUtc).getTime()) / 1000)
+  let timestampMs: number
+  if (typeof isoUtc === 'number') {
+    timestampMs = isoUtc < 1e11 ? isoUtc * 1000 : isoUtc
+  } else {
+    const num = Number(isoUtc)
+    if (!isNaN(num) && isoUtc.trim() !== '') {
+      timestampMs = num < 1e11 ? num * 1000 : num
+    } else {
+      timestampMs = new Date(isoUtc).getTime()
+    }
+  }
+  if (isNaN(timestampMs)) return ''
+  const seconds = Math.floor((Date.now() - timestampMs) / 1000)
+  if (seconds < 0)    return '0s ago'
   if (seconds < 60)   return `${seconds}s ago`
   if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
   return `${Math.floor(seconds / 3600)}h ago`

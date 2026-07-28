@@ -7,10 +7,21 @@ import { ArrowRight, RefreshCw, Clock } from 'lucide-react'
 import { getLiveGainers } from '@/lib/api'
 
 // Helper to format ISO fetched_at string to ET time string (HH:MM:SS)
-function formatTimeET(isoString: string | null): string {
+function formatTimeET(isoString: string | number | null): string {
   if (!isoString) return '--:--:--'
   try {
-    const date = new Date(isoString)
+    let date: Date
+    if (typeof isoString === 'number') {
+      date = new Date(isoString < 1e11 ? isoString * 1000 : isoString)
+    } else {
+      const num = Number(isoString)
+      if (!isNaN(num) && isoString.trim() !== '') {
+        date = new Date(num < 1e11 ? num * 1000 : num)
+      } else {
+        date = new Date(isoString)
+      }
+    }
+    if (isNaN(date.getTime())) return '--:--:--'
     return date.toLocaleTimeString('en-US', {
       hour12: false,
       hour: '2-digit',

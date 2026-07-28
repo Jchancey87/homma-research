@@ -7,6 +7,7 @@ and locking discipline for fast (2s) Redis tick overlays and slow (60s) REST pip
 
 import time
 import threading
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
 
@@ -37,9 +38,10 @@ class ScreenerCache:
 
     def update_cache(self, gainers: List[dict], session: str = "REGULAR") -> dict:
         now = time.time()
+        iso_now = datetime.fromtimestamp(now, tz=timezone.utc).isoformat()
         with self._cache_lock:
             self._cache['gainers'] = gainers
-            self._cache['fetched_at'] = now
+            self._cache['fetched_at'] = iso_now
             self._cache['session'] = session
             for g in gainers:
                 t = g.get('ticker')
@@ -112,5 +114,6 @@ class ScreenerCache:
                 self._last_update_ts[ticker] = snap.timestamp
                 updated_count += 1
 
-            self._cache['fetched_at'] = now
+            iso_now = datetime.fromtimestamp(now, tz=timezone.utc).isoformat()
+            self._cache['fetched_at'] = iso_now
             return updated_count > 0, len(streamed_prices)

@@ -96,6 +96,7 @@ def test_schwab_movers_field_mapping(monkeypatch):
     class FakeCandidateSource:
         def fetch_candidates(self, limit=150):
             source = ScreenerCandidateSource()
+            monkeypatch.setattr('backend.services.screener_source._get_tradingview_candidates', lambda: {})
             monkeypatch.setattr('backend.services.screener_source.get_movers', lambda exch: raw_movers if exch == 'NYSE' else [])
             return source.fetch_candidates(limit=limit)
 
