@@ -81,13 +81,6 @@ class ScreenerCandidateSource:
 
                     if sym not in candidates:
                         candidates[sym] = cand
-                    else:
-                        if last_p is not None:
-                            candidates[sym]['last_price'] = float(last_p)
-                            candidates[sym]['price'] = float(last_p)
-                        if gap_pct is not None and abs(gap_pct) > abs(candidates[sym].get('gap_pct') or 0):
-                            candidates[sym]['gap_pct'] = float(gap_pct)
-                            candidates[sym]['change'] = float(gap_pct)
         except Exception as e:
             logger.warning(f"[ScreenerCandidateSource] Schwab get_movers failed: {e}")
 

@@ -113,8 +113,18 @@ def _get_tradingview_candidates() -> Dict[str, Dict]:
         "range": [0, 100]
     }
     
+    from services.live_screener import get_market_session
+    session = get_market_session()
+
+    if session == 'pre_market':
+        session_order = [("Pre-market", payload_pre, True), ("Regular", payload_reg, False), ("Post-market", payload_post, False)]
+    elif session == 'after_hours':
+        session_order = [("Post-market", payload_post, True), ("Regular", payload_reg, False), ("Pre-market", payload_pre, False)]
+    else:
+        session_order = [("Regular", payload_reg, True), ("Pre-market", payload_pre, False), ("Post-market", payload_post, False)]
+
     import requests
-    for label, payload in [("Regular", payload_reg), ("Pre-market", payload_pre), ("Post-market", payload_post)]:
+    for label, payload, is_priority in session_order:
         try:
             resp = requests.post(url, json=payload, headers=headers, timeout=10)
             if resp.status_code == 200:
@@ -132,16 +142,23 @@ def _get_tradingview_candidates() -> Dict[str, Dict]:
                         float_sh = d[5]
                         sector = d[6]
                         
-                        # Update or add if change is higher
-                        if sym not in candidates or abs(change) > abs(candidates[sym]["change"]):
+                        # Priority session scan ALWAYS sets candidate data first.
+                        # Non-priority sessions add new tickers or update if not set by priority session.
+                        if sym not in candidates or is_priority:
                             candidates[sym] = {
                                 "change": change,
                                 "price": close,
                                 "volume": volume,
                                 "market_cap": mcap,
                                 "float_shares": float_sh,
-                                "sector": sector
+                                "sector": sector,
+                                "session_source": label,
                             }
+                        elif candidates[sym].get("session_source") != session_order[0][0]:
+                            if abs(change) > abs(candidates[sym]["change"]):
+                                candidates[sym]["change"] = change
+                                candidates[sym]["price"] = close
+                                candidates[sym]["volume"] = volume
             else:
                 log.warning(f"[TradingView] {label} failed: {resp.status_code}")
         except Exception as e:
