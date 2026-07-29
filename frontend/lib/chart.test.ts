@@ -57,11 +57,21 @@ describe('shiftChartDataTime', () => {
   })
 
   it('shifts all timestamps by offset seconds', () => {
-    const data = makeData([1000, 2000, 3000], [1500])
+    const data: ChartData = {
+      ohlcv:  [{ time: t(1000), open: 0, high: 0, low: 0, close: 0 }],
+      volume: [{ time: t(1000), value: 0 }],
+      ema_9:  [{ time: t(1500), value: 10 }],
+      ema_20: [{ time: t(1500), value: 20 }],
+      vwap:   [{ time: t(1500), value: 15 }],
+      ema_21: [{ time: t(1500), value: 21 }],
+    }
     const result = shiftChartDataTime(data, 3600)
-    expect(result.ohlcv.map(b => b.time)).toEqual([t(4600), t(5600), t(6600)])
-    expect(result.volume.map(b => b.time)).toEqual([t(4600), t(5600), t(6600)])
-    expect(result.ema_21.map(b => b.time)).toEqual([t(5100)])
+    expect(result.ohlcv.map(b => b.time)).toEqual([t(4600)])
+    expect(result.volume.map(b => b.time)).toEqual([t(4600)])
+    expect(result.ema_9?.map(b => b.time)).toEqual([t(5100)])
+    expect(result.ema_20?.map(b => b.time)).toEqual([t(5100)])
+    expect(result.vwap?.map(b => b.time)).toEqual([t(5100)])
+    expect(result.ema_21?.map(b => b.time)).toEqual([t(5100)])
   })
 
   it('handles negative offset (UTC → viewer-local)', () => {
@@ -71,10 +81,13 @@ describe('shiftChartDataTime', () => {
   })
 
   it('preserves empty arrays', () => {
-    const data: ChartData = { ohlcv: [], volume: [], ema_21: [] }
+    const data: ChartData = { ohlcv: [], volume: [], ema_9: [], ema_20: [], vwap: [], ema_21: [] }
     const result = shiftChartDataTime(data, 100)
     expect(result.ohlcv).toEqual([])
     expect(result.volume).toEqual([])
+    expect(result.ema_9).toEqual([])
+    expect(result.ema_20).toEqual([])
+    expect(result.vwap).toEqual([])
     expect(result.ema_21).toEqual([])
   })
 })

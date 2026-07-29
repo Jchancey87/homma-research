@@ -10,7 +10,7 @@ import { PipeScanResult, getLivePrices, getChartData } from '@/lib/api'
 import { getMomStyle, fmtMom } from '@/lib/momentum'
 import {
   CHART_BG, GRID_COLOR, TEXT_COLOR, UP_COLOR, DOWN_COLOR,
-  EMA21_COL, EMA50_COL, EMA100_COL,
+  EMA9_COL, EMA20_COL, EMA21_COL, EMA50_COL, EMA100_COL, VWAP_COL,
   ChartData, OhlcBar, LinePt, HistoPt,
   dedupSort, shiftChartDataTime,
 } from '@/lib/chart'
@@ -30,7 +30,7 @@ interface Props {
   onExpand: (ticker: string) => void
 }
 
-export default function MiniSessionChart({ ticker, date, gapPct, float: floatShares, rvol, rank, pipe, height = 250, mom_2m = null, autoRefreshMs, onExpand }: Props) {
+export default function MiniSessionChart({ ticker, date, gapPct, float: floatShares, rvol, rank, pipe, height = 360, mom_2m = null, autoRefreshMs, onExpand }: Props) {
   const [clickStart, setClickStart] = useState<{ x: number; y: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef     = useRef<IChartApi | null>(null)
@@ -89,6 +89,9 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
       const rawData = {
         ohlcv:   json.ohlcv   as OhlcBar[],
         volume:  json.volume  as HistoPt[],
+        ema_9:   json.ema_9   as LinePt[] ?? [],
+        ema_20:  json.ema_20  as LinePt[] ?? [],
+        vwap:    json.vwap    as LinePt[] ?? [],
         ema_21:  json.ema_21  as LinePt[] ?? [],
         ema_50:  json.ema_50  as LinePt[] ?? [],
         ema_100: json.ema_100 as LinePt[] ?? [],
@@ -234,8 +237,38 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
     })
     vol.setData(dedupSort(volData))
 
-    // EMA 21
-    if (data.ema_21?.length) {
+    // EMA 9 (cyan)
+    if (data.ema_9?.length) {
+      const ema9 = chart.addSeries(LineSeries, {
+        color: EMA9_COL, lineWidth: 1,
+        priceLineVisible: false, lastValueVisible: false,
+        crosshairMarkerVisible: false,
+      })
+      ema9.setData(dedupSort(data.ema_9))
+    }
+
+    // EMA 20 (neon yellow)
+    if (data.ema_20?.length) {
+      const ema20 = chart.addSeries(LineSeries, {
+        color: EMA20_COL, lineWidth: 1,
+        priceLineVisible: false, lastValueVisible: false,
+        crosshairMarkerVisible: false,
+      })
+      ema20.setData(dedupSort(data.ema_20))
+    }
+
+    // VWAP (white dashed)
+    if (data.vwap?.length) {
+      const vwapSeries = chart.addSeries(LineSeries, {
+        color: VWAP_COL, lineWidth: 1, lineStyle: 2,
+        priceLineVisible: false, lastValueVisible: false,
+        crosshairMarkerVisible: false,
+      })
+      vwapSeries.setData(dedupSort(data.vwap))
+    }
+
+    // EMA 21 (cyan legacy / fallback)
+    if (!data.ema_20?.length && data.ema_21?.length) {
       const ema = chart.addSeries(LineSeries, {
         color: EMA21_COL, lineWidth: 1,
         priceLineVisible: false, lastValueVisible: false,

@@ -35,7 +35,10 @@ export interface HistoPt {
 export interface ChartData {
   ohlcv:    OhlcBar[]
   volume:   HistoPt[]
-  ema_21:   LinePt[]
+  ema_9?:   LinePt[]
+  ema_20?:  LinePt[]
+  vwap?:    LinePt[]
+  ema_21?:  LinePt[]
   ema_50?:  LinePt[]
   ema_100?: LinePt[]
 }
@@ -45,9 +48,12 @@ export const GRID_COLOR = '#444444' // Stark dotted grids
 export const TEXT_COLOR = '#8e8e8e'
 export const UP_COLOR   = '#00ff00' // Neon bullish green
 export const DOWN_COLOR = '#ff003c' // Neon bearish red
+export const EMA9_COL   = '#00ffff' // Cyan (EMA 9)
+export const EMA20_COL  = '#ffff00' // Neon yellow (EMA 20)
 export const EMA21_COL  = '#00f0ff'
 export const EMA50_COL  = '#ffff00' // Neon yellow
 export const EMA100_COL = '#ff00ff' // Neon pink
+export const VWAP_COL   = '#ffffff' // White (VWAP)
 
 /**
  * Sort ascending by time and remove duplicate timestamps (keep last occurrence).
@@ -69,10 +75,13 @@ export function shiftChartDataTime(data: ChartData, offsetSec: number): ChartDat
   const shiftTime = (t: UTCTimestamp) =>
     (typeof t === 'number' ? (t + offsetSec) as UTCTimestamp : t)
   return {
-    ohlcv:   data.ohlcv  ? data.ohlcv.map(x => ({ ...x, time: shiftTime(x.time) }))   : [],
-    volume:  data.volume ? data.volume.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
-    ema_21:  data.ema_21 ? data.ema_21.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
-    ema_50:  data.ema_50 ? data.ema_50.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
+    ohlcv:   data.ohlcv   ? data.ohlcv.map(x => ({ ...x, time: shiftTime(x.time) }))   : [],
+    volume:  data.volume  ? data.volume.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
+    ema_9:   data.ema_9   ? data.ema_9.map(x => ({ ...x, time: shiftTime(x.time) }))   : [],
+    ema_20:  data.ema_20  ? data.ema_20.map(x => ({ ...x, time: shiftTime(x.time) }))  : [],
+    vwap:    data.vwap    ? data.vwap.map(x => ({ ...x, time: shiftTime(x.time) }))    : [],
+    ema_21:  data.ema_21  ? data.ema_21.map(x => ({ ...x, time: shiftTime(x.time) }))  : [],
+    ema_50:  data.ema_50  ? data.ema_50.map(x => ({ ...x, time: shiftTime(x.time) }))  : [],
     ema_100: data.ema_100 ? data.ema_100.map(x => ({ ...x, time: shiftTime(x.time) })) : [],
   }
 }

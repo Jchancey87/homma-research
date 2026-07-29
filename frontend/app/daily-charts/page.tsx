@@ -200,7 +200,7 @@ function DailyChartsContent() {
     const filtered = priceFilterEnabled
       ? list.filter(g => g.close_price != null && g.close_price >= 1.0 && g.close_price <= 20.0)
       : list
-    return filtered.slice(0, 9)
+    return filtered.slice(0, 6)
   }, [summary, priceFilterEnabled])
 
   useEffect(() => { loadSummary() }, [loadSummary])
@@ -262,7 +262,7 @@ function DailyChartsContent() {
             {isLiveMode && (
               <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-none text-[9px] font-bold bg-emerald-950/20 border border-emerald-500/30 text-emerald-400">
                 <Wifi size={9} />
-                live · top 9 by gap %
+                live · top 6 by gap %
               </span>
             )}
             {isLiveMode && fastModeActive && (
@@ -286,8 +286,8 @@ function DailyChartsContent() {
           </h1>
           <p className="text-gray-500 text-[10px] mt-0.5 uppercase">
             {isLiveMode
-              ? 'bars 15s · websocket tick 2s (fast) / rest 60s (slow) · candlestick + volume + EMA 21, 50, 100'
-              : 'Top 9 intraday sessions · candlestick + volume + EMA 21, 50, 100'}
+              ? 'bars 15s · websocket tick 2s (fast) / rest 60s (slow) · candlestick + volume + 9/20 EMA + VWAP'
+              : 'Top 6 intraday sessions · candlestick + volume + 9/20 EMA + VWAP'}
           </p>
         </div>
 
@@ -377,8 +377,8 @@ function DailyChartsContent() {
       {/* ── State: loading ── */}
       {loading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[1px] bg-[#262626] border border-[#262626] rounded-none">
-          {Array.from({ length: 9 }).map((_, i) => (
-            <div key={i} className="bg-black h-[250px] rounded-none animate-pulse" />
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="bg-black h-[360px] rounded-none animate-pulse" />
           ))}
         </div>
       )}
