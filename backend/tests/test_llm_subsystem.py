@@ -10,6 +10,7 @@ from backend.llm.prompts import (
     build_news_freshness_prompt,
     build_pre_digest_prompt,
     build_reflection_prompt,
+    build_catalyst_analysis_prompt,
 )
 from backend.llm.analyzers.sentiment_analyzer import SentimentAnalyzer
 from backend.llm.analyzers.reflection_analyzer import ReflectionAnalyzer
@@ -29,6 +30,10 @@ def test_prompt_builders():
     sys_p3, user_p3 = build_pre_digest_prompt("Headline 1\nHeadline 2", content_type="sec")
     assert "forensic equity analyst" in sys_p3
     assert "Headline 1" in user_p3
+
+    sys_p4, user_p4 = build_catalyst_analysis_prompt("AAPL", "2026-07-29", {"news": []}, freshness_summary="Fresh")
+    assert "CATALYST TIER" in sys_p4
+    assert "AAPL" in user_p4
 
 
 def test_sentiment_analyzer_with_mock_transport():

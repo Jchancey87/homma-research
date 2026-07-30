@@ -4,6 +4,7 @@ LLM Prompt Templates & Builder Functions.
 Pure string and template functions. No network calls or side effects.
 """
 
+import json
 from typing import Dict, List, Optional, Tuple
 
 CONTINUATION_SYSTEM = """\
@@ -229,14 +230,14 @@ A headline published on or up to 2 days before the event date is FRESH regardles
 An 8-K filed on or near the event date with item 8.01 (FDA/other) or 2.02 (earnings) is a strong primary catalyst signal.
 
 Classify the catalyst as:
-🟢 TIER 1 — Binary event with clear resolution (FDA approval/rejection, earnings surprise, acquisition, clinical trial result)
-🟡 TIER 2 — Soft catalyst (contract win, partnership, MOU, analyst upgrade with new data, guidance raise)
-🔴 TIER 3 — No real catalyst (vague press release, general sector hype, price target update, no filing, unknown)
+🟢 CATALYST TIER 1 — Binary event with clear resolution (FDA approval/rejection, earnings surprise, acquisition, clinical trial result)
+🟡 CATALYST TIER 2 — Soft catalyst (contract win, partnership, MOU, analyst upgrade with new data, guidance raise)
+🔴 CATALYST TIER 3 — No real catalyst (vague press release, general sector hype, price target update, no filing, unknown)
 
 Output EXACTLY this format (ensure tables have proper newlines to render correctly):
 
 ## ⚡ Catalyst Report: [TICKER]
-### Catalyst Tier: [🟢 TIER 1 / 🟡 TIER 2 / 🔴 TIER 3]
+### Catalyst Tier: [🟢 CATALYST TIER 1 / 🟡 CATALYST TIER 2 / 🔴 CATALYST TIER 3]
 
 | Field | Value |
 |---|---|
@@ -252,11 +253,29 @@ Output EXACTLY this format (ensure tables have proper newlines to render correct
 [Bullet points: 3–5 most relevant items. For each, include the source (Polygon/yfinance/SEC), published date, and days_from_event if available.]
 
 ### 🔬 Catalyst Quality Assessment
-[2–3 sentences: Why this tier? Is there an SEC filing that confirms the narrative? Is the catalyst specific and verifiable?]
+[2–3 sentences: Why this catalyst tier? Is there an SEC filing that confirms the narrative? Is the catalyst specific and verifiable?]
 
 ### ⚠️ Risk to Catalyst Thesis
 [1–2 sentences: What could invalidate or reverse the narrative?]
 """
+
+
+def build_catalyst_analysis_prompt(
+    ticker: str,
+    event_date: str,
+    digested_data: dict,
+    freshness_summary: str = "",
+    catalyst_8k_count: int = 0
+) -> Tuple[str, str]:
+    """Build system and user prompt tuple for catalyst quality analysis (Catalyst Tier)."""
+    user_prompt = (
+        f"Ticker: {ticker}\n"
+        f"Event Date: {event_date}\n"
+        f"News freshness summary (relative to event date): {freshness_summary or 'no articles found'}\n"
+        f"8-K filings with catalyst signals: {catalyst_8k_count} found\n\n"
+        f"Full Catalyst Signal Data:\n{json.dumps(digested_data, indent=2, default=str)}"
+    )
+    return CATALYST_ANALYSIS_SYSTEM, user_prompt
 
 
 def build_headline_sentiment_prompt(headlines: List[str]) -> Tuple[str, str]:

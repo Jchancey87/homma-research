@@ -4,6 +4,12 @@
 
 ## 🌿 Branch: main (Persistent Core Decisions)
 
+## 👤 Session
+* **Goal:** Diagnose local webpage access issues between phone and laptop.
+* **Diagnosed Root Cause:** `frontend/lib/api/client.ts` hardcodes `http://127.0.0.1:5000` as default client-side API URL. Server-Side Rendering (SSR) succeeds on host, but client-side browser requests on phone/laptop target `127.0.0.1:5000` (local to client device) and fail. Also CORS/CSP missing LAN IP (`192.168.0.202`).
+
+
+
 ### 1. Codebase Architecture Refactoring (Chunks 1–5 Completed)
 - **Chunk 1 (Alert Engine)**: Decoupled alert detection into pure, stateless `backend/services/alert_detection_service.py` (ADR-0001). `stream_client.py` handles downstream DB/Redis/Telegram side-effects.
 - **Chunk 2 (LLM Prompt & Transport)**: Extracted `LLMTransport` (`backend/llm/transport.py`), pure prompt builders (`backend/llm/prompts.py`), and domain analyzers (`backend/llm/analyzers/`). `llm_client.py` is a thin facade maintaining 100% test compatibility (ADR-0002).
@@ -19,6 +25,7 @@
 ### 3. Alerts & Hysteresis State Machine
 * **Scope:** Evaluate symbols in `self.watchlist_symbols` only.
 * **Triggers:** VWAP crossover uses hysteresis state ('above'/'below') ±2.0 buffer. NEAR_HOD_RADAR breakout triggers on live price tick exceeding previous session high. Cooldowns use `alerts.should_fire_alert`.
+* **Tier Naming Convention:** `priority_tier` = Alert Tier (confluence score signal strength). `catalyst_tier` = Catalyst Tier (LLM news quality rating). Never mix these concepts.
 
 ### 4. Validation Helpers (RFC-004 QW-4)
 * **Ticker normalisation:** `from validation import normalize_ticker` — uppercase + strip.
