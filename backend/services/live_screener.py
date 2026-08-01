@@ -72,15 +72,28 @@ def _compute_minute_metrics(ticker: str, last_price: Optional[float],
 
     intraday_sparkline: List[float] = []
     sparkline_1h: List[float] = []
+    rvol_10m: Optional[float] = None
+    volume_ratio: Optional[float] = None
 
     try:
         from services.schwab_client import get_price_history_every_minute
         bars = get_price_history_every_minute(ticker)
         if bars:
             closes = [float(b['close']) for b in bars if b.get('close') is not None]
+            volumes = [float(b.get('volume', 0)) for b in bars if b.get('volume') is not None]
             if closes:
                 intraday_sparkline = build_sparkline(closes, max_points=30)
                 sparkline_1h = build_sparkline(closes[-60:], max_points=30)
+
+            if volumes:
+                n_bars = len(volumes)
+                total_vol = sum(volumes)
+                avg_1m_vol = total_vol / n_bars
+                avg_10m_vol = avg_1m_vol * 10.0
+                recent_10m_vol = sum(volumes[-10:])
+                if avg_10m_vol > 0:
+                    rvol_10m = round(recent_10m_vol / avg_10m_vol, 2)
+                    volume_ratio = round(recent_10m_vol / avg_10m_vol, 1)
     except Exception as e:
         log.debug(f"[Screener] Sparkline candle fetch failed for {ticker}: {e}")
 
@@ -97,6 +110,8 @@ def _compute_minute_metrics(ticker: str, last_price: Optional[float],
         'atr_sprd': None,
         'atr_vwap': None,
         'zen_v': None,
+        'rvol_10m': rvol_10m,
+        'volume_ratio': volume_ratio,
         'intraday_sparkline': intraday_sparkline,
         'sparkline_1h': sparkline_1h,
         'hod': high_price or last_price,
@@ -205,6 +220,9 @@ def refresh_cache(force: bool = False) -> dict:
             mkt_cap = fund.get('market_cap') or c.get('market_cap')
             sec = fund.get('sector') or c.get('sector') or 'Unknown'
 
+            rvol_raw = c.get('rvol_15m')
+            rvol_val = round(float(rvol_raw), 2) if (rvol_raw is not None and float(rvol_raw) > 0) else None
+
             gainers.append({
                 'ticker': sym,
                 'company_name': co_name,
@@ -215,7 +233,10 @@ def refresh_cache(force: bool = False) -> dict:
                 'open_price': round(last_p, 2),
                 'prev_close': round(prev_close, 2),
                 'volume': volume,
-                'rvol_15m': round(float(c.get('rvol_15m', 2.5)), 2),
+                'rvol_15m': rvol_val if rvol_val is not None else 1.0,
+                'rvol_10m': None,
+                'rvol_1m': None,
+                'volume_ratio': None,
                 'float_shares': fl_shares,
                 'market_cap': mkt_cap,
                 'sector': sec,
@@ -237,6 +258,11 @@ def refresh_cache(force: bool = False) -> dict:
             mm = _compute_minute_metrics(g['ticker'], g['last_price'], g['high_price'], None, None)
             g['sparkline_intraday'] = mm.get('intraday_sparkline', [])
             g['sparkline_1h'] = mm.get('sparkline_1h', [])
+            if mm.get('rvol_10m') is not None:
+                g['rvol_10m'] = mm['rvol_10m']
+                g['rvol_1m'] = mm['rvol_10m']
+            if mm.get('volume_ratio') is not None:
+                g['volume_ratio'] = mm['volume_ratio']
 
         with ThreadPoolExecutor(max_workers=8) as executor:
             list(executor.map(_fetch_metrics, top_gainers))

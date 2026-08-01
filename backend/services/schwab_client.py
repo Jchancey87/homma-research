@@ -79,7 +79,7 @@ def _get_tradingview_candidates() -> Dict[str, Dict]:
         "markets": ["america"],
         "symbols": {"query": {"types": []}},
         "sort": {"sortBy": "change", "sortOrder": "desc"},
-        "columns": ["name", "change", "close", "volume", "market_cap_basic", "float_shares_outstanding", "sector"],
+        "columns": ["name", "change", "close", "volume", "relative_volume_10d_calc", "market_cap_basic", "float_shares_outstanding", "sector"],
         "range": [0, 100]
     }
     
@@ -94,7 +94,7 @@ def _get_tradingview_candidates() -> Dict[str, Dict]:
         "markets": ["america"],
         "symbols": {"query": {"types": []}},
         "sort": {"sortBy": "premarket_change", "sortOrder": "desc"},
-        "columns": ["name", "premarket_change", "premarket_close", "premarket_volume", "market_cap_basic", "float_shares_outstanding", "sector"],
+        "columns": ["name", "premarket_change", "premarket_close", "premarket_volume", "relative_volume_10d_calc", "market_cap_basic", "float_shares_outstanding", "sector"],
         "range": [0, 100]
     }
     
@@ -109,7 +109,7 @@ def _get_tradingview_candidates() -> Dict[str, Dict]:
         "markets": ["america"],
         "symbols": {"query": {"types": []}},
         "sort": {"sortBy": "postmarket_change", "sortOrder": "desc"},
-        "columns": ["name", "postmarket_change", "postmarket_close", "postmarket_volume", "market_cap_basic", "float_shares_outstanding", "sector"],
+        "columns": ["name", "postmarket_change", "postmarket_close", "postmarket_volume", "relative_volume_10d_calc", "market_cap_basic", "float_shares_outstanding", "sector"],
         "range": [0, 100]
     }
     
@@ -138,9 +138,11 @@ def _get_tradingview_candidates() -> Dict[str, Dict]:
                         change = d[1] or 0
                         close = d[2] or 0
                         volume = d[3] or 0
-                        mcap = d[4]
-                        float_sh = d[5]
-                        sector = d[6]
+                        rvol_raw = d[4]
+                        mcap = d[5]
+                        float_sh = d[6]
+                        sector = d[7]
+                        rvol_val = round(float(rvol_raw), 2) if (rvol_raw is not None and float(rvol_raw) > 0) else None
                         
                         # Priority session scan ALWAYS sets candidate data first.
                         # Non-priority sessions add new tickers or update if not set by priority session.
@@ -149,6 +151,7 @@ def _get_tradingview_candidates() -> Dict[str, Dict]:
                                 "change": change,
                                 "price": close,
                                 "volume": volume,
+                                "rvol_15m": rvol_val,
                                 "market_cap": mcap,
                                 "float_shares": float_sh,
                                 "sector": sector,
@@ -159,6 +162,8 @@ def _get_tradingview_candidates() -> Dict[str, Dict]:
                                 candidates[sym]["change"] = change
                                 candidates[sym]["price"] = close
                                 candidates[sym]["volume"] = volume
+                                if rvol_val is not None:
+                                    candidates[sym]["rvol_15m"] = rvol_val
             else:
                 log.warning(f"[TradingView] {label} failed: {resp.status_code}")
         except Exception as e:

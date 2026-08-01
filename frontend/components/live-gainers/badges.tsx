@@ -76,10 +76,10 @@ export function PriceCell({ last, prev }: { last: number | null; prev: number | 
 
 export function MetricLabelWithTooltip({ label, tooltip }: { label: string; tooltip: string }) {
   return (
-    <div className="flex items-center gap-1 text-text-secondary group/tooltip relative select-none">
+    <div className="inline-flex items-center gap-1 text-[11px] text-[#808080] group/tooltip relative select-none shrink-0 whitespace-nowrap">
       <span>{label}</span>
-      <Info size={10} className="text-text-muted hover:text-text-primary cursor-help shrink-0" />
-      <div className="pointer-events-none absolute bottom-full left-0 mb-1.5 hidden group-hover/tooltip:block bg-panel border border-border-strong text-text-primary text-[10px] font-medium py-1 px-2 shadow-2xl w-56 leading-normal z-50 normal-case font-sans">
+      <Info size={10} className="text-[#808080] hover:text-text-primary cursor-help shrink-0" />
+      <div className="pointer-events-none absolute bottom-full left-0 mb-1.5 hidden group-hover/tooltip:block bg-panel border border-border-strong text-text-primary text-[10px] font-medium py-1 px-2 shadow-2xl w-56 leading-normal z-50 normal-case font-sans whitespace-normal">
         {tooltip}
         <span className="absolute top-full left-2 border-4 border-transparent border-t-panel" />
       </div>

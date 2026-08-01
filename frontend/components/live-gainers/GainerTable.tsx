@@ -222,7 +222,7 @@ export function GainerTable({
                 <>
                   <Th col="rvol"      label="RVOL"    align="right" width="w-[10%]" />
                   <Th col="vol_ratio" label="Vol Ratio" align="right" width="w-[14%]" />
-                  <Th col="micro_rvol" label="1m RVOL" align="right" width="w-[16%]" />
+                  <Th col="micro_rvol" label="10m RVOL" align="right" width="w-[16%]" />
                 </>
               )}
             </tr>
@@ -246,6 +246,24 @@ export function GainerTable({
                 const hodStatus  = computeHodStatus(g.last_price, g.high_price)
                 const vwapStatus = computeVwapStatus(g.atr_vwap)
                 const consolStatus = computeConsolStatus(g.zen_v, g.mom_2m)
+
+                const spreadCents = g.ask != null && g.bid != null ? `${((g.ask - g.bid) * 100).toFixed(1)}c` : null
+                const spreadPctStyle = getSpreadBadgeStyle(g.spread_pct)
+                const spreadFormatted = spreadCents && spreadPctStyle.label !== '—'
+                  ? `${spreadCents} (${spreadPctStyle.label})`
+                  : spreadCents || (spreadPctStyle.label !== '—' ? spreadPctStyle.label : null)
+
+                const formattedTradeTime = g.trade_time
+                  ? new Date(g.trade_time).toLocaleTimeString('en-US', {
+                      timeZone: 'America/New_York',
+                      hour12: false,
+                    }) + ' EST'
+                  : null
+
+                const sparklinePoints =
+                  (g.sparkline_1h && g.sparkline_1h.length > 1)
+                    ? g.sparkline_1h
+                    : ((g.sparkline_intraday && g.sparkline_intraday.length > 1) ? g.sparkline_intraday : g.sparkline_5d)
 
                 const isFlashing = !!flashingTickers[g.ticker]
                 const prevRank = prevRanks[g.ticker]
@@ -466,193 +484,205 @@ export function GainerTable({
                           {/* Vol Ratio */}
                           <td className="py-[3px] px-1.5 text-right select-none font-mono text-[11px]">
                             {g.volume_ratio != null ? (
-                              <span className={g.volume_ratio >= 50 ? 'text-amber-custom font-bold' : 'text-text-secondary'}>
-                                {g.volume_ratio.toFixed(1)}%
+                              <span className={g.volume_ratio >= 2.0 ? 'text-amber-custom font-bold' : 'text-text-secondary'}>
+                                {g.volume_ratio.toFixed(1)}x
                               </span>
                             ) : (
-                              <span className="text-text-muted">—</span>
+                              <span className="text-text-muted/40">—</span>
                             )}
                           </td>
 
-                          {/* Pattern / Micro RVOL */}
+                          {/* Pattern / 10m RVOL */}
                           <td className="py-[3px] px-1.5 text-right select-none font-mono text-[11px] font-bold">
                             {g.active_patterns && g.active_patterns.length > 0 ? (
                               <span className="text-gainer bg-gainer/15 border border-gainer/30 px-1 py-0.25 text-[9px] uppercase font-bold tracking-wider">
                                 {g.active_patterns[0].replace('_', ' ')}
                               </span>
-                            ) : g.rvol_1m != null ? (
-                              <span className={g.rvol_1m >= 2.0 ? 'text-purple-400 bg-purple-400/10 px-1.5 py-0.25 animate-pulse' : 'text-text-secondary'}>
-                                {g.rvol_1m.toFixed(1)}x
+                            ) : (g.rvol_10m ?? g.rvol_1m) != null ? (
+                              <span className={(g.rvol_10m ?? g.rvol_1m)! >= 2.0 ? 'text-purple-400 bg-purple-400/10 px-1.5 py-0.25 animate-pulse' : 'text-text-secondary'}>
+                                {(g.rvol_10m ?? g.rvol_1m)!.toFixed(1)}x
                               </span>
                             ) : (
-                              <span className="text-text-muted">—</span>
+                              <span className="text-text-muted/40">—</span>
                             )}
                           </td>
                         </>
                       )}
                     </tr>
 
-                    {/* Expandable details row */}
-                    <tr className="bg-raised/15">
-                      <td colSpan={colSpanCount} className="p-0 border-0">
+                    {/* Expanded Detail HUD Drawer Row */}
+                    <tr>
+                      <td colSpan={colSpanCount} className="p-0 border-b border-border-subtle bg-[#0B0E14]">
                         <div
-                          className={`grid transition-all duration-300 ease-in-out ${
+                          className={`grid transition-all duration-200 ease-in-out ${
                             isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
                           }`}
                         >
                           <div className="overflow-hidden">
-                            <div className="py-2.5 px-4 border-t border-border-subtle bg-[#0E1116] space-y-2.5">
-                              {/* Actionability & Technical Status Dashboard */}
-                              <div className="flex flex-wrap gap-2 select-none border-b border-border-subtle pb-2">
-                                {playStatus && (
-                                  <span className={`inline-flex items-center px-1.5 py-0.25 text-[10px] font-mono font-bold border border-current bg-transparent ${playStatus.className}`}>
-                                    {playStatus.label}
+                            <div className="py-2.5 px-3.5 bg-[#0E1116] space-y-2 select-none">
+                              {/* 1. Dynamic Alert Banner (Top Bar) */}
+                              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border-subtle/60 pb-2">
+                                <div className="flex flex-wrap items-center gap-1.5 font-mono text-[10px]">
+                                  {playStatus && (
+                                    <span className={`inline-flex items-center px-1.5 py-0.5 font-bold border border-current bg-transparent ${playStatus.className}`}>
+                                      {playStatus.label}
+                                    </span>
+                                  )}
+                                  {consolStatus && (
+                                    <span className={`inline-flex items-center px-1.5 py-0.5 font-bold border border-current bg-transparent ${consolStatus.className}`}>
+                                      {consolStatus.label}
+                                    </span>
+                                  )}
+                                  {vwapStatus && (
+                                    <span className={`inline-flex items-center px-1.5 py-0.5 font-bold border border-current bg-transparent ${vwapStatus.className}`}>
+                                      {vwapStatus.label}
+                                    </span>
+                                  )}
+                                  {hodStatus && (
+                                    <span className={`inline-flex items-center px-1.5 py-0.5 font-bold border ${hodStatus.className}`}>
+                                      {hodStatus.label}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1.5 text-[11px] font-sans truncate shrink-0">
+                                  <span className="text-[#808080]">Sector:</span>
+                                  <span className={`font-semibold ${g.sector ? 'text-text-primary' : 'text-text-muted/40'}`}>
+                                    {g.sector ?? '—'}
                                   </span>
-                                )}
-                                {consolStatus && (
-                                  <span className={`inline-flex items-center px-1.5 py-0.25 text-[10px] font-mono font-bold border border-current bg-transparent ${consolStatus.className}`}>
-                                    {consolStatus.label}
-                                  </span>
-                                )}
-                                {vwapStatus && (
-                                  <span className={`inline-flex items-center px-1.5 py-0.25 text-[10px] font-mono font-bold border border-current bg-transparent ${vwapStatus.className}`}>
-                                    {vwapStatus.label}
-                                  </span>
-                                )}
-                                {hodStatus && (
-                                  <span className={`inline-flex items-center px-1.5 py-0.25 text-[10px] font-mono font-bold border border-current bg-transparent ${hodStatus.className}`}>
-                                    {hodStatus.label}
-                                  </span>
-                                )}
+                                </div>
                               </div>
 
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-text-secondary">
-                                {/* Left Column: Detailed Metrics */}
-                                <div className="space-y-2">
-                                  <h4 className="text-[10px] font-bold text-text-muted uppercase tracking-wider select-none border-b border-border-subtle pb-0.5">Secondary Metrics</h4>
-                                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 font-mono text-[11px]">
-                                    <span className="text-text-muted">Volume:</span>
-                                    <span className="text-text-primary font-bold">{fmtVol(g.volume)}</span>
+                              {/* 2. 3-Column Grid Layout (CSS Grid) */}
+                              <div className="grid grid-cols-[1.2fr_1.2fr_1fr] gap-3 text-xs leading-[1.2] items-stretch pt-0.5">
+                                {/* Column 1 (Volume & Execution) */}
+                                <div className="grid grid-cols-[auto_1fr] gap-x-2.5 gap-y-1.5 items-center self-start">
+                                  <span className="text-[11px] text-[#808080] whitespace-nowrap select-none">Volume:</span>
+                                  <div className="font-mono text-[12px]">
+                                    {g.volume != null ? (
+                                      <span className="text-text-primary font-bold">{fmtVol(g.volume)}</span>
+                                    ) : (
+                                      <span className="text-text-muted/40 font-bold">—</span>
+                                    )}
+                                  </div>
 
-                                    <MetricLabelWithTooltip
-                                      label="RVOL (15m):"
-                                      tooltip="Relative Volume over the last 15 minutes compared to historical average. Higher values indicate unusual/strong activity."
-                                    />
-                                    <div>
+                                  <MetricLabelWithTooltip
+                                    label="RVOL (15m):"
+                                    tooltip="Relative Volume over the last 15 minutes compared to historical average. Higher values indicate unusual/strong activity."
+                                  />
+                                  <div className="font-mono text-[12px]">
+                                    {g.rvol_15m != null ? (
                                       <span className={`inline-flex font-bold ${getRvolBadgeStyle(g.rvol_15m).className}`}>
                                         {getRvolBadgeStyle(g.rvol_15m).label}
                                       </span>
-                                    </div>
+                                    ) : (
+                                      <span className="text-text-muted/40 font-bold">—</span>
+                                    )}
+                                  </div>
 
-                                    <MetricLabelWithTooltip
-                                      label="Spread %:"
-                                      tooltip="The bid-ask spread as a percentage of the last price. Lower spread (<1%) implies better liquidity."
-                                    />
-                                    <div>
-                                      <span className={getSpreadBadgeStyle(g.spread_pct).className}>
-                                        {getSpreadBadgeStyle(g.spread_pct).label}
+                                  <MetricLabelWithTooltip
+                                    label="Spread (Cents/%):"
+                                    tooltip="Bid-ask spread in cents and percentage of last price. Lower spread (<1%) implies better liquidity."
+                                  />
+                                  <div className="font-mono text-[12px]">
+                                    {spreadFormatted ? (
+                                      <span className={`font-bold ${spreadPctStyle.className}`}>
+                                        {spreadFormatted}
                                       </span>
-                                    </div>
+                                    ) : (
+                                      <span className="text-text-muted/40 font-bold">—</span>
+                                    )}
+                                  </div>
 
-                                    <span className="text-text-muted">Trade Time:</span>
-                                    <div className="flex flex-col gap-0.5 text-text-secondary">
-                                      <span>
-                                        {g.trade_time
-                                          ? new Date(g.trade_time).toLocaleTimeString('en-US', {
-                                              timeZone: 'America/New_York',
-                                              hour12: false,
-                                            })
-                                          : '—'} EST
-                                      </span>
-                                    </div>
+                                  <span className="text-[11px] text-[#808080] whitespace-nowrap select-none">Trade Time:</span>
+                                  <div className="font-mono text-[12px]">
+                                    {formattedTradeTime ? (
+                                      <span className="text-text-primary font-bold">{formattedTradeTime}</span>
+                                    ) : (
+                                      <span className="text-text-muted/40 font-bold">—</span>
+                                    )}
                                   </div>
                                 </div>
 
-                                {/* Middle Column: Volatility & Relative Level */}
-                                <div className="space-y-2">
-                                  <h4 className="text-[10px] font-bold text-text-muted uppercase tracking-wider select-none border-b border-border-subtle pb-0.5">Volatility & Relative Level</h4>
-                                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 font-mono text-[11px]">
-                                    <MetricLabelWithTooltip
-                                      label="ATR Spread:"
-                                      tooltip="The current bid-ask spread divided by the 14-period Average True Range. Measures relative cost to cross the spread."
-                                    />
-                                    <div>
-                                      <span className={getAtrSpreadStyle(g.atr_sprd).className}>
-                                        {getAtrSpreadStyle(g.atr_sprd).text}
-                                      </span>
-                                    </div>
+                                {/* Column 2 (Structure & Volatility) */}
+                                <div className="grid grid-cols-[auto_1fr] gap-x-2.5 gap-y-1.5 items-center self-start border-l border-border-subtle/30 pl-3">
+                                  <MetricLabelWithTooltip
+                                    label="ATR (1m):"
+                                    tooltip="1-minute Average True Range. Use to check if a tight 20-cent stop fits this stock's volatility."
+                                  />
+                                  <div className="font-mono text-[12px]">
+                                    {g.atr_14 != null ? (
+                                      <span className="text-text-primary font-bold">${g.atr_14.toFixed(3)}</span>
+                                    ) : (
+                                      <span className="text-text-muted/40 font-bold">—</span>
+                                    )}
+                                  </div>
 
-                                    <MetricLabelWithTooltip
-                                      label="ATR VWAP:"
-                                      tooltip="Distance from the Volume Weighted Average Price in ATR units. Near 0 indicates a reversion/consolidation test."
-                                    />
-                                    <div>
-                                      <span className={getAtrVwapStyle(g.atr_vwap).className}>
+                                  <MetricLabelWithTooltip
+                                    label="ATR/VWAP:"
+                                    tooltip="Distance from Volume Weighted Average Price in ATR units. Near 0 indicates a reversion/consolidation test."
+                                  />
+                                  <div className="font-mono text-[12px]">
+                                    {g.atr_vwap != null ? (
+                                      <span className={`font-bold ${getAtrVwapStyle(g.atr_vwap).className}`}>
                                         {getAtrVwapStyle(g.atr_vwap).text}
                                       </span>
-                                    </div>
+                                    ) : (
+                                      <span className="text-text-muted/40 font-bold">—</span>
+                                    )}
+                                  </div>
 
-                                    <MetricLabelWithTooltip
-                                      label="ZenV (Slope):"
-                                      tooltip="The 2-minute slope of volume acceleration. Positive (▲) values indicate escalating buyer urgency."
-                                    />
-                                    <div>
-                                      <span className={getZenVStyle(g.zen_v).className}>
+                                  <MetricLabelWithTooltip
+                                    label="ZenV (Slope):"
+                                    tooltip="The 2-minute slope of volume acceleration. Positive (▲) values indicate escalating buyer urgency."
+                                  />
+                                  <div className="font-mono text-[12px]">
+                                    {g.zen_v != null ? (
+                                      <span className={`font-bold ${getZenVStyle(g.zen_v).className}`}>
                                         {getZenVStyle(g.zen_v).text}
                                       </span>
-                                    </div>
+                                    ) : (
+                                      <span className="text-text-muted/40 font-bold">—</span>
+                                    )}
+                                  </div>
 
-                                    <MetricLabelWithTooltip
-                                      label="ATR (1m):"
-                                      tooltip="1-minute Average True Range. Use to check if a tight 20-cent stop fits this stock's volatility."
-                                    />
-                                    <span className="text-text-primary font-bold">
-                                      {g.atr_14 != null ? `$${g.atr_14.toFixed(3)}` : '—'}
-                                    </span>
-
-                                    <MetricLabelWithTooltip
-                                      label="Spread (Cents):"
-                                      tooltip="Absolute bid-ask spread in cents. Smaller spreads minimize slippage for 20-cent risk."
-                                    />
-                                    <span className="text-text-primary font-bold">
-                                      {g.ask != null && g.bid != null ? `${((g.ask - g.bid) * 100).toFixed(1)}c` : '—'}
-                                    </span>
-
-                                    <span className="text-text-muted">Sector:</span>
-                                    <span className="text-text-primary font-bold font-sans truncate">{g.sector ?? '—'}</span>
+                                  <MetricLabelWithTooltip
+                                    label="Float:"
+                                    tooltip="Total shares in floating supply. Lower float (<10M) enables higher volatility."
+                                  />
+                                  <div className="font-mono text-[12px]">
+                                    <FloatCellInline float={g.float_shares} />
                                   </div>
                                 </div>
 
-                                {/* Right Column: Trend Sparkline & Actions */}
-                                <div className="flex flex-col justify-between gap-2.5">
-                                  {(g.sparkline_1h && g.sparkline_1h.length > 1) || (g.sparkline_intraday && g.sparkline_intraday.length > 1) || (g.sparkline_5d && g.sparkline_5d.length > 1) ? (
-                                    <div className="space-y-0.5">
-                                      <span className="text-[9px] font-bold text-text-muted uppercase tracking-wider select-none block">
-                                        Trend Sparkline:
-                                      </span>
-                                      <div className="bg-[#12161c] p-1.5 border border-border-subtle inline-block">
+                                {/* Column 3 (Visual & Actions) */}
+                                <div className="flex flex-col justify-between h-full gap-2 pl-3 border-l border-border-subtle/30 self-stretch">
+                                  <div className="space-y-1">
+                                    <span className="text-[10px] font-bold text-[#808080] uppercase tracking-wider select-none block">
+                                      Trend Sparkline
+                                    </span>
+                                    {sparklinePoints && sparklinePoints.length > 1 ? (
+                                      <div className="bg-[#12161c] p-1 border border-border-subtle flex items-center justify-center w-full">
                                         <Sparkline
-                                          points={
-                                            (g.sparkline_1h && g.sparkline_1h.length > 1)
-                                              ? g.sparkline_1h
-                                              : ((g.sparkline_intraday && g.sparkline_intraday.length > 1) ? g.sparkline_intraday : g.sparkline_5d)
-                                          }
-                                          width={80}
-                                          height={20}
+                                          points={sparklinePoints}
+                                          width={140}
+                                          height={28}
                                           colorByLast5m={true}
                                         />
                                       </div>
-                                    </div>
-                                  ) : (
-                                    <div />
-                                  )}
-                                  <div className="flex flex-row md:flex-col justify-end gap-1.5 select-none w-full">
+                                    ) : (
+                                      <div className="bg-[#12161c] p-1.5 border border-border-subtle/30 text-[10px] text-text-muted/40 font-mono text-center">
+                                        No Sparkline
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  <div className="flex flex-col gap-1 select-none w-full">
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation()
                                         onOpenModal(g)
                                       }}
-                                      className="flex-1 md:flex-initial flex items-center justify-center gap-1 px-2.5 py-1 text-[11px] font-bold text-white bg-green-custom/80 hover:bg-green-custom transition-all"
+                                      className="w-full flex items-center justify-center gap-1 px-2 py-1 text-[11px] font-bold text-white bg-green-custom/80 hover:bg-green-custom transition-all"
                                     >
                                       <Maximize2 size={11} />
                                       Detailed View
@@ -662,7 +692,7 @@ export function GainerTable({
                                         e.stopPropagation()
                                         handleResearch(g)
                                       }}
-                                      className="flex-1 md:flex-initial flex items-center justify-center gap-1 px-2.5 py-1 text-[11px] font-bold text-text-secondary hover:text-text-primary bg-[#12161c] hover:bg-[#1b222d] border border-border-subtle transition-all"
+                                      className="w-full flex items-center justify-center gap-1 px-2 py-1 text-[11px] font-bold text-text-secondary hover:text-text-primary bg-[#12161c] hover:bg-[#1b222d] border border-border-subtle transition-all"
                                     >
                                       <ExternalLink size={11} />
                                       Research Ticker
@@ -672,8 +702,8 @@ export function GainerTable({
                               </div>
 
                               {/* Headline Footer */}
-                              <div className="mt-2 pt-2 border-t border-border-subtle flex items-start gap-1.5 text-[11px]">
-                                <span className="text-text-muted font-bold uppercase select-none shrink-0">Headline:</span>
+                              <div className="mt-1 pt-1.5 border-t border-border-subtle/60 flex items-start gap-1.5 text-[11px]">
+                                <span className="text-[#808080] font-bold uppercase select-none shrink-0 text-[10px]">Headline:</span>
                                 {g.catalyst === 'Technical / No News' ? (
                                   <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-custom">
                                     ⚠️ Speculative Volatility / No News
@@ -689,9 +719,9 @@ export function GainerTable({
                                     </span>
                                   </span>
                                 ) : g.catalyst === 'Confirmed Catalyst' && g.news_headline ? (
-                                  <span className="text-text-primary leading-normal block max-w-2xl font-medium">{g.news_headline}</span>
+                                  <span className="text-text-primary leading-normal block max-w-2xl font-medium text-[11px]">{g.news_headline}</span>
                                 ) : (
-                                  <span className="text-text-muted italic">No recent news</span>
+                                  <span className="text-text-muted/40 italic text-[10px]">No recent news</span>
                                 )}
                               </div>
                             </div>
@@ -723,10 +753,10 @@ function computePlayStatus(rvol: number | null | undefined, mom: number | null |
 function computeHodStatus(last: number | null | undefined, high: number | null | undefined) {
   if (last == null || high == null || high <= 0) return null
   const pctOff = ((high - last) / high) * 100
-  if (pctOff <= 0.2) return { label: '🎯 At HOD', className: 'text-green-custom font-bold' }
-  if (pctOff <= 1.5) return { label: `🎯 Near HOD (${pctOff.toFixed(1)}% off)`, className: 'text-green-custom' }
-  if (pctOff <= 5.0) return { label: `📈 Pullback (${pctOff.toFixed(1)}% off)`, className: 'text-amber-custom' }
-  return { label: `⚠️ Off HOD (${pctOff.toFixed(1)}% off)`, className: 'text-red-custom' }
+  if (pctOff <= 0.2) return { label: '🎯 At HOD', className: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30 font-bold' }
+  if (pctOff <= 1.5) return { label: `🎯 Near HOD (${pctOff.toFixed(1)}% off)`, className: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/30 font-bold' }
+  if (pctOff <= 5.0) return { label: `📈 Pullback (${pctOff.toFixed(1)}% off)`, className: 'text-amber-400 bg-amber-400/10 border-amber-400/30' }
+  return { label: `⚠️ Off HOD (${pctOff.toFixed(1)}% off)`, className: 'text-red-400/80 bg-red-400/10 border-red-400/20' }
 }
 
 // Keep parameter name 'atrVwap' to preserve exact implementation logic

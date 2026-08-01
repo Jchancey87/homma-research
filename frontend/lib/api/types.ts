@@ -123,6 +123,7 @@ export interface LiveGainerRow {
   psych_dist_cents?: number | null
   volume_ratio?: number | null
   rvol_1m?: number | null
+  rvol_10m?: number | null
   atr_14?: number | null
   ema50?: number | null
   ema200?: number | null

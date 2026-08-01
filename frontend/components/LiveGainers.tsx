@@ -402,7 +402,7 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = EMP
           gainers={loading ? [] : filteredGainers.filter(g => {
             const hasVolume = g.volume != null && g.volume >= 250000
             const hasAtr = g.atr_14 != null ? g.atr_14 > 0.05 : (g.high_price != null && g.low_price != null ? (g.high_price - g.low_price) > 0.05 : true)
-            const isInPlay = (g.rvol_15m != null && g.rvol_15m >= 2.0) || (g.rvol_1m != null && g.rvol_1m >= 2.0) || (g.active_patterns && g.active_patterns.length > 0)
+            const isInPlay = (g.rvol_15m != null && g.rvol_15m >= 1.5) || ((g.rvol_10m ?? g.rvol_1m) != null && (g.rvol_10m ?? g.rvol_1m)! >= 1.5) || (g.active_patterns && g.active_patterns.length > 0)
             return hasVolume && hasAtr && isInPlay
           })}
           fullList={loading ? [] : filteredGainers}

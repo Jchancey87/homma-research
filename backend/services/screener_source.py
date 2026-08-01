@@ -37,6 +37,7 @@ class ScreenerCandidateSource:
                         'gap_pct': change,
                         'change': change,
                         'volume': info.get('volume', 0),
+                        'rvol_15m': info.get('rvol_15m'),
                         'float_shares': info.get('float_shares'),
                         'market_cap': info.get('market_cap'),
                         'sector': info.get('sector'),
