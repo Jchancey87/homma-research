@@ -151,14 +151,14 @@ app.include_router(continuation.router, prefix="/api")
 from .routers import chart as chart_router
 app.include_router(chart_router.router, prefix="/api")
 
-# Phase 4 routers
-from .routers import analysis, alerts, market_data, strategies, rss, alert_config
+from .routers import analysis, alerts, market_data, strategies, rss, alert_config, rundown
 app.include_router(analysis.router, prefix="/api")
 app.include_router(alerts.router, prefix="/api")
 app.include_router(market_data.router, prefix="/api")
 app.include_router(strategies.router, prefix="/api")
 app.include_router(rss.router, prefix="/api")
 app.include_router(alert_config.router, prefix="/api")
+app.include_router(rundown.router, prefix="/api")
 
 # WebSocket alert streaming
 from .websocket_alerts import router as ws_router
