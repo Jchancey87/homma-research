@@ -19,9 +19,10 @@ import {
   Activity, AlertTriangle, Download, Filter, Eye, TrendingUp, TrendingDown, SkipForward
 } from 'lucide-react'
 import {
-  CHART_BG, GRID_COLOR, TEXT_COLOR, UP_COLOR, DOWN_COLOR, EMA21_COL,
+  CHART_BG, GRID_COLOR, TEXT_COLOR, UP_COLOR, DOWN_COLOR, UP_VOL_COLOR, DOWN_VOL_COLOR,
+  EMA9_COL, EMA20_COL, EMA50_COL, VWAP_COL,
   ChartData, OhlcBar, LinePt, HistoPt,
-  dedupSort, shiftChartDataTime,
+  dedupSort, shiftChartDataTime, calcEMA,
 } from '@/lib/chart'
 import { fmtFloat } from '@/lib/format'
 
@@ -336,6 +337,22 @@ function AlertSessionChart({ ticker, date, alerts, selectedAlertId }: ChartProps
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const sma200Info = useMemo(() => {
+    if (!data?.ohlcv || data.ohlcv.length === 0) return null
+    const bars = data.ohlcv
+    const len = bars.length
+    const windowSize = Math.min(len, 200)
+    let sum = 0
+    for (let i = len - windowSize; i < len; i++) {
+      sum += bars[i].close
+    }
+    const currentSma200 = sum / windowSize
+    const latestClose = bars[len - 1].close
+    const isAbove = latestClose >= currentSma200
+    const diffPct = ((latestClose - currentSma200) / currentSma200) * 100
+    return { value: currentSma200, isAbove, diffPct }
+  }, [data?.ohlcv])
+
   useEffect(() => {
     let active = true
     const fetchData = async () => {
@@ -348,7 +365,10 @@ function AlertSessionChart({ ticker, date, alerts, selectedAlertId }: ChartProps
         const rawData = {
           ohlcv:  json.ohlcv  as OhlcBar[],
           volume: json.volume as HistoPt[],
-          ema_21: json.ema_21 as LinePt[] ?? [],
+          ema_9:  json.ema_9  as LinePt[] ?? [],
+          ema_20: json.ema_20 as LinePt[] ?? [],
+          ema_50: json.ema_50 as LinePt[] ?? [],
+          vwap:   json.vwap   as LinePt[] ?? [],
         } as ChartData
         const localOffset = -new Date().getTimezoneOffset() * 60
         setData(shiftChartDataTime(rawData, localOffset))
@@ -385,14 +405,14 @@ function AlertSessionChart({ ticker, date, alerts, selectedAlertId }: ChartProps
         vertLine: {
           color: '#555555',
           width: 1,
-          style: 1, // Dotted
-          labelBackgroundColor: '#00ff00',
+          style: 1,
+          labelBackgroundColor: UP_COLOR,
         },
         horzLine: {
           color: '#555555',
           width: 1,
-          style: 1, // Dotted
-          labelBackgroundColor: '#ff003c',
+          style: 1,
+          labelBackgroundColor: DOWN_COLOR,
         }
       },
       rightPriceScale: { borderColor: '#262626', textColor: TEXT_COLOR },
@@ -435,18 +455,44 @@ function AlertSessionChart({ ticker, date, alerts, selectedAlertId }: ChartProps
       return {
         time: v.time,
         value: v.value,
-        color: isUp ? 'rgba(0, 255, 0, 0.3)' : 'rgba(255, 0, 60, 0.3)',
+        color: isUp ? UP_VOL_COLOR : DOWN_VOL_COLOR,
       }
     })
     vol.setData(dedupSort(volData))
 
-    if (data.ema_21?.length) {
-      const ema = chart.addSeries(LineSeries, {
-        color: EMA21_COL, lineWidth: 1,
-        priceLineVisible: false, lastValueVisible: false,
-        crosshairMarkerVisible: false,
+    // EMA 9 (Sky Blue)
+    const ema9Data = data.ema_9?.length ? data.ema_9 : calcEMA(data.ohlcv, 9)
+    if (ema9Data.length) {
+      const s = chart.addSeries(LineSeries, {
+        color: EMA9_COL, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
       })
-      ema.setData(dedupSort(data.ema_21))
+      s.setData(dedupSort(ema9Data))
+    }
+
+    // EMA 20 (Amber / Gold)
+    const ema20Data = data.ema_20?.length ? data.ema_20 : calcEMA(data.ohlcv, 20)
+    if (ema20Data.length) {
+      const s = chart.addSeries(LineSeries, {
+        color: EMA20_COL, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+      })
+      s.setData(dedupSort(ema20Data))
+    }
+
+    // EMA 50 (Purple)
+    const ema50Data = data.ema_50?.length ? data.ema_50 : calcEMA(data.ohlcv, 50)
+    if (ema50Data.length) {
+      const s = chart.addSeries(LineSeries, {
+        color: EMA50_COL, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+      })
+      s.setData(dedupSort(ema50Data))
+    }
+
+    // VWAP
+    if (data.vwap?.length) {
+      const vwapSeries = chart.addSeries(LineSeries, {
+        color: VWAP_COL, lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+      })
+      vwapSeries.setData(dedupSort(data.vwap))
     }
 
     // Apply decorations immediately on mount / data load
@@ -477,7 +523,7 @@ function AlertSessionChart({ ticker, date, alerts, selectedAlertId }: ChartProps
   if (loading) {
     return (
       <div className="h-[350px] flex items-center justify-center bg-[#050505] border border-[#262626]">
-        <Loader2 className="text-[#00ff00] animate-spin" size={28} />
+        <Loader2 className="text-[#26a69a] animate-spin" size={28} />
       </div>
     )
   }
@@ -485,7 +531,7 @@ function AlertSessionChart({ ticker, date, alerts, selectedAlertId }: ChartProps
   if (error || !data) {
     return (
       <div className="h-[350px] flex flex-col items-center justify-center bg-[#050505] border border-[#262626] gap-2">
-        <AlertCircle className="text-[#ff003c]" size={32} />
+        <AlertCircle className="text-[#ef5350]" size={32} />
         <span className="font-mono text-xs text-gray-500">{error ?? 'No intraday chart data available'}</span>
         <span className="font-mono text-xs text-gray-500">Run nightly backfill if this date is today.</span>
       </div>
@@ -493,8 +539,35 @@ function AlertSessionChart({ ticker, date, alerts, selectedAlertId }: ChartProps
   }
 
   return (
-    <div className="relative w-full h-[350px]">
-      <div ref={containerRef} className="w-full h-full bg-black border border-[#262626] overflow-hidden" />
+    <div className="relative w-full h-[350px] font-mono overflow-hidden select-none">
+      {/* Large Transparent Stock Ticker Symbol Watermark */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 select-none overflow-hidden">
+        <span className="text-7xl sm:text-8xl font-black text-white/[0.08] tracking-widest uppercase scale-125">
+          {ticker}
+        </span>
+      </div>
+
+      {/* Header Overlay with 200 SMA Badge */}
+      <div className="absolute top-2 left-2 z-10 pointer-events-none flex items-center gap-2">
+        <span className="font-black text-white text-xs uppercase tracking-wider bg-black/80 px-1.5 py-0.5 border border-[#333333]">
+          {ticker}
+        </span>
+        {sma200Info != null && (
+          <span
+            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-none text-[8.5px] font-black uppercase tracking-wider border ${
+              sma200Info.isAbove
+                ? 'bg-emerald-950/50 text-[#26a69a] border-[#26a69a]/40'
+                : 'bg-red-950/50 text-[#ef5350] border-[#ef5350]/40'
+            }`}
+            title={`200 SMA: $${sma200Info.value.toFixed(2)} (${sma200Info.diffPct >= 0 ? '+' : ''}${sma200Info.diffPct.toFixed(1)}%)`}
+          >
+            <span>200 SMA</span>
+            <span>{sma200Info.isAbove ? '▲ ABOVE' : '▼ BELOW'}</span>
+          </span>
+        )}
+      </div>
+
+      <div ref={containerRef} className="w-full h-full bg-black border border-[#262626] overflow-hidden relative z-5" />
       {data && (
         <button
           onClick={() => chartRef.current?.timeScale().fitContent()}

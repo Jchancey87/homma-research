@@ -30,14 +30,14 @@ router = APIRouter(prefix="/rss", tags=["rss"])
 class RSSSourceCreate(BaseModel):
     name: str
     feed_url: str
-    category: Literal["biotech", "tech", "general"]
+    category: Literal["biotech", "tech", "general", "macro", "calendar", "sec", "press", "earnings"]
     is_active: bool = True
 
 
 class RSSSourceUpdate(BaseModel):
     name: Optional[str] = None
     feed_url: Optional[str] = None
-    category: Optional[Literal["biotech", "tech", "general"]] = None
+    category: Optional[Literal["biotech", "tech", "general", "macro", "calendar", "sec", "press", "earnings"]] = None
     is_active: Optional[bool] = None
 
 
@@ -107,8 +107,6 @@ async def get_pool(status: Optional[str] = "pending", db: asyncpg.Connection = D
 async def trigger_ingest(db: asyncpg.Connection = Depends(get_db)):
     """Manually trigger background feed ingestion and return statistics."""
     stats = await rss_service.fetch_and_ingest_feeds(db)
-    # Deliver any pending auto-approved Telegram notifications
-    await rss_service.send_pending_telegram_alerts(db)
     return {"message": "Ingest complete", "stats": stats}
 
 
@@ -135,11 +133,8 @@ async def curate_item(item_id: int, data: RSSCurateBody, db: asyncpg.Connection 
     
     # 2. Update status in staging pool
     await db_rss.update_rss_feed_pool_status(db, item_id, "approved")
-    
-    # 3. Deliver Telegram notification synchronously
-    await rss_service.send_pending_telegram_alerts(db)
-    
-    return {"message": "Item published and Telegram alert queued."}
+
+    return {"message": "Item published to feed."}
 
 
 @router.post("/pool/{item_id}/reject")

@@ -2,8 +2,8 @@
 backend/services/rss_service.py
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Core business logic for self-hosted curated RSS feed.
-Includes feed ingestion, XML generation (with live quote enrichment),
-and Telegram notification syndication.
+Includes feed ingestion and RSS 2.0 XML generation.
+Telegram syndication removed — feed is a plain news aggregator.
 """
 from __future__ import annotations
 
@@ -17,7 +17,6 @@ import html
 import httpx
 import asyncpg
 
-from fastapi_app.config import settings
 from fastapi_app.db import rss as db_rss
 from services.live_quotes_service import get_live_quotes
 
@@ -178,31 +177,31 @@ def parse_xml_feed(xml_content: bytes) -> list[dict]:
 
 async def fetch_and_ingest_feeds(conn: asyncpg.Connection) -> dict[str, int]:
     """
-    Poll all active RSS sources, extract stock tickers, perform auto-curation
-    based on Option B (ticker + keywords), and populate staging pool.
+    Poll all active RSS sources and publish every article directly to the
+    curated feed. Ticker extraction is still performed for metadata but is
+    no longer a gate — all articles are auto-approved on ingest.
     """
     log.info("[rss_service] Starting feed ingestion...")
-    
-    # 1. Fetch target tickers to match against (Watchlist + Daily Gainers)
+
+    # Best-effort ticker tagging against watchlist + recent gainers
     watchlist_rows = await conn.fetch("SELECT ticker FROM watchlist")
     gainers_rows = await conn.fetch("SELECT DISTINCT ticker FROM daily_gainers")
     target_tickers = {r["ticker"].upper() for r in watchlist_rows} | {r["ticker"].upper() for r in gainers_rows}
-    
-    # Map tickers to company names using stock_fundamentals table
+
     fundamentals_rows = await conn.fetch(
         "SELECT symbol, company_name FROM stock_fundamentals WHERE symbol = ANY($1)",
         list(target_tickers)
     )
     ticker_to_company = {r["symbol"].upper(): r["company_name"] for r in fundamentals_rows}
-    
-    # 2. Get active sources
+
     sources = await db_rss.list_rss_sources(conn)
     active_sources = [s for s in sources if s["is_active"]]
-    
+
     stats = {"processed": 0, "inserted": 0, "auto_approved": 0}
-    
+
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        " (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     async with httpx.AsyncClient(timeout=10.0, headers=headers) as client:
         for src in active_sources:
@@ -211,43 +210,36 @@ async def fetch_and_ingest_feeds(conn: asyncpg.Connection) -> dict[str, int]:
                 if res.status_code != 200:
                     log.warning(f"[rss_service] Feed {src['name']} returned HTTP {res.status_code}")
                     continue
-                
+
                 articles = parse_xml_feed(res.content)
                 for art in articles:
                     stats["processed"] += 1
-                    
-                    # Ticker extraction
+
+                    # Best-effort ticker tagging (informational only)
                     text_to_search = f"{art['title']} {art['description']}".upper()
                     detected = []
                     for ticker in target_tickers:
                         is_common = ticker in COMMON_WORDS_OR_ABBREVIATIONS or len(ticker) <= 2
                         if is_common:
-                            ticker_regex = r'(?:\$' + re.escape(ticker) + r'\b|\b' + re.escape(ticker) + r'\b(?:\s*[\)\]:]|\s+COMMON))'
+                            ticker_regex = (
+                                r'(?:\$' + re.escape(ticker) + r'\b|\b'
+                                + re.escape(ticker) + r'\b(?:\s*[\)\]:]|\s+COMMON))'
+                            )
                         else:
                             ticker_regex = r'\b' + re.escape(ticker) + r'\b'
-                        
-                        has_ticker_match = re.search(ticker_regex, text_to_search)
-                        
-                        has_company_match = False
+
+                        if re.search(ticker_regex, text_to_search):
+                            detected.append(ticker)
+                            continue
+
                         company_name = ticker_to_company.get(ticker)
                         if company_name and company_name.upper() != "UNKNOWN":
-                            search_phrases = get_company_search_phrases(ticker, company_name)
-                            for phrase in search_phrases:
+                            for phrase in get_company_search_phrases(ticker, company_name):
                                 if phrase and re.search(r'\b' + re.escape(phrase) + r'\b', text_to_search):
-                                    has_company_match = True
+                                    detected.append(ticker)
                                     break
-                                    
-                        if has_ticker_match or has_company_match:
-                            detected.append(ticker)
-                    
-                    # Auto-curation logic (Option B)
-                    is_catalyst = any(
-                        re.search(r'\b' + re.escape(kw) + r'\b', text_to_search.lower())
-                        for kw in CATALYST_KEYWORDS
-                    )
-                    should_approve = len(detected) > 0 and is_catalyst
-                    status = "approved" if should_approve else "pending"
-                    
+
+                    # All articles go straight to the curated feed
                     inserted = await db_rss.insert_rss_feed_pool_item(
                         conn,
                         source_id=src["id"],
@@ -257,36 +249,34 @@ async def fetch_and_ingest_feeds(conn: asyncpg.Connection) -> dict[str, int]:
                         link=art["link"],
                         published_at=art["published_at"],
                         detected_tickers=detected,
-                        status=status
+                        status="approved",
                     )
-                    
+
                     if inserted:
                         stats["inserted"] += 1
-                        if should_approve:
-                            stats["auto_approved"] += 1
-                            # Move directly to curated feed
-                            await db_rss.insert_curated_rss_item(
-                                conn,
-                                pool_item_id=None,  # Handled inline
-                                guid=art["guid"],
-                                title=art["title"],
-                                description=art["description"] or "Auto-approved market update.",
-                                link=art["link"],
-                                published_at=art["published_at"],
-                                curated_by="system",
-                                associated_tickers=detected,
-                                curated_notes="System auto-curated: regulatory/catalyst match."
-                            )
-                
-                # Stamp last polled
+                        stats["auto_approved"] += 1
+                        await db_rss.insert_curated_rss_item(
+                            conn,
+                            pool_item_id=None,
+                            guid=art["guid"],
+                            title=art["title"],
+                            description=art["description"] or "",
+                            link=art["link"],
+                            published_at=art["published_at"],
+                            curated_by="system",
+                            associated_tickers=detected,
+                            curated_notes=f"Auto-ingested from {src['name']}.",
+                        )
+
                 await db_rss.update_rss_source(conn, src["id"], {"last_polled_at": datetime.now(timezone.utc)})
-                
+
             except Exception as e:
                 log.exception(f"[rss_service] Failed to poll feed {src['name']}: {e}")
-                
+
     log.info(
-        f"[rss_service] Feed ingestion complete. "
-        f"Processed={stats['processed']} Inserted={stats['inserted']} Auto-Approved={stats['auto_approved']}"
+        "[rss_service] Feed ingestion complete. "
+        "Processed=%d Inserted=%d Auto-Approved=%d",
+        stats["processed"], stats["inserted"], stats["auto_approved"]
     )
     return stats
 
@@ -352,60 +342,3 @@ async def generate_rss_xml(conn: asyncpg.Connection) -> str:
     xml_lines.append('</rss>')
 
     return "\n".join(xml_lines)
-
-
-async def send_pending_telegram_alerts(conn: asyncpg.Connection) -> int:
-    """Send Telegram alerts for recently curated research items."""
-    unsent = await db_rss.get_unsent_telegram_curated_items(conn)
-    if not unsent:
-        return 0
-
-    token = settings.telegram_bot_token
-    chat_id = settings.telegram_chat_id
-    if not token or not chat_id:
-        log.warning("[rss_service] Telegram bot not configured. Skipping notifications.")
-        return 0
-
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
-    sent_count = 0
-
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        for item in unsent:
-            try:
-                tickers_str = " ".join([f"${t}" for t in item["associated_tickers"]])
-                
-                # Strip HTML tags and truncate to prevent "message too long" errors
-                desc = item['description'] or ""
-                desc = re.sub(r'<[^>]*>', '', desc)
-                if len(desc) > 500:
-                    desc = desc[:500] + "..."
-                
-                # Escape markdown special characters in titles
-                title_escaped = item['title'].replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace('`', '\\`')
-                desc_escaped = desc.replace('_', '\\_').replace('*', '\\*').replace('[', '\\[').replace('`', '\\`')
-                
-                message = (
-                    f"📢 *CURATED RESEARCH APPROVED*\n"
-                    f"Tickers: {tickers_str}\n\n"
-                    f"*{title_escaped}*\n\n"
-                    f"{desc_escaped}\n\n"
-                    f"[Read Full Article]({item['link']})"
-                )
-                
-                res = await client.post(url, json={
-                    "chat_id": chat_id,
-                    "text": message,
-                    "parse_mode": "Markdown",
-                    "disable_web_page_preview": False
-                })
-                
-                if res.status_code == 200:
-                    await db_rss.mark_telegram_sent(conn, item["id"])
-                    sent_count += 1
-                else:
-                    log.warning(f"[rss_service] Telegram sent status {res.status_code}: {res.text}")
-                    
-            except Exception as e:
-                log.exception(f"[rss_service] Failed to send Telegram alert for item {item['id']}: {e}")
-
-    return sent_count

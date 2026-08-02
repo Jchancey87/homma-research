@@ -312,7 +312,7 @@ CREATE TABLE IF NOT EXISTS rss_sources (
     id            SERIAL PRIMARY KEY,
     name          TEXT NOT NULL,
     feed_url      TEXT NOT NULL UNIQUE,
-    category      TEXT NOT NULL CHECK(category IN ('biotech', 'tech', 'general')),
+    category      TEXT NOT NULL CHECK(category IN ('biotech', 'tech', 'general', 'macro', 'calendar', 'sec', 'press', 'earnings')),
     is_active     BOOLEAN DEFAULT TRUE,
     last_polled_at TIMESTAMPTZ,
     created_at    TIMESTAMPTZ DEFAULT NOW()
@@ -355,6 +355,18 @@ CREATE TABLE IF NOT EXISTS curated_rss_items (
 CREATE INDEX IF NOT EXISTS idx_curated_rss_pub ON curated_rss_items(published_at DESC);
 CREATE INDEX IF NOT EXISTS idx_curated_rss_tickers ON curated_rss_items USING GIN(associated_tickers);
 CREATE INDEX IF NOT EXISTS idx_curated_rss_tele ON curated_rss_items(telegram_sent);
+
+CREATE TABLE IF NOT EXISTS daily_rundowns (
+    id          SERIAL PRIMARY KEY,
+    date        DATE NOT NULL UNIQUE,
+    content     TEXT NOT NULL,
+    raw_source  TEXT,
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_daily_rundowns_date ON daily_rundowns(date DESC);
+
 
 CREATE TABLE IF NOT EXISTS continuation_reflections (
     id SERIAL PRIMARY KEY,

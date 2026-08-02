@@ -5,8 +5,10 @@
 ## 🌿 Branch: main (Persistent Core Decisions)
 
 ## 👤 Session
-* **Goal:** Diagnose local webpage access issues between phone and laptop.
-* **Diagnosed Root Cause:** `frontend/lib/api/client.ts` hardcodes `http://127.0.0.1:5000` as default client-side API URL. Server-Side Rendering (SSR) succeeds on host, but client-side browser requests on phone/laptop target `127.0.0.1:5000` (local to client device) and fail. Also CORS/CSP missing LAN IP (`192.168.0.202`).
+* **Goal:** Refactor expanded HUD in live gainer screener & fix RVOL / Vol Ratio metrics.
+* **HUD Refactor:** 3-column CSS Grid (`1.2fr 1.2fr 1fr`) in `GainerTable.tsx`. Dynamic top alert banner (Bright Emerald Green `<1.5%` off HOD, Dim Red `>5.0%`). Condensed `font-mono` numbers, muted null states (`—`), inline tooltips.
+* **RVOL Engine Fix:** Ingested TradingView `relative_volume_10d_calc` in `schwab_client.py` & `screener_source.py`. Calculated 10-minute relative volume (`rvol_10m`) and `volume_ratio` in `live_screener.py` from 1m candles. Relabeled UI header to `10m RVOL`.
+* **QA & Deployment:** Tested (`npx tsc`, `vitest`, `pytest` green), committed (`46b8656`), pushed `origin/master`, deployed via `deploy.sh` (PM2 services re-online).
 
 
 

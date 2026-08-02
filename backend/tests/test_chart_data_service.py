@@ -60,7 +60,7 @@ def test_compute_indicators_mini_returns_ohlcv_volume_ema21():
     payload, records = _compute_indicators(df, mini_mode=True)
 
     assert records == []  # pure indicator path; insert list built elsewhere
-    assert {"ohlcv", "volume", "ema_9", "ema_20", "ema_55", "vwap"}.issubset(set(payload.keys()))
+    assert {"ohlcv", "volume", "ema_9", "ema_20", "ema_50", "ema_55", "vwap"}.issubset(set(payload.keys()))
 
     # EMA-20 series must have at least 1 point (drops NaN, warmup is 20)
     assert len(payload["ema_20"]) >= 1
@@ -81,7 +81,7 @@ def test_compute_indicators_full_returns_all_indicators():
 
     expected_keys = {
         "ohlcv", "volume", "vwap",
-        "rvol", "ema_8", "ema_9", "ema_13", "ema_20", "ema_21", "ema_34", "ema_55",
+        "rvol", "ema_8", "ema_9", "ema_13", "ema_20", "ema_21", "ema_34", "ema_50", "ema_55",
         "adx", "plus_di", "minus_di", "atr",
     }
     assert set(payload.keys()) == expected_keys

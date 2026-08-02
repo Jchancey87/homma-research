@@ -38,9 +38,11 @@ class LLMTransport:
 
     def get_deep_client(self) -> OpenAI:
         if self._deep_client is None:
+            api_key = Config.DEEP_LLM_API_KEY or Config.LLM_API_KEY
+            base_url = Config.DEEP_LLM_BASE_URL if Config.DEEP_LLM_API_KEY else Config.LLM_BASE_URL
             self._deep_client = OpenAI(
-                api_key=Config.DEEP_LLM_API_KEY,
-                base_url=Config.DEEP_LLM_BASE_URL,
+                api_key=api_key,
+                base_url=base_url,
                 default_headers={
                     "HTTP-Referer": "https://github.com/jchancey87/Analysis-App",
                     "X-Title": "Trading Journal Analysis App",
@@ -61,7 +63,11 @@ class LLMTransport:
         Returns response text string.
         """
         client = self.get_deep_client() if model_tier == "deep" else self.get_client()
-        model_name = Config.DEEP_LLM_MODEL if model_tier == "deep" else Config.LLM_MODEL
+        model_name = (
+            Config.DEEP_LLM_MODEL
+            if (model_tier == "deep" and Config.DEEP_LLM_API_KEY)
+            else Config.LLM_MODEL
+        )
 
         messages = []
         if system_prompt:

@@ -5,6 +5,7 @@ Read/write helpers for RSS feed tables.
 Conventions match db/ohlcv.py: every public function takes a live
 ``asyncpg.Connection`` as the first argument and returns plain
 dicts/lists/booleans.
+Telegram helpers removed — use tasks/alerts.py for alert dispatch.
 """
 from __future__ import annotations
 
@@ -170,19 +171,3 @@ async def insert_curated_rss_item(
     )
     return not result.endswith(" 0")
 
-
-async def get_unsent_telegram_curated_items(conn: asyncpg.Connection) -> list[dict]:
-    """Get curated articles that have not been sent to Telegram yet."""
-    rows = await conn.fetch(
-        "SELECT * FROM curated_rss_items WHERE telegram_sent = FALSE ORDER BY published_at ASC"
-    )
-    return [dict(r) for r in rows]
-
-
-async def mark_telegram_sent(conn: asyncpg.Connection, item_id: int) -> bool:
-    """Flag that a curated item was successfully notified on Telegram."""
-    result = await conn.execute(
-        "UPDATE curated_rss_items SET telegram_sent = TRUE WHERE id = $1",
-        item_id
-    )
-    return not result.endswith(" 0")

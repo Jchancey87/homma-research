@@ -9,10 +9,10 @@ import { Loader2, AlertTriangle } from 'lucide-react'
 import { PipeScanResult, getLivePrices, getChartData } from '@/lib/api'
 import { getMomStyle, fmtMom } from '@/lib/momentum'
 import {
-  CHART_BG, GRID_COLOR, TEXT_COLOR, UP_COLOR, DOWN_COLOR,
-  EMA9_COL, EMA20_COL, EMA21_COL, EMA50_COL, EMA100_COL, VWAP_COL,
+  CHART_BG, GRID_COLOR, TEXT_COLOR, UP_COLOR, DOWN_COLOR, UP_VOL_COLOR, DOWN_VOL_COLOR,
+  EMA9_COL, EMA20_COL, EMA50_COL, VWAP_COL,
   ChartData, OhlcBar, LinePt, HistoPt,
-  dedupSort, shiftChartDataTime,
+  dedupSort, shiftChartDataTime, calcEMA,
 } from '@/lib/chart'
 import { fmt1, fmtFloat } from '@/lib/format'
 
@@ -42,16 +42,10 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
   const loaded = useRef(false)
 
   // Ref mirror of `data` so the tick callback can read the latest bars
-  // without recapturing `data` in its closure. Without this, an in-flight
-  // tick from a previous auto-refresh cycle can land after the chart has
-  // been rebuilt with a newer last bar, and candles.update() throws
-  // "Cannot update oldest data" (lightweight-charts v5 guard).
+  // without recapturing `data` in its closure.
   const dataRef = useRef<ChartData | null>(null)
   dataRef.current = data
 
-  // In-place tick of the latest candle's close (and high/low) with the
-  // current live price from the screener. No chart rebuild — the existing
-  // candle is just .update()'d so the wick grows in real time.
   const tickLatestBar = useCallback((price: number) => {
     const candles = candlesRef.current
     const cur = dataRef.current?.ohlcv
@@ -77,15 +71,32 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
 
   const hasMomentumSpike = priceMomentum !== null && priceMomentum >= 1.0
 
+  // 200 SMA calculation and status relative to close price
+  const sma200Info = useMemo(() => {
+    if (!data?.ohlcv || data.ohlcv.length === 0) return null
+    const bars = data.ohlcv
+    const len = bars.length
+    const windowSize = Math.min(len, 200)
+    let sum = 0
+    for (let i = len - windowSize; i < len; i++) {
+      sum += bars[i].close
+    }
+    const currentSma200 = sum / windowSize
+    const latestClose = bars[len - 1].close
+    const isAbove = latestClose >= currentSma200
+    const diffPct = ((latestClose - currentSma200) / currentSma200) * 100
+    return {
+      value: currentSma200,
+      isAbove,
+      diffPct,
+    }
+  }, [data?.ohlcv])
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
       const json = await getChartData(ticker, date, true)
-      // Only extract what we need to keep memory low. The `as ChartData`
-      // cast is safe — `time: number` from the API is structurally
-      // identical to `time: UTCTimestamp` at runtime (lightweight-charts
-      // uses a brand on the type only).
       const rawData = {
         ohlcv:   json.ohlcv   as OhlcBar[],
         volume:  json.volume  as HistoPt[],
@@ -106,7 +117,7 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
     }
   }, [ticker, date])
 
-  // Lazy-load via IntersectionObserver — only fetch when scrolled into view
+  // Lazy-load via IntersectionObserver
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -125,19 +136,13 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
     return () => observer.disconnect()
   }, [fetchData])
 
-  // Auto-refresh + tick — two cadences in live mode:
-  //   • autoRefreshMs (e.g. 15s) → re-fetch OHLCV bars (new minute, new row)
-  //   • TICK_MS (5s)            → pull the single ticker's last_price from
-  //                                /api/chart/live-price and update the last
-  //                                candle's close in place
-  // The tick keeps the chart "alive" between completed-minute bar fetches.
-  // Page-level 30s interval handles the ticker list rotation separately.
+  // Auto-refresh + tick
   useEffect(() => {
     if (!autoRefreshMs || autoRefreshMs <= 0) return
 
     const TICK_MS = 5_000
     const fetchId = setInterval(() => {
-      loaded.current = true   // bypass IntersectionObserver gate
+      loaded.current = true
       fetchData()
     }, autoRefreshMs)
 
@@ -147,7 +152,7 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
         const price  = prices[ticker]
         if (price != null) tickLatestBar(price)
       } catch {
-        // Tick is best-effort — the next bar poll will resync the close.
+        // Tick is best-effort
       }
     }, TICK_MS)
 
@@ -161,7 +166,6 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
   useEffect(() => {
     if (!data || !containerRef.current) return
 
-    // Destroy previous instance if any
     chartRef.current?.remove()
 
     const chart = createChart(containerRef.current, {
@@ -180,14 +184,14 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
         vertLine: {
           color: '#555555',
           width: 1,
-          style: 1, // Dotted
-          labelBackgroundColor: '#00ff00',
+          style: 1,
+          labelBackgroundColor: UP_COLOR,
         },
         horzLine: {
           color: '#555555',
           width: 1,
-          style: 1, // Dotted
-          labelBackgroundColor: '#ff003c',
+          style: 1,
+          labelBackgroundColor: DOWN_COLOR,
         }
       },
       rightPriceScale: { borderColor: '#262626', textColor: TEXT_COLOR },
@@ -205,7 +209,7 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
     })
     chartRef.current = chart
 
-    // Candles
+    // Candles with mellow colors
     const candles = chart.addSeries(CandlestickSeries, {
       upColor: UP_COLOR, downColor: DOWN_COLOR,
       borderUpColor: UP_COLOR, borderDownColor: DOWN_COLOR,
@@ -214,7 +218,7 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
     candles.setData(dedupSort(data.ohlcv))
     candlesRef.current = candles
 
-    // Volume (overlaid, small scale, colored by up/down candle)
+    // Volume histogram with matching mellow translucent fills
     const vol = chart.addSeries(HistogramSeries, {
       priceFormat:     { type: 'volume' },
       priceScaleId:    'vol',
@@ -232,29 +236,42 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
       return {
         time: v.time,
         value: v.value,
-        color: isUp ? 'rgba(0, 255, 0, 0.3)' : 'rgba(255, 0, 60, 0.3)',
+        color: isUp ? UP_VOL_COLOR : DOWN_VOL_COLOR,
       }
     })
     vol.setData(dedupSort(volData))
 
-    // EMA 9 (cyan)
-    if (data.ema_9?.length) {
+    // EMA 9 (Sky Blue)
+    const ema9Data = data.ema_9?.length ? data.ema_9 : calcEMA(data.ohlcv, 9)
+    if (ema9Data.length) {
       const ema9 = chart.addSeries(LineSeries, {
         color: EMA9_COL, lineWidth: 1,
         priceLineVisible: false, lastValueVisible: false,
         crosshairMarkerVisible: false,
       })
-      ema9.setData(dedupSort(data.ema_9))
+      ema9.setData(dedupSort(ema9Data))
     }
 
-    // EMA 20 (neon yellow)
-    if (data.ema_20?.length) {
+    // EMA 20 (Amber / Gold)
+    const ema20Data = data.ema_20?.length ? data.ema_20 : calcEMA(data.ohlcv, 20)
+    if (ema20Data.length) {
       const ema20 = chart.addSeries(LineSeries, {
         color: EMA20_COL, lineWidth: 1,
         priceLineVisible: false, lastValueVisible: false,
         crosshairMarkerVisible: false,
       })
-      ema20.setData(dedupSort(data.ema_20))
+      ema20.setData(dedupSort(ema20Data))
+    }
+
+    // EMA 50 (Purple)
+    const ema50Data = data.ema_50?.length ? data.ema_50 : calcEMA(data.ohlcv, 50)
+    if (ema50Data.length) {
+      const ema50 = chart.addSeries(LineSeries, {
+        color: EMA50_COL, lineWidth: 1,
+        priceLineVisible: false, lastValueVisible: false,
+        crosshairMarkerVisible: false,
+      })
+      ema50.setData(dedupSort(ema50Data))
     }
 
     // VWAP (white dashed)
@@ -265,36 +282,6 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
         crosshairMarkerVisible: false,
       })
       vwapSeries.setData(dedupSort(data.vwap))
-    }
-
-    // EMA 21 (cyan legacy / fallback)
-    if (!data.ema_20?.length && data.ema_21?.length) {
-      const ema = chart.addSeries(LineSeries, {
-        color: EMA21_COL, lineWidth: 1,
-        priceLineVisible: false, lastValueVisible: false,
-        crosshairMarkerVisible: false,
-      })
-      ema.setData(dedupSort(data.ema_21))
-    }
-
-    // EMA 50 (neon yellow)
-    if (data.ema_50?.length) {
-      const ema50 = chart.addSeries(LineSeries, {
-        color: EMA50_COL, lineWidth: 1,
-        priceLineVisible: false, lastValueVisible: false,
-        crosshairMarkerVisible: false,
-      })
-      ema50.setData(dedupSort(data.ema_50))
-    }
-
-    // EMA 100 (neon pink)
-    if (data.ema_100?.length) {
-      const ema100 = chart.addSeries(LineSeries, {
-        color: EMA100_COL, lineWidth: 1,
-        priceLineVisible: false, lastValueVisible: false,
-        crosshairMarkerVisible: false,
-      })
-      ema100.setData(dedupSort(data.ema_100))
     }
 
     // Crosshair readout
@@ -331,7 +318,6 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
     if (!clickStart) return
     const dx = Math.abs(e.clientX - clickStart.x)
     const dy = Math.abs(e.clientY - clickStart.y)
-    // If mouse moved less than 5px, it's a click, not a drag
     if (dx < 5 && dy < 5) {
       onExpand(ticker)
     }
@@ -345,17 +331,39 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
     >
+      {/* Large Transparent Stock Ticker Symbol Watermark */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 select-none overflow-hidden">
+        <span className="text-6xl sm:text-7xl font-black text-white/[0.08] tracking-widest uppercase scale-125">
+          {ticker}
+        </span>
+      </div>
+
       {/* HUD / Overlay */}
       <div className="absolute top-1 left-1.5 right-1.5 z-10 pointer-events-none flex justify-between select-none">
-        {/* Left Side: Rank, Ticker, Gap, Timeframe, Momentum, PIPE */}
-        <div className="flex items-center gap-1.5 bg-black/85 px-1 py-0.5 border border-[#333333] rounded-none">
+        {/* Left Side: Rank, Ticker, Gap, Timeframe, 200 SMA Indicator, Momentum, PIPE */}
+        <div className="flex items-center gap-1.5 bg-black/85 px-1.5 py-0.5 border border-[#333333] rounded-none flex-wrap">
           {rank != null && <span className="text-gray-500 text-[9px] font-bold">#{rank}</span>}
-          <span className="font-bold text-white text-[10px] uppercase tracking-wider">{ticker}</span>
-          <span className={`font-bold text-[9.5px] ${gapPct != null && gapPct >= 0 ? 'text-[#00ff00]' : 'text-[#ff003c]'}`}>
+          <span className="font-bold text-white text-[10.5px] uppercase tracking-wider">{ticker}</span>
+          <span className={`font-bold text-[9.5px] ${gapPct != null && gapPct >= 0 ? 'text-[#26a69a]' : 'text-[#ef5350]'}`}>
             {gapPct != null ? `${gapPct >= 0 ? '+' : ''}${fmt1(gapPct)}%` : ''}
           </span>
           <span className="text-gray-400 text-[8.5px] border border-gray-800 px-0.5">1m</span>
           
+          {/* 200 SMA Above/Below Indicator */}
+          {sma200Info != null && (
+            <span
+              className={`inline-flex items-center gap-1 px-1 py-[1px] rounded-none text-[8px] font-black uppercase tracking-wider border ${
+                sma200Info.isAbove
+                  ? 'bg-emerald-950/40 text-[#26a69a] border-[#26a69a]/40'
+                  : 'bg-red-950/40 text-[#ef5350] border-[#ef5350]/40'
+              }`}
+              title={`200 SMA: $${sma200Info.value.toFixed(2)} (${sma200Info.diffPct >= 0 ? '+' : ''}${sma200Info.diffPct.toFixed(1)}%)`}
+            >
+              <span>200 SMA</span>
+              <span>{sma200Info.isAbove ? '▲ ABOVE' : '▼ BELOW'}</span>
+            </span>
+          )}
+
           {mom_2m != null && (
             <span
               className={`inline-flex items-center gap-0.5 px-1 py-[1px] rounded-none text-[8px] font-black uppercase tracking-wider border border-black/40 ${getMomStyle(mom_2m)}`}
@@ -366,7 +374,7 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
           )}
 
           {mom_2m == null && hasMomentumSpike && (
-            <span className="inline-flex items-center gap-0.5 px-0.5 py-[1px] rounded-none text-[8px] font-black uppercase tracking-wider bg-[#ff003c]/20 text-[#ff003c] border border-[#ff003c]/30 animate-pulse">
+            <span className="inline-flex items-center gap-0.5 px-0.5 py-[1px] rounded-none text-[8px] font-black uppercase tracking-wider bg-[#ef5350]/20 text-[#ef5350] border border-[#ef5350]/30 animate-pulse">
               MOM +{priceMomentum.toFixed(1)}%
             </span>
           )}
@@ -374,8 +382,8 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
           {pipe?.is_pipe && (
             <span
               className={`text-[8px] px-0.5 py-[1px] rounded-none uppercase tracking-wider border font-bold ${
-                (pipe.deal_score ?? 0) >= 4 ? 'bg-emerald-950/45 text-[#00ff00] border-[#00ff00]/30'
-                : (pipe.deal_score ?? 0) <= 2 ? 'bg-red-950/45 text-[#ff003c] border-[#ff003c]/30'
+                (pipe.deal_score ?? 0) >= 4 ? 'bg-emerald-950/45 text-[#26a69a] border-[#26a69a]/30'
+                : (pipe.deal_score ?? 0) <= 2 ? 'bg-red-950/45 text-[#ef5350] border-[#ef5350]/30'
                 : 'bg-yellow-950/45 text-yellow-400 border-yellow-500/30'
               }`}
             >
@@ -388,10 +396,10 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
         <div className="flex flex-col items-end gap-0.5 bg-black/85 px-1 py-0.5 border border-[#333333] rounded-none text-[9px]">
           {hovered ? (
             <div className="text-[8.5px] text-gray-300 font-bold tracking-tight">
-              O:<span className="text-[#00ff00]">{hovered.o.toFixed(2)}</span>{' '}
-              H:<span className="text-[#00ff00]">{hovered.h.toFixed(2)}</span>{' '}
-              L:<span className="text-[#ff003c]">{hovered.l.toFixed(2)}</span>{' '}
-              C:<span className={hovered.c >= hovered.o ? 'text-[#00ff00]' : 'text-[#ff003c]'}>{hovered.c.toFixed(2)}</span>
+              O:<span className="text-[#26a69a]">{hovered.o.toFixed(2)}</span>{' '}
+              H:<span className="text-[#26a69a]">{hovered.h.toFixed(2)}</span>{' '}
+              L:<span className="text-[#ef5350]">{hovered.l.toFixed(2)}</span>{' '}
+              C:<span className={hovered.c >= hovered.o ? 'text-[#26a69a]' : 'text-[#ef5350]'}>{hovered.c.toFixed(2)}</span>
             </div>
           ) : (
             <div className="flex items-center gap-1.5 text-gray-400">
@@ -404,9 +412,15 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
         </div>
       </div>
 
-      {/* Date overlay in bottom-left corner */}
-      <div className="absolute bottom-1 left-1.5 z-10 pointer-events-none bg-black/85 px-1 py-0.25 border border-[#222222] rounded-none text-[8px] text-gray-500 font-mono select-none">
-        {date}
+      {/* Date & EMA legend overlay in bottom-left corner */}
+      <div className="absolute bottom-1 left-1.5 z-10 pointer-events-none bg-black/85 px-1.5 py-0.5 border border-[#222222] rounded-none text-[8px] text-gray-400 font-mono flex items-center gap-2 select-none">
+        <span>{date}</span>
+        <span className="text-gray-600">|</span>
+        <span className="flex items-center gap-1 font-bold">
+          <span className="text-[#38bdf8]">9</span>
+          <span className="text-[#f59e0b]">20</span>
+          <span className="text-[#ab47bc]">50 EMA</span>
+        </span>
       </div>
 
       {/* Live auto-refresh indicator (bottom-right) */}
@@ -414,9 +428,9 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
         <div className={`absolute bottom-1 right-1.5 z-10 pointer-events-none flex items-center gap-1 bg-black/85 px-1.5 py-0.5 border rounded-none text-[8px] font-mono select-none transition-colors duration-200 ${
           loading
             ? 'border-yellow-500/40 text-yellow-400'
-            : 'border-[#00ff00]/30 text-[#00ff00]'
+            : 'border-[#26a69a]/30 text-[#26a69a]'
         }`}>
-          <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${loading ? 'bg-yellow-400' : 'bg-[#00ff00]'}`} />
+          <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${loading ? 'bg-yellow-400' : 'bg-[#26a69a]'}`} />
           {loading ? 'UPDATING' : `LIVE ${Math.round(autoRefreshMs / 1000)}s`}
         </div>
       )}

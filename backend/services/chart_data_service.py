@@ -296,8 +296,8 @@ def _compute_indicators(bars_df: pd.DataFrame, mini_mode: bool) -> tuple[dict, l
     cum_vol = df["volume"].cumsum()
     df["vwap"] = np.where(cum_vol > 0, cum_pv / cum_vol, typical_price)
 
-    # Compute standard EMAs: 9, 20, 55 per ADR-0006
-    for span in (9, 20, 55):
+    # Compute standard EMAs: 9, 20, 50, 55 per ADR-0006
+    for span in (9, 20, 50, 55):
         df[f"ema_{span}"] = df["close"].ewm(span=span, adjust=False).mean()
 
     # Legacy spans kept for fallback
@@ -351,7 +351,7 @@ def _compute_indicators(bars_df: pd.DataFrame, mini_mode: bool) -> tuple[dict, l
         for ti, o, h, l, c in zip(t, df["open"], df["high"], df["low"], df["close"])
     ]
     vol_colors = [
-        "rgba(34,211,167,0.5)" if c >= o else "rgba(240,77,90,0.5)"
+        "rgba(38, 166, 154, 0.35)" if c >= o else "rgba(239, 83, 80, 0.35)"
         for c, o in zip(df["close"], df["open"])
     ]
     vol_records = [
@@ -364,6 +364,7 @@ def _compute_indicators(bars_df: pd.DataFrame, mini_mode: bool) -> tuple[dict, l
         "volume": vol_records,
         "ema_9": line_series("ema_9"),
         "ema_20": line_series("ema_20"),
+        "ema_50": line_series("ema_50"),
         "ema_55": line_series("ema_55"),
         "vwap": line_series("vwap"),
         "ema_21": line_series("ema_21"),  # legacy alias

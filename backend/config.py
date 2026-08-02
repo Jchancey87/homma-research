@@ -84,15 +84,15 @@ class Settings:
         "SCHWAB_TOKEN_PATH", os.path.expanduser("~/.config/schwab/token.json")
     )
 
-    # LLM (Groq / fast tasks)
-    llm_base_url: str = os.getenv("LLM_BASE_URL", "https://api.groq.com/openai/v1")
+    # LLM (OpenRouter / DeepSeek)
+    llm_base_url: str = os.getenv("LLM_BASE_URL", "https://openrouter.ai/api/v1")
     llm_api_key: str = os.getenv("LLM_API_KEY", "")
-    llm_model: str = os.getenv("LLM_MODEL", "llama-3.3-70b-versatile")
+    llm_model: str = os.getenv("LLM_MODEL", "deepseek/deepseek-v4-flash")
 
-    # LLM (OpenRouter / deep research)
+    # LLM (OpenRouter / Deep Research)
     deep_llm_base_url: str = os.getenv("DEEP_LLM_BASE_URL", "https://openrouter.ai/api/v1")
     deep_llm_api_key: str = os.getenv("DEEP_LLM_API_KEY", os.getenv("DEEP_LLM_KEY", ""))
-    deep_llm_model: str = os.getenv("DEEP_LLM_MODEL", "meta-llama/llama-3.3-70b-instruct")
+    deep_llm_model: str = os.getenv("DEEP_LLM_MODEL", "deepseek/deepseek-v4-flash")
 
     # Vision (Gemini / OpenAI-compatible)
     vision_base_url: str = os.getenv("VISION_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/")

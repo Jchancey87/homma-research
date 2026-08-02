@@ -93,6 +93,15 @@ def _build_scheduler():
         replace_existing=True,
     )
 
+    # ── Job 8: Daily Market Rundown ──────────────────────────────────────────
+    scheduler.add_job(
+        _daily_market_rundown,
+        CronTrigger(day_of_week="mon-fri", hour=8, minute=30, timezone=EASTERN_TZ),  # 8:30 AM ET
+        id="daily_market_rundown",
+        name="Daily Market Rundown",
+        replace_existing=True,
+    )
+
     return scheduler
 
 
@@ -163,85 +172,9 @@ async def _research_cache_refresh() -> None:
 
 
 async def _premarket_gappers_summary() -> None:
-    """Query pre-market gappers from TV, filter by rules, and broadcast via Telegram."""
-    log.info("[scheduler] premarket_gappers_summary starting")
-    try:
-        import pytz
-        import httpx
-        from fastapi_app.config import settings
-        from services.schwab_client import _get_tradingview_candidates
+    """Pre-market gappers summary. Telegram removed — placeholder for future channel."""
+    log.info("[scheduler] premarket_gappers_summary — Telegram removed, skipping dispatch")
 
-        token = settings.telegram_bot_token
-        chat_id = settings.telegram_chat_id
-
-        if not token or not chat_id:
-            log.warning("[scheduler] Telegram not configured, skipping pre-market gappers summary.")
-            return
-
-        # Query candidates (TradingView scan)
-        import asyncio
-        candidates = await asyncio.to_thread(_get_tradingview_candidates)
-
-        gappers = []
-        for sym, val in candidates.items():
-            price = val.get("price") or 0.0
-            change = val.get("change") or 0.0
-            volume = val.get("volume") or 0
-            float_shares = val.get("float_shares")
-
-            # Filters:
-            # Price $1-$20
-            price_ok = 1.00 <= price <= 20.00
-            # Float <100M
-            float_ok = float_shares is None or float_shares < 100_000_000
-            # Volume >50k
-            volume_ok = volume > 50_000
-            # Gap >=10%
-            gap_ok = change >= 10.0
-
-            if price_ok and float_ok and volume_ok and gap_ok:
-                gappers.append((sym, price, change, volume, float_shares))
-
-        gappers.sort(key=lambda x: x[2], reverse=True)
-
-        eastern = EASTERN_TZ
-        date_str = datetime.now(eastern).strftime("%Y-%m-%d")
-
-        message = (
-            "🌅 *PRE-MARKET GAPPERS SUMMARY* 🌅\n"
-            f"Date: {date_str}\n\n"
-        )
-
-        if not gappers:
-            message += "No gappers matching the criteria today."
-        else:
-            for sym, price, change, volume, float_shares in gappers:
-                float_str = f"{float_shares/1_000_000:.1f}M" if float_shares else "N/A"
-                vol_str = f"{volume/1_000:.1f}k" if volume >= 1000 else str(volume)
-                escaped_sym = sym.replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("`", "\\`")
-                message += (
-                    f"• [${escaped_sym}](https://www.tradingview.com/chart/?symbol={sym}) | "
-                    f"Price: ${price:.2f} | "
-                    f"Gap: +{change:.1f}% | "
-                    f"Vol: {vol_str} | "
-                    f"Float: {float_str}\n"
-                )
-
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
-        payload = {
-            "chat_id": chat_id,
-            "text": message,
-            "parse_mode": "Markdown",
-            "disable_web_page_preview": True
-        }
-
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
-
-        log.info("[scheduler] premarket_gappers_summary completed successfully")
-    except Exception as exc:
-        log.exception("[scheduler] premarket_gappers_summary failed: %s", exc)
 
 
 async def _nightly_alerts_backfill() -> None:
@@ -294,7 +227,7 @@ async def _update_continuation_performance() -> None:
 
 
 async def _ingest_rss_feeds() -> None:
-    """Ingest configured RSS feeds, perform auto-curation, and send Telegram alerts."""
+    """Ingest configured RSS feeds and auto-publish all articles to curated feed."""
     log.info("[scheduler] Ingesting RSS feeds starting")
     try:
         from .db import get_pool
@@ -303,14 +236,30 @@ async def _ingest_rss_feeds() -> None:
         pool = get_pool()
         async with pool.acquire() as conn:
             stats = await rss_service.fetch_and_ingest_feeds(conn)
-            sent = await rss_service.send_pending_telegram_alerts(conn)
-            
+
         log.info(
-            "[scheduler] Ingesting RSS feeds done — parsed=%d, auto_approved=%d, alerts_sent=%d",
-            stats.get("processed", 0), stats.get("auto_approved", 0), sent
+            "[scheduler] Ingesting RSS feeds done — parsed=%d, auto_approved=%d",
+            stats.get("processed", 0), stats.get("auto_approved", 0),
         )
     except Exception as exc:
         log.exception("[scheduler] Ingesting RSS feeds failed: %s", exc)
+
+
+async def _daily_market_rundown() -> None:
+    """Generate and cache pre-market Daily Market Rundown for the trading session."""
+    log.info("[scheduler] Daily Market Rundown generation starting")
+    try:
+        from .db import get_pool
+        from services import rundown_service
+
+        pool = get_pool()
+        async with pool.acquire() as conn:
+            res = await rundown_service.generate_and_save_rundown(conn, datetime.now(EASTERN_TZ).date())
+
+        log.info("[scheduler] Daily Market Rundown generation done — ID=%s", res.get("id"))
+    except Exception as exc:
+        log.exception("[scheduler] Daily Market Rundown generation failed: %s", exc)
+
 
 
 # ---------------------------------------------------------------------------
