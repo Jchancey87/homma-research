@@ -29,6 +29,7 @@ from backend.llm.prompts import (
     SEC_DIGEST_SYSTEM,
     RISK_DETECTION_SYSTEM,
     CATALYST_ANALYSIS_SYSTEM,
+    DAILY_RUNDOWN_SYSTEM,
 )
 
 from backend.llm.analyzers.continuation_analyzer import ContinuationAnalyzer
@@ -441,3 +442,20 @@ def get_upcoming_catalyst(ticker: str, context: dict) -> dict:
     prompt_body = f"Ticker: {ticker}\nContext: {context}\nReturn JSON with keys 'upcoming_catalyst' and 'catalyst_date'."
     text = _chat("Extract upcoming catalyst event date.", prompt_body, max_tokens=500, use_deep_client=False)
     return {"upcoming_catalyst": text, "catalyst_date": "N/A"}
+
+
+def get_daily_rundown(date_str: str, market_data: dict, raw_email_text: Optional[str] = None) -> Tuple[str, str]:
+    """
+    Generate structured Daily Market Rundown from aggregated market feeds, top gainers,
+    calendar events, news, and optional morning research email text.
+    """
+    email_section = f"\n\n--- Morning Research Email Text ---\n{raw_email_text}" if raw_email_text else ""
+    user_msg = (
+        f"Target Date: {date_str}\n\n"
+        f"Aggregated Market Data:\n{json.dumps(market_data, indent=2, default=str)}"
+        f"{email_section}\n\n"
+        "Generate the complete Daily Market Rundown in exact Markdown format."
+    )
+    result = _chat(DAILY_RUNDOWN_SYSTEM, user_msg, max_tokens=3000, use_deep_client=True)
+    return result, Config.DEEP_LLM_MODEL
+
