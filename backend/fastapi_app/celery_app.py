@@ -37,7 +37,11 @@ celery_app.conf.update(
         "enrich-watchlist-nightly": {
             "task": "tasks.enrich_watchlist_task",
             "schedule": crontab(hour=1, minute=0),  # 1:00 AM Eastern Time
-        }
+        },
+        "generate-daily-rundown-morning": {
+            "task": "tasks.generate_rundown_task",
+            "schedule": crontab(hour=8, minute=30, day_of_week="1-5"),  # 8:30 AM ET Mon-Fri
+        },
     }
 )
 
