@@ -5,10 +5,11 @@
 ## 🌿 Branch: main (Persistent Core Decisions)
 
 ## 👤 Session
-* **Goal:** Refactor expanded HUD in live gainer screener & fix RVOL / Vol Ratio metrics.
-* **HUD Refactor:** 3-column CSS Grid (`1.2fr 1.2fr 1fr`) in `GainerTable.tsx`. Dynamic top alert banner (Bright Emerald Green `<1.5%` off HOD, Dim Red `>5.0%`). Condensed `font-mono` numbers, muted null states (`—`), inline tooltips.
-* **RVOL Engine Fix:** Ingested TradingView `relative_volume_10d_calc` in `schwab_client.py` & `screener_source.py`. Calculated 10-minute relative volume (`rvol_10m`) and `volume_ratio` in `live_screener.py` from 1m candles. Relabeled UI header to `10m RVOL`.
-* **QA & Deployment:** Tested (`npx tsc`, `vitest`, `pytest` green), committed (`46b8656`), pushed `origin/master`, deployed via `deploy.sh` (PM2 services re-online).
+* **Goal:** Enhance daily chart visuals (mellow candle palette, background ticker watermark, 9/20/50 EMAs, 200 SMA status indicator).
+* **Candle Palette:** Softened bullish/bearish candles to TradingView teal-emerald (`#26a69a`) & soft crimson (`#ef5350`). Softened volume histogram bars to matching translucent fills.
+* **Ticker Watermark:** Added large centered transparent ticker symbol watermark (`text-white/[0.08]`, uppercase bold) across chart views ([MiniSessionChart.tsx](file:///home/jackc/projects/homma-research/frontend/components/MiniSessionChart.tsx), [AlertReviewDetailChart.tsx](file:///home/jackc/projects/homma-research/frontend/components/AlertReviewDetailChart.tsx), [AlertReviewMiniChart.tsx](file:///home/jackc/projects/homma-research/frontend/components/AlertReviewMiniChart.tsx), [alerts/page.tsx](file:///home/jackc/projects/homma-research/frontend/app/alerts/page.tsx)).
+* **9/20/50 EMAs & 200 SMA:** Added `ema_50` to [chart_data_service.py](file:///home/jackc/projects/homma-research/backend/services/chart_data_service.py) & client-side fallback `calcEMA` in [chart.ts](file:///home/jackc/projects/homma-research/frontend/lib/chart.ts) (EMA 9 Sky Blue `#38bdf8`, EMA 20 Gold `#f59e0b`, EMA 50 Purple `#ab47bc`, VWAP White). Added 200 SMA status indicator (`200 SMA ▲ ABOVE` / `▼ BELOW`) in chart headers.
+* **QA & Deployment:** Tested (`npx tsc` 0 errors, `pytest backend/tests/` 312 passed), committed (`6e440af`), pushed `origin/master`, deployed via `deploy.sh` (PM2 services online).
 
 
 
