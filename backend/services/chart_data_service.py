@@ -47,6 +47,32 @@ class ChartDataNotFoundError(Exception):
 # Public API
 # ---------------------------------------------------------------------------
 
+_chart_cache: dict[str, tuple[float, dict]] = {}
+
+
+def clear_chart_cache() -> None:
+    _chart_cache.clear()
+
+
+def _get_cached_payload(key: str) -> Optional[dict]:
+    if key in _chart_cache:
+        ts, payload = _chart_cache[key]
+        if (datetime.now(UTC).timestamp() - ts) < 3.0:
+            return payload
+        else:
+            _chart_cache.pop(key, None)
+    return None
+
+
+def _set_cached_payload(key: str, payload: dict) -> None:
+    _chart_cache[key] = (datetime.now(UTC).timestamp(), payload)
+    if len(_chart_cache) > 200:
+        now = datetime.now(UTC).timestamp()
+        stale = [k for k, (t, _) in _chart_cache.items() if now - t > 10.0]
+        for k in stale:
+            _chart_cache.pop(k, None)
+
+
 async def get_chart_data(
     db: asyncpg.Connection,
     ticker: str,
@@ -58,16 +84,23 @@ async def get_chart_data(
     Charts frontend.
 
     Pipeline:
-      1. Try TimescaleDB (price_history_1min).
-      2. Fall back to Schwab → Polygon → yfinance → prev-day Polygon → prev-day yfinance.
-      3. Compute indicators (EMA / RVOL / ADX / +DI / -DI / ATR; EMA-21 only in mini mode).
-      4. If bars came from an external source, cache them in price_history_1min.
+      1. Try 3s TTL in-memory payload cache.
+      2. Try TimescaleDB (price_history_1min). If bars exist and are fresh (within 60s), use them.
+      3. Fall back to Schwab → Polygon → yfinance → prev-day Polygon → prev-day yfinance.
+      4. Compute indicators.
+      5. If bars came from an external source, cache them in price_history_1min.
 
     Raises:
         ChartDataNotFoundError: when the entire fallback chain returns no data.
     """
     ticker_val = normalize_ticker(ticker)
     date_str = date.isoformat()
+    cache_key = f"{ticker_val}:{date_str}:{mini}"
+
+    cached = _get_cached_payload(cache_key)
+    if cached is not None:
+        return cached
+
     start_dt = EASTERN.localize(datetime.combine(date, time.min))
     end_dt = EASTERN.localize(datetime.combine(date, time.max))
 
@@ -79,21 +112,31 @@ async def get_chart_data(
     bars_df = pd.DataFrame()
     records_to_insert: list[tuple] = []
 
-    if is_today_or_future:
-        # For today/future, always fetch live. Stale DB bars are NOT a
-        # acceptable substitute — surfacing the not-found error is better
-        # than showing a chart that looks live but is frozen hours behind.
+    if db_bars:
+        if is_today_or_future:
+            # If DB bars for today are fresh (last bar within 60 seconds of now),
+            # use DB bars instantly instead of waiting for external HTTP calls.
+            now_utc = datetime.now(UTC)
+            last_bar_time = db_bars[-1]["time"]
+            if last_bar_time.tzinfo is None:
+                last_bar_time = UTC.localize(last_bar_time)
+            else:
+                last_bar_time = last_bar_time.astimezone(UTC)
+
+            if (now_utc - last_bar_time).total_seconds() <= 60:
+                bars_df = pd.DataFrame(db_bars).set_index("time")
+                records_to_insert = []
+            else:
+                bars_df, records_to_insert = await asyncio.to_thread(
+                    _fetch_with_fallback, ticker_val, date_str, start_dt, end_dt
+                )
+        else:
+            bars_df = pd.DataFrame(db_bars).set_index("time")
+            records_to_insert = []
+    else:
         bars_df, records_to_insert = await asyncio.to_thread(
             _fetch_with_fallback, ticker_val, date_str, start_dt, end_dt
         )
-    else:
-        if db_bars:
-            bars_df = pd.DataFrame(db_bars).set_index("time")
-            records_to_insert = []
-        else:
-            bars_df, records_to_insert = await asyncio.to_thread(
-                _fetch_with_fallback, ticker_val, date_str, start_dt, end_dt
-            )
 
     if bars_df.empty:
         raise ChartDataNotFoundError(ticker_val, date_str)
@@ -108,6 +151,7 @@ async def get_chart_data(
         except Exception as exc:
             log.error("Failed to cache fetched chart data in DB: %s", exc)
 
+    _set_cached_payload(cache_key, result)
     return result
 
 

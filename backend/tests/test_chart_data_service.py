@@ -229,6 +229,7 @@ def _df_to_db_rows(df: pd.DataFrame) -> list[dict]:
 
 
 def _install_frozen_clock(monkeypatch):
+    cds.clear_chart_cache()
     monkeypatch.setattr(cds, "datetime", _FrozenClock)
 
 

@@ -117,8 +117,15 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
     }
   }, [ticker, date])
 
-  // Lazy-load via IntersectionObserver
+  // Load immediately on mount for top items, observe with large rootMargin for rest
   useEffect(() => {
+    if (loaded.current) return
+    if (rank != null && rank <= 6) {
+      loaded.current = true
+      fetchData()
+      return
+    }
+
     const el = containerRef.current
     if (!el) return
 
@@ -130,11 +137,11 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
           fetchData()
         }
       },
-      { rootMargin: '200px' }
+      { rootMargin: '600px' }
     )
     observer.observe(el)
     return () => observer.disconnect()
-  }, [fetchData])
+  }, [fetchData, rank])
 
   // Auto-refresh + tick
   useEffect(() => {
@@ -170,7 +177,7 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
 
     const chart = createChart(containerRef.current, {
       layout: { 
-        background: { color: CHART_BG }, 
+        background: { color: 'transparent' }, 
         textColor: TEXT_COLOR, 
         fontSize: 10,
         fontFamily: "Consolas, 'Roboto Mono', Monaco, ui-monospace, monospace"
@@ -331,9 +338,12 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
     >
-      {/* Large Transparent Stock Ticker Symbol Watermark */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 select-none overflow-hidden">
-        <span className="text-6xl sm:text-7xl font-black text-white/[0.08] tracking-widest uppercase scale-125">
+      {/* Chart Canvas */}
+      <div ref={containerRef} className="w-full h-full relative z-0" />
+
+      {/* Large Transparent Stock Ticker Symbol Watermark (z-5 overlay) */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-5 select-none overflow-hidden">
+        <span className="text-6xl sm:text-7xl font-black text-white/[0.12] tracking-widest uppercase scale-125">
           {ticker}
         </span>
       </div>
@@ -447,9 +457,6 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
           <span className="text-[9px]">{error}</span>
         </div>
       )}
-
-      {/* Chart Canvas */}
-      <div ref={containerRef} className="w-full h-full" />
     </div>
   )
 }

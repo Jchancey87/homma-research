@@ -391,7 +391,7 @@ function AlertSessionChart({ ticker, date, alerts, selectedAlertId }: ChartProps
 
     const chart = createChart(containerRef.current, {
       layout: { 
-        background: { color: CHART_BG }, 
+        background: { color: 'transparent' }, 
         textColor: TEXT_COLOR, 
         fontSize: 10,
         fontFamily: "Consolas, 'Roboto Mono', Monaco, ui-monospace, monospace"
@@ -539,14 +539,7 @@ function AlertSessionChart({ ticker, date, alerts, selectedAlertId }: ChartProps
   }
 
   return (
-    <div className="relative w-full h-[350px] font-mono overflow-hidden select-none">
-      {/* Large Transparent Stock Ticker Symbol Watermark */}
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 select-none overflow-hidden">
-        <span className="text-7xl sm:text-8xl font-black text-white/[0.08] tracking-widest uppercase scale-125">
-          {ticker}
-        </span>
-      </div>
-
+    <div className="relative w-full h-[350px] font-mono overflow-hidden select-none bg-black">
       {/* Header Overlay with 200 SMA Badge */}
       <div className="absolute top-2 left-2 z-10 pointer-events-none flex items-center gap-2">
         <span className="font-black text-white text-xs uppercase tracking-wider bg-black/80 px-1.5 py-0.5 border border-[#333333]">
@@ -567,7 +560,16 @@ function AlertSessionChart({ ticker, date, alerts, selectedAlertId }: ChartProps
         )}
       </div>
 
-      <div ref={containerRef} className="w-full h-full bg-black border border-[#262626] overflow-hidden relative z-5" />
+      {/* Chart Canvas */}
+      <div ref={containerRef} className="w-full h-full border border-[#262626] overflow-hidden relative z-0" />
+
+      {/* Large Transparent Stock Ticker Symbol Watermark (z-5 overlay) */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-5 select-none overflow-hidden">
+        <span className="text-7xl sm:text-8xl font-black text-white/[0.12] tracking-widest uppercase scale-125">
+          {ticker}
+        </span>
+      </div>
+
       {data && (
         <button
           onClick={() => chartRef.current?.timeScale().fitContent()}

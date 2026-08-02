@@ -68,7 +68,7 @@ export default function AlertReviewDetailChart({
 
     const chart = createChart(containerRef.current, {
       layout: {
-        background: { color: CHART_BG },
+        background: { color: 'transparent' },
         textColor: TEXT_COLOR,
         fontSize: 11,
         fontFamily: "Consolas, 'Roboto Mono', Monaco, ui-monospace, monospace",
@@ -213,13 +213,6 @@ export default function AlertReviewDetailChart({
     <div className="flex flex-col gap-4 font-mono">
       {/* Chart Canvas */}
       <div className="relative bg-black border border-[#262626] p-2 overflow-hidden select-none">
-        {/* Large Transparent Stock Ticker Symbol Watermark */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 select-none overflow-hidden">
-          <span className="text-7xl sm:text-8xl font-black text-white/[0.08] tracking-widest uppercase scale-125">
-            {symbol}
-          </span>
-        </div>
-
         <div className="relative z-10 flex items-center justify-between px-2 py-1 mb-1 border-b border-[#222222] text-xs">
           <div className="flex items-center gap-3">
             <span className="font-black text-white text-sm uppercase tracking-wider">{symbol}</span>
@@ -245,7 +238,16 @@ export default function AlertReviewDetailChart({
             <span className="text-[#ffffff]">-- VWAP</span>
           </div>
         </div>
-        <div ref={containerRef} className="w-full h-[480px] relative z-10" />
+
+        {/* Chart Canvas */}
+        <div ref={containerRef} className="w-full h-[480px] relative z-0" />
+
+        {/* Large Transparent Stock Ticker Symbol Watermark */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-5 select-none overflow-hidden">
+          <span className="text-7xl sm:text-8xl font-black text-white/[0.12] tracking-widest uppercase scale-125">
+            {symbol}
+          </span>
+        </div>
       </div>
 
       {/* Alert Breakdown & MFE/MAE Table */}
