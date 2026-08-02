@@ -9,6 +9,7 @@ import {
 import MiniSessionChart from '@/components/MiniSessionChart'
 import { BarChart2, RefreshCw, ChevronLeft, ChevronRight, Search, Radio, Wifi, Database, Zap } from 'lucide-react'
 import { addDays, todayET } from '@/lib/format'
+import { isMarketOpen } from '@/lib/market'
 
 // Normalise raw `/api/gainers?date=...` rows into the unified summary shape.
 function mapDbRowsToSummary(rows: Gainer[], date: string): GainerSummary | null {
@@ -205,11 +206,10 @@ function DailyChartsContent() {
 
   useEffect(() => { loadSummary() }, [loadSummary])
 
-  // Live polling — keep the screener list and price values fresh. The live
-  // screener's fast-path overlays WebSocket-streamed prices every ~2s
-  // (FAST_REFRESH_SECONDS). We poll at 3s to stay just behind the backend.
+  // Live polling — keep the screener list and price values fresh during market hours.
   useEffect(() => {
     if (!isLiveMode) return
+    if (!isMarketOpen()) return
     const id = setInterval(() => {
       refreshLiveGainers()
     }, 3_000)

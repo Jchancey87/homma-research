@@ -15,6 +15,7 @@ import {
   dedupSort, shiftChartDataTime, calcEMA,
 } from '@/lib/chart'
 import { fmt1, fmtFloat } from '@/lib/format'
+import { isMarketOpen } from '@/lib/market'
 
 interface Props {
   ticker:   string
@@ -143,9 +144,10 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
     return () => observer.disconnect()
   }, [fetchData, rank])
 
-  // Auto-refresh + tick
+  // Auto-refresh + tick (only run during active trading hours: Mon-Fri 4am-8pm ET)
   useEffect(() => {
     if (!autoRefreshMs || autoRefreshMs <= 0) return
+    if (!isMarketOpen()) return
 
     const TICK_MS = 5_000
     const fetchId = setInterval(() => {
@@ -433,15 +435,23 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
         </span>
       </div>
 
-      {/* Live auto-refresh indicator (bottom-right) */}
+      {/* Live / Market status indicator (bottom-right) */}
       {autoRefreshMs && data && !error && (
         <div className={`absolute bottom-1 right-1.5 z-10 pointer-events-none flex items-center gap-1 bg-black/85 px-1.5 py-0.5 border rounded-none text-[8px] font-mono select-none transition-colors duration-200 ${
-          loading
+          !isMarketOpen()
+            ? 'border-gray-800 text-gray-500'
+            : loading
             ? 'border-yellow-500/40 text-yellow-400'
             : 'border-[#26a69a]/30 text-[#26a69a]'
         }`}>
-          <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${loading ? 'bg-yellow-400' : 'bg-[#26a69a]'}`} />
-          {loading ? 'UPDATING' : `LIVE ${Math.round(autoRefreshMs / 1000)}s`}
+          <span className={`w-1.5 h-1.5 rounded-full ${
+            !isMarketOpen()
+              ? 'bg-gray-600'
+              : loading
+              ? 'bg-yellow-400 animate-pulse'
+              : 'bg-[#26a69a] animate-pulse'
+          }`} />
+          {!isMarketOpen() ? 'MARKET CLOSED' : loading ? 'UPDATING' : `LIVE ${Math.round(autoRefreshMs / 1000)}s`}
         </div>
       )}
 
