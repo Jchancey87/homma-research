@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import {
-  createChart, IChartApi,
+  createChart, IChartApi, ISeriesApi,
   CandlestickSeries, LineSeries, HistogramSeries,
-  CrosshairMode, SeriesMarker, Time, createSeriesMarkers,
+  SeriesMarker, Time, createSeriesMarkers,
 } from 'lightweight-charts'
 import { Loader2, AlertTriangle } from 'lucide-react'
 import { getChartData, AlertReviewSymbol } from '@/lib/api'
 import {
-  CHART_BG, GRID_COLOR, TEXT_COLOR, UP_COLOR, DOWN_COLOR, UP_VOL_COLOR, DOWN_VOL_COLOR,
+  UP_COLOR, DOWN_COLOR, UP_VOL_COLOR, DOWN_VOL_COLOR,
   EMA9_COL, EMA20_COL, EMA50_COL, VWAP_COL,
   ChartData, OhlcBar, LinePt, HistoPt,
-  dedupSort, shiftChartDataTime, calcEMA,
+  dedupSort, shiftChartDataTime, calcEMA, makeChartOptions,
 } from '@/lib/chart'
+import { useChartLegend } from '@/lib/useChartLegend'
+import ChartLegend from '@/components/ChartLegend'
 import { fmt1 } from '@/lib/format'
 
 interface Props {
@@ -31,10 +33,15 @@ export default function AlertReviewMiniChart({
   const [clickStart, setClickStart] = useState<{ x: number; y: number } | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
+  const ema9Ref  = useRef<ISeriesApi<'Line'> | null>(null)
+  const ema20Ref = useRef<ISeriesApi<'Line'> | null>(null)
+  const ema50Ref = useRef<ISeriesApi<'Line'> | null>(null)
+  const vwapRef  = useRef<ISeriesApi<'Line'> | null>(null)
   const [data, setData] = useState<ChartData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const loaded = useRef(false)
+  const { legend, subscribe: subscribeLegend } = useChartLegend()
 
   const sma200Info = useMemo(() => {
     if (!data?.ohlcv || data.ohlcv.length === 0) return null
@@ -98,31 +105,10 @@ export default function AlertReviewMiniChart({
 
     chartRef.current?.remove()
 
-    const chart = createChart(containerRef.current, {
-      layout: {
-        background: { color: 'transparent' },
-        textColor: TEXT_COLOR,
-        fontSize: 10,
-        fontFamily: "Consolas, 'Roboto Mono', Monaco, ui-monospace, monospace",
-      },
-      grid: {
-        vertLines: { color: GRID_COLOR, style: 1 },
-        horzLines: { color: GRID_COLOR, style: 1 },
-      },
-      crosshair: {
-        mode: CrosshairMode.Normal,
-      },
-      rightPriceScale: { borderColor: '#262626', textColor: TEXT_COLOR },
-      timeScale: {
-        borderColor: '#262626',
-        timeVisible: true,
-        secondsVisible: false,
-        fixLeftEdge: true,
-        fixRightEdge: true,
-      },
-      width: containerRef.current.clientWidth,
-      height: height,
-    })
+    const chart = createChart(
+      containerRef.current,
+      makeChartOptions(containerRef.current.clientWidth, height, { fixEdges: true, fontSize: 10 })
+    )
     chartRef.current = chart
 
     const candles = chart.addSeries(CandlestickSeries, {
@@ -158,35 +144,51 @@ export default function AlertReviewMiniChart({
     const localOffset = -new Date().getTimezoneOffset() * 60
 
     const ema9Data = data.ema_9?.length ? data.ema_9 : calcEMA(data.ohlcv, 9)
+    let ema9S: ISeriesApi<'Line'> | null = null
     if (ema9Data.length) {
-      const ema9 = chart.addSeries(LineSeries, {
+      ema9S = chart.addSeries(LineSeries, {
         color: EMA9_COL, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
       })
-      ema9.setData(dedupSort(ema9Data))
+      ema9S.setData(dedupSort(ema9Data))
     }
+    ema9Ref.current = ema9S
 
     const ema20Data = data.ema_20?.length ? data.ema_20 : calcEMA(data.ohlcv, 20)
+    let ema20S: ISeriesApi<'Line'> | null = null
     if (ema20Data.length) {
-      const ema20 = chart.addSeries(LineSeries, {
+      ema20S = chart.addSeries(LineSeries, {
         color: EMA20_COL, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
       })
-      ema20.setData(dedupSort(ema20Data))
+      ema20S.setData(dedupSort(ema20Data))
     }
+    ema20Ref.current = ema20S
 
     const ema50Data = data.ema_50?.length ? data.ema_50 : calcEMA(data.ohlcv, 50)
+    let ema50S: ISeriesApi<'Line'> | null = null
     if (ema50Data.length) {
-      const ema50 = chart.addSeries(LineSeries, {
+      ema50S = chart.addSeries(LineSeries, {
         color: EMA50_COL, lineWidth: 1, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
       })
-      ema50.setData(dedupSort(ema50Data))
+      ema50S.setData(dedupSort(ema50Data))
     }
+    ema50Ref.current = ema50S
 
+    let vwapS: ISeriesApi<'Line'> | null = null
     if (data.vwap?.length) {
-      const vwapSeries = chart.addSeries(LineSeries, {
+      vwapS = chart.addSeries(LineSeries, {
         color: VWAP_COL, lineWidth: 1, lineStyle: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
       })
-      vwapSeries.setData(dedupSort(data.vwap))
+      vwapS.setData(dedupSort(data.vwap))
     }
+    vwapRef.current = vwapS
+
+    // Subscribe crosshair legend
+    subscribeLegend(chart, candles, {
+      ema9:  ema9S  ?? undefined,
+      ema20: ema20S ?? undefined,
+      ema50: ema50S ?? undefined,
+      vwap:  vwapS  ?? undefined,
+    })
 
     // Overlay Alert Markers
     if (alerts?.length && data.ohlcv.length) {
@@ -208,7 +210,8 @@ export default function AlertReviewMiniChart({
             position: 'aboveBar',
             color: color,
             shape: 'arrowDown',
-            text: '',
+            // Phase 4: show tier abbreviation so markers are self-labelled
+            text: a.priority_tier === 'Tier 1' ? 'T1' : a.priority_tier === 'Tier 2' ? 'T2' : 'T3',
           })
         } catch {
           // Ignore invalid timestamps
@@ -230,8 +233,12 @@ export default function AlertReviewMiniChart({
       ro.disconnect()
       chart.remove()
       chartRef.current = null
+      ema9Ref.current  = null
+      ema20Ref.current = null
+      ema50Ref.current = null
+      vwapRef.current  = null
     }
-  }, [data, height, alerts])
+  }, [data, height, alerts, subscribeLegend])
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setClickStart({ x: e.clientX, y: e.clientY })
@@ -256,6 +263,9 @@ export default function AlertReviewMiniChart({
     >
       {/* Chart Canvas */}
       <div ref={containerRef} className="w-full h-full relative z-0" />
+
+      {/* Crosshair OHLCV Legend */}
+      <ChartLegend legend={legend} showEmas={false} showVwap={false} />
 
       {/* Large Transparent Stock Ticker Symbol Watermark (z-5 overlay) */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-5 select-none overflow-hidden">

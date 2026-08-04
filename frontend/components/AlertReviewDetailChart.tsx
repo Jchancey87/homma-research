@@ -2,16 +2,19 @@
 
 import { useMemo, useEffect, useRef, useState } from 'react'
 import {
-  createChart, IChartApi,
+  createChart, IChartApi, ISeriesApi,
   CandlestickSeries, LineSeries, HistogramSeries,
-  CrosshairMode, SeriesMarker, Time, createSeriesMarkers,
+  SeriesMarker, Time, createSeriesMarkers,
 } from 'lightweight-charts'
 import { AlertReviewItem } from '@/lib/api'
 import {
-  CHART_BG, GRID_COLOR, TEXT_COLOR, UP_COLOR, DOWN_COLOR, UP_VOL_COLOR, DOWN_VOL_COLOR,
+  UP_COLOR, DOWN_COLOR, UP_VOL_COLOR, DOWN_VOL_COLOR,
   EMA9_COL, EMA20_COL, EMA50_COL, VWAP_COL,
   ChartData, OhlcBar, LinePt, HistoPt, dedupSort, shiftChartDataTime, calcEMA,
+  makeChartOptions,
 } from '@/lib/chart'
+import { useChartLegend } from '@/lib/useChartLegend'
+import ChartLegend from '@/components/ChartLegend'
 import { Zap } from 'lucide-react'
 
 interface Props {
@@ -29,9 +32,14 @@ export default function AlertReviewDetailChart({
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
+  const ema9Ref  = useRef<ISeriesApi<'Line'> | null>(null)
+  const ema20Ref = useRef<ISeriesApi<'Line'> | null>(null)
+  const ema50Ref = useRef<ISeriesApi<'Line'> | null>(null)
+  const vwapRef  = useRef<ISeriesApi<'Line'> | null>(null)
   const [selectedAlert, setSelectedAlert] = useState<AlertReviewItem | null>(
     alerts.length > 0 ? alerts[0] : null
   )
+  const { legend, subscribe: subscribeLegend } = useChartLegend()
 
   const sma200Info = useMemo(() => {
     if (!chartData?.ohlcv) return null
@@ -66,27 +74,10 @@ export default function AlertReviewDetailChart({
     }
     const data = shiftChartDataTime(rawData as unknown as ChartData, localOffset)
 
-    const chart = createChart(containerRef.current, {
-      layout: {
-        background: { color: 'transparent' },
-        textColor: TEXT_COLOR,
-        fontSize: 11,
-        fontFamily: "Consolas, 'Roboto Mono', Monaco, ui-monospace, monospace",
-      },
-      grid: {
-        vertLines: { color: GRID_COLOR, style: 1 },
-        horzLines: { color: GRID_COLOR, style: 1 },
-      },
-      crosshair: { mode: CrosshairMode.Normal },
-      rightPriceScale: { borderColor: '#262626', textColor: TEXT_COLOR },
-      timeScale: {
-        borderColor: '#262626',
-        timeVisible: true,
-        secondsVisible: false,
-      },
-      width: containerRef.current.clientWidth,
-      height: 480,
-    })
+    const chart = createChart(
+      containerRef.current,
+      makeChartOptions(containerRef.current.clientWidth, 480)
+    )
     chartRef.current = chart
 
     const candles = chart.addSeries(CandlestickSeries, {
@@ -120,29 +111,57 @@ export default function AlertReviewDetailChart({
 
     // Indicators: EMA 9, 20, 50, VWAP
     const ema9Data = data.ema_9?.length ? data.ema_9 : calcEMA(data.ohlcv, 9)
+    let ema9S: ISeriesApi<'Line'> | null = null
     if (ema9Data.length) {
-      const s = chart.addSeries(LineSeries, { color: EMA9_COL, lineWidth: 1, title: 'EMA 9' })
-      s.setData(dedupSort(ema9Data))
+      ema9S = chart.addSeries(LineSeries, {
+        color: EMA9_COL, lineWidth: 1,
+        priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+      })
+      ema9S.setData(dedupSort(ema9Data))
     }
+    ema9Ref.current = ema9S
 
     const ema20Data = data.ema_20?.length ? data.ema_20 : calcEMA(data.ohlcv, 20)
+    let ema20S: ISeriesApi<'Line'> | null = null
     if (ema20Data.length) {
-      const s = chart.addSeries(LineSeries, { color: EMA20_COL, lineWidth: 1, title: 'EMA 20' })
-      s.setData(dedupSort(ema20Data))
+      ema20S = chart.addSeries(LineSeries, {
+        color: EMA20_COL, lineWidth: 1,
+        priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+      })
+      ema20S.setData(dedupSort(ema20Data))
     }
+    ema20Ref.current = ema20S
 
     const ema50Data = data.ema_50?.length ? data.ema_50 : calcEMA(data.ohlcv, 50)
+    let ema50S: ISeriesApi<'Line'> | null = null
     if (ema50Data.length) {
-      const s = chart.addSeries(LineSeries, { color: EMA50_COL, lineWidth: 1, title: 'EMA 50' })
-      s.setData(dedupSort(ema50Data))
+      ema50S = chart.addSeries(LineSeries, {
+        color: EMA50_COL, lineWidth: 1,
+        priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+      })
+      ema50S.setData(dedupSort(ema50Data))
     }
+    ema50Ref.current = ema50S
 
+    let vwapS: ISeriesApi<'Line'> | null = null
     if (data.vwap?.length) {
-      const s = chart.addSeries(LineSeries, { color: VWAP_COL, lineWidth: 1, lineStyle: 2, title: 'VWAP' })
-      s.setData(dedupSort(data.vwap))
+      vwapS = chart.addSeries(LineSeries, {
+        color: VWAP_COL, lineWidth: 1, lineStyle: 2,
+        priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+      })
+      vwapS.setData(dedupSort(data.vwap))
     }
+    vwapRef.current = vwapS
 
-    // Set Alert Markers
+    // Subscribe crosshair legend
+    subscribeLegend(chart, candles, {
+      ema9:  ema9S  ?? undefined,
+      ema20: ema20S ?? undefined,
+      ema50: ema50S ?? undefined,
+      vwap:  vwapS  ?? undefined,
+    })
+
+    // Set Alert Markers — Phase 4: include alert type + tier in text
     if (alerts?.length && data.ohlcv.length) {
       const markers: SeriesMarker<Time>[] = []
       alerts.forEach(a => {
@@ -156,13 +175,14 @@ export default function AlertReviewDetailChart({
               : a.priority_tier === 'Tier 2'
               ? '#f59e0b'
               : '#38bdf8'
+          const tierAbbr = a.priority_tier === 'Tier 1' ? 'T1' : a.priority_tier === 'Tier 2' ? 'T2' : 'T3'
 
           markers.push({
             time: tsSec as Time,
             position: 'aboveBar',
             color: color,
             shape: 'arrowDown',
-            text: `${a.alert_type} (${a.priority_tier})`,
+            text: `${a.alert_type} ${tierAbbr}`,
           })
         } catch {
           // ignore
@@ -173,15 +193,15 @@ export default function AlertReviewDetailChart({
       }
     }
 
-    // Price lines for selected Tier 1 alert (Entry & Stop lines)
-    if (selectedAlert && selectedAlert.priority_tier === 'Tier 1') {
+    // Price lines for selected alert (any tier) — Phase 4: expanded from Tier 1 only
+    if (selectedAlert) {
       if (selectedAlert.trigger_price) {
         candles.createPriceLine({
           price: selectedAlert.trigger_price,
           color: '#26a69a',
           lineWidth: 1,
           lineStyle: 0,
-          title: `Trigger $${selectedAlert.trigger_price.toFixed(2)}`,
+          title: `Entry $${selectedAlert.trigger_price.toFixed(2)}`,
         })
       }
       if (selectedAlert.stop_price) {
@@ -206,8 +226,12 @@ export default function AlertReviewDetailChart({
       ro.disconnect()
       chart.remove()
       chartRef.current = null
+      ema9Ref.current  = null
+      ema20Ref.current = null
+      ema50Ref.current = null
+      vwapRef.current  = null
     }
-  }, [chartData, alerts, selectedAlert])
+  }, [chartData, alerts, selectedAlert, subscribeLegend])
 
   return (
     <div className="flex flex-col gap-4 font-mono">
@@ -241,6 +265,9 @@ export default function AlertReviewDetailChart({
 
         {/* Chart Canvas */}
         <div ref={containerRef} className="w-full h-[480px] relative z-0" />
+
+        {/* Crosshair OHLCV + Indicator Legend */}
+        <ChartLegend legend={legend} />
 
         {/* Large Transparent Stock Ticker Symbol Watermark */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-5 select-none overflow-hidden">

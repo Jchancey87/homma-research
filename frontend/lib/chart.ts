@@ -45,18 +45,80 @@ export interface ChartData {
 }
 
 export const CHART_BG       = '#000000'
-export const GRID_COLOR     = '#222222' // Muted dark grid
+export const GRID_COLOR     = '#1a1a1a' // Subtler grid for cleaner look
 export const TEXT_COLOR     = '#8e8e8e'
 export const UP_COLOR       = '#26a69a' // Mellow bullish teal-green (TradingView standard)
 export const DOWN_COLOR     = '#ef5350' // Mellow bearish soft crimson (TradingView standard)
-export const UP_VOL_COLOR   = 'rgba(38, 166, 154, 0.35)'
-export const DOWN_VOL_COLOR = 'rgba(239, 83, 80, 0.35)'
+export const UP_VOL_COLOR   = 'rgba(38, 166, 154, 0.30)'
+export const DOWN_VOL_COLOR = 'rgba(239, 83, 80, 0.30)'
 export const EMA9_COL       = '#38bdf8' // Sky Blue (EMA 9)
 export const EMA20_COL      = '#f59e0b' // Amber / Gold (EMA 20)
 export const EMA50_COL      = '#ab47bc' // Purple (EMA 50)
 export const EMA21_COL      = '#f59e0b'
 export const EMA100_COL     = '#ec4899' // Pink
-export const VWAP_COL       = '#ffffff' // White (VWAP)
+export const VWAP_COL       = 'rgba(255,255,255,0.75)' // White semi-transparent (VWAP)
+
+/** Shared monospace font stack used across all chart overlays. */
+export const CHART_FONT = "JetBrains Mono, Consolas, 'Roboto Mono', ui-monospace, monospace"
+
+/**
+ * Factory for a consistent `createChart()` options object.
+ * All charts should call this so layout, grid, crosshair, and scale
+ * tokens are guaranteed identical across the whole dashboard.
+ *
+ * @param width  Initial canvas width in px
+ * @param height Canvas height in px
+ * @param opts   Per-call overrides (e.g. fixEdges for mini charts)
+ */
+export function makeChartOptions(
+  width: number,
+  height: number,
+  opts: { fixEdges?: boolean; fontSize?: number } = {}
+) {
+  const { fixEdges = false, fontSize = 11 } = opts
+  return {
+    layout: {
+      background:  { color: 'transparent' },
+      textColor:   TEXT_COLOR,
+      fontSize,
+      fontFamily:  CHART_FONT,
+    },
+    grid: {
+      vertLines: { color: GRID_COLOR, style: 0 },
+      horzLines: { color: GRID_COLOR, style: 0 },
+    },
+    crosshair: {
+      // Solid thin lines — matches TradingView's default
+      vertLine: {
+        color:                '#444444',
+        width:                1 as const,
+        style:                0 as const,
+        labelBackgroundColor: '#1a1a1a',
+      },
+      horzLine: {
+        color:                '#444444',
+        width:                1 as const,
+        style:                0 as const,
+        labelBackgroundColor: '#1a1a1a',
+      },
+    },
+    rightPriceScale: {
+      borderColor: '#262626',
+      textColor:   TEXT_COLOR,
+    },
+    timeScale: {
+      borderColor:    '#262626',
+      timeVisible:    true,
+      secondsVisible: false,
+      fixLeftEdge:    fixEdges,
+      fixRightEdge:   fixEdges,
+    },
+    handleScroll: true,
+    handleScale:  true,
+    width,
+    height,
+  }
+}
 
 /**
  * Sort ascending by time and remove duplicate timestamps (keep last occurrence).

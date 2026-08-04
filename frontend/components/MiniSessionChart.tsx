@@ -3,17 +3,18 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import {
   createChart, IChartApi, ISeriesApi,
   CandlestickSeries, LineSeries, HistogramSeries,
-  CrosshairMode,
 } from 'lightweight-charts'
 import { Loader2, AlertTriangle } from 'lucide-react'
 import { PipeScanResult, getLivePrices, getChartData } from '@/lib/api'
 import { getMomStyle, fmtMom } from '@/lib/momentum'
 import {
-  CHART_BG, GRID_COLOR, TEXT_COLOR, UP_COLOR, DOWN_COLOR, UP_VOL_COLOR, DOWN_VOL_COLOR,
+  UP_COLOR, DOWN_COLOR, UP_VOL_COLOR, DOWN_VOL_COLOR,
   EMA9_COL, EMA20_COL, EMA50_COL, VWAP_COL,
   ChartData, OhlcBar, LinePt, HistoPt,
-  dedupSort, shiftChartDataTime, calcEMA,
+  dedupSort, shiftChartDataTime, calcEMA, makeChartOptions,
 } from '@/lib/chart'
+import { useChartLegend } from '@/lib/useChartLegend'
+import ChartLegend from '@/components/ChartLegend'
 import { fmt1, fmtFloat } from '@/lib/format'
 import { isMarketOpen } from '@/lib/market'
 
@@ -36,11 +37,15 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
   const containerRef = useRef<HTMLDivElement>(null)
   const chartRef     = useRef<IChartApi | null>(null)
   const candlesRef   = useRef<ISeriesApi<'Candlestick'> | null>(null)
+  const ema9Ref      = useRef<ISeriesApi<'Line'> | null>(null)
+  const ema20Ref     = useRef<ISeriesApi<'Line'> | null>(null)
+  const ema50Ref     = useRef<ISeriesApi<'Line'> | null>(null)
+  const vwapRef      = useRef<ISeriesApi<'Line'> | null>(null)
   const [data,    setData]    = useState<ChartData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string | null>(null)
-  const [hovered, setHovered] = useState<{ o: number; h: number; l: number; c: number } | null>(null)
   const loaded = useRef(false)
+  const { legend, subscribe: subscribeLegend } = useChartLegend()
 
   // Ref mirror of `data` so the tick callback can read the latest bars
   // without recapturing `data` in its closure.
@@ -177,45 +182,10 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
 
     chartRef.current?.remove()
 
-    const chart = createChart(containerRef.current, {
-      layout: { 
-        background: { color: 'transparent' }, 
-        textColor: TEXT_COLOR, 
-        fontSize: 10,
-        fontFamily: "Consolas, 'Roboto Mono', Monaco, ui-monospace, monospace"
-      },
-      grid: { 
-        vertLines: { color: GRID_COLOR, style: 1 }, 
-        horzLines: { color: GRID_COLOR, style: 1 } 
-      },
-      crosshair: { 
-        mode: CrosshairMode.Normal,
-        vertLine: {
-          color: '#555555',
-          width: 1,
-          style: 1,
-          labelBackgroundColor: UP_COLOR,
-        },
-        horzLine: {
-          color: '#555555',
-          width: 1,
-          style: 1,
-          labelBackgroundColor: DOWN_COLOR,
-        }
-      },
-      rightPriceScale: { borderColor: '#262626', textColor: TEXT_COLOR },
-      timeScale: {
-        borderColor:     '#262626',
-        timeVisible:     true,
-        secondsVisible:  false,
-        fixLeftEdge:     true,
-        fixRightEdge:    true,
-      },
-      handleScroll: true,
-      handleScale:  true,
-      width:  containerRef.current.clientWidth,
-      height: height,
-    })
+    const chart = createChart(
+      containerRef.current,
+      makeChartOptions(containerRef.current.clientWidth, height, { fixEdges: true, fontSize: 10 })
+    )
     chartRef.current = chart
 
     // Candles with mellow colors
@@ -252,55 +222,61 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
 
     // EMA 9 (Sky Blue)
     const ema9Data = data.ema_9?.length ? data.ema_9 : calcEMA(data.ohlcv, 9)
+    let ema9S: ISeriesApi<'Line'> | null = null
     if (ema9Data.length) {
-      const ema9 = chart.addSeries(LineSeries, {
+      ema9S = chart.addSeries(LineSeries, {
         color: EMA9_COL, lineWidth: 1,
         priceLineVisible: false, lastValueVisible: false,
         crosshairMarkerVisible: false,
       })
-      ema9.setData(dedupSort(ema9Data))
+      ema9S.setData(dedupSort(ema9Data))
     }
+    ema9Ref.current = ema9S
 
     // EMA 20 (Amber / Gold)
     const ema20Data = data.ema_20?.length ? data.ema_20 : calcEMA(data.ohlcv, 20)
+    let ema20S: ISeriesApi<'Line'> | null = null
     if (ema20Data.length) {
-      const ema20 = chart.addSeries(LineSeries, {
+      ema20S = chart.addSeries(LineSeries, {
         color: EMA20_COL, lineWidth: 1,
         priceLineVisible: false, lastValueVisible: false,
         crosshairMarkerVisible: false,
       })
-      ema20.setData(dedupSort(ema20Data))
+      ema20S.setData(dedupSort(ema20Data))
     }
+    ema20Ref.current = ema20S
 
     // EMA 50 (Purple)
     const ema50Data = data.ema_50?.length ? data.ema_50 : calcEMA(data.ohlcv, 50)
+    let ema50S: ISeriesApi<'Line'> | null = null
     if (ema50Data.length) {
-      const ema50 = chart.addSeries(LineSeries, {
+      ema50S = chart.addSeries(LineSeries, {
         color: EMA50_COL, lineWidth: 1,
         priceLineVisible: false, lastValueVisible: false,
         crosshairMarkerVisible: false,
       })
-      ema50.setData(dedupSort(ema50Data))
+      ema50S.setData(dedupSort(ema50Data))
     }
+    ema50Ref.current = ema50S
 
-    // VWAP (white dashed)
+    // VWAP (semi-transparent white, dashed)
+    let vwapS: ISeriesApi<'Line'> | null = null
     if (data.vwap?.length) {
-      const vwapSeries = chart.addSeries(LineSeries, {
+      vwapS = chart.addSeries(LineSeries, {
         color: VWAP_COL, lineWidth: 1, lineStyle: 2,
         priceLineVisible: false, lastValueVisible: false,
         crosshairMarkerVisible: false,
       })
-      vwapSeries.setData(dedupSort(data.vwap))
+      vwapS.setData(dedupSort(data.vwap))
     }
+    vwapRef.current = vwapS
 
-    // Crosshair readout
-    chart.subscribeCrosshairMove((param) => {
-      if (param.time) {
-        const bar = param.seriesData.get(candles) as OhlcBar | undefined
-        if (bar) setHovered({ o: bar.open, h: bar.high, l: bar.low, c: bar.close })
-      } else {
-        setHovered(null)
-      }
+    // Subscribe crosshair legend
+    subscribeLegend(chart, candles, {
+      ema9:  ema9S  ?? undefined,
+      ema20: ema20S ?? undefined,
+      ema50: ema50S ?? undefined,
+      vwap:  vwapS  ?? undefined,
     })
 
     chart.timeScale().fitContent()
@@ -316,8 +292,12 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
       chart.remove()
       chartRef.current = null
       candlesRef.current = null
+      ema9Ref.current   = null
+      ema20Ref.current  = null
+      ema50Ref.current  = null
+      vwapRef.current   = null
     }
-  }, [data, height])
+  }, [data, height, subscribeLegend])
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setClickStart({ x: e.clientX, y: e.clientY })
@@ -342,6 +322,9 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
     >
       {/* Chart Canvas */}
       <div ref={containerRef} className="w-full h-full relative z-0" />
+
+      {/* Crosshair OHLCV Legend */}
+      <ChartLegend legend={legend} />
 
       {/* Large Transparent Stock Ticker Symbol Watermark (z-5 overlay) */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-5 select-none overflow-hidden">
@@ -404,23 +387,14 @@ export default function MiniSessionChart({ ticker, date, gapPct, float: floatSha
           )}
         </div>
 
-        {/* Right Side: Data stats / Hover coordinates */}
+        {/* Right Side: Data stats */}
         <div className="flex flex-col items-end gap-0.5 bg-black/85 px-1 py-0.5 border border-[#333333] rounded-none text-[9px]">
-          {hovered ? (
-            <div className="text-[8.5px] text-gray-300 font-bold tracking-tight">
-              O:<span className="text-[#26a69a]">{hovered.o.toFixed(2)}</span>{' '}
-              H:<span className="text-[#26a69a]">{hovered.h.toFixed(2)}</span>{' '}
-              L:<span className="text-[#ef5350]">{hovered.l.toFixed(2)}</span>{' '}
-              C:<span className={hovered.c >= hovered.o ? 'text-[#26a69a]' : 'text-[#ef5350]'}>{hovered.c.toFixed(2)}</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5 text-gray-400">
-              <span>FLT:{fmtFloat(floatShares)}</span>
-              {rvol != null && (
-                <span className={rvol >= 5 ? 'text-[#fff000] font-bold' : ''}>RV:{fmt1(rvol)}x</span>
-              )}
-            </div>
-          )}
+          <div className="flex items-center gap-1.5 text-gray-400">
+            <span>FLT:{fmtFloat(floatShares)}</span>
+            {rvol != null && (
+              <span className={rvol >= 5 ? 'text-[#fff000] font-bold' : ''}>RV:{fmt1(rvol)}x</span>
+            )}
+          </div>
         </div>
       </div>
 
