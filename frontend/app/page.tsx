@@ -8,14 +8,26 @@ import EconomicCalendar from '@/components/EconomicCalendar'
 import HelpGuide from '@/components/HelpGuide'
 import DashboardHeader from '@/components/DashboardHeader'
 import { Panel, PanelLabel } from '@/components/Panel'
-import { getContinuationPicks, ContinuationPick } from '@/lib/api'
+import { getContinuationPicks, ContinuationPick, getMTFScanner, MTFScannerData } from '@/lib/api'
+import { MTFScannerWidget } from '@/components/MTFScannerWidget'
 import {
   TrendingUp, RotateCcw,
   ArrowRight, CalendarDays,
-  Bell, Zap,
+  Bell, Zap, Activity
 } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
+
+// ── MTF S/R Momentum Scanner ───────────────────────────────────────────────
+
+async function MTFScannerPanel() {
+  let scannerData: MTFScannerData = { timestamp: null, in_play: [] }
+  try {
+    scannerData = await getMTFScanner()
+  } catch {}
+
+  return <MTFScannerWidget items={scannerData.in_play} />
+}
 
 // ── Dashboard Header ──────────────────────────────────────────────────────────
 
@@ -97,6 +109,9 @@ export default function DashboardPage() {
 
       {/* ── Command Summary Strip (4 Overview Cards) ── */}
       <CommandSummaryStrip />
+
+      {/* ── MTF S/R Momentum Scanner Widget ── */}
+      <MTFScannerPanel />
 
 
       {/* ── Row 1: Live screener (full width) ── */}
