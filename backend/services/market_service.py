@@ -69,3 +69,20 @@ async def fetch_breadth_data(quotes_map: dict) -> dict:
         "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "cache_ttl_s": BREADTH_TTL,
     }
+
+
+# In-memory store for active MTF scanner items
+_mtf_scanner_cache: dict = {"timestamp": None, "in_play": []}
+
+
+def set_mtf_scanner_state(in_play_items: list):
+    """Update active MTF scanner items from background streaming task."""
+    import time
+    _mtf_scanner_cache["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    _mtf_scanner_cache["in_play"] = in_play_items
+
+
+async def get_mtf_scanner_state() -> dict:
+    """Retrieve active MTF scanner state."""
+    return _mtf_scanner_cache
+

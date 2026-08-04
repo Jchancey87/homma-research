@@ -96,6 +96,16 @@ async def market_breadth():
     return data
 
 
+# ---------------------------------------------------------------------------
+# GET /market/mtf-scanner
+# ---------------------------------------------------------------------------
+
+@router.get("/mtf-scanner")
+async def get_mtf_scanner_results():
+    """Get current MTF S/R Momentum Scanner active tickers (score >= 50)."""
+    from services.market_service import get_mtf_scanner_state
+    return await get_mtf_scanner_state()
+
 
 # ---------------------------------------------------------------------------
 # GET /market/calendar
@@ -634,4 +644,6 @@ async def stocktwits_sentiment(ticker: str):
     from validation import normalize_ticker
     sym = normalize_ticker(ticker)
     return await asyncio.to_thread(get_stocktwits_sentiment, sym)
+
+
 

@@ -2,6 +2,17 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-08-04] Multi-Timeframe S/R Momentum Scanner Architecture Alignment
+
+### Summary
+* Completed `/grill-with-docs` domain modeling session for Multi-Timeframe S/R Momentum Scanner.
+* Resolved domain terminology: defined canonical term `MTF_IN_PLAY` in [CONTEXT.md](file:///home/jackc/projects/homma-research/CONTEXT.md) to distinguish dynamic scanner score state ($\ge 50$) from session-scoped `AIP` (Already In Play) alert suppression.
+* Unified data provider strategy: locked in Schwab API (`schwab_client.py` and `stream_client.py`) for all 3 timeframes (Daily, 5m, 1m).
+* Rebalanced confluence scoring matrix to a clean 100-point ceiling: Tier 1 Daily (+20), Tier 2 5-min (+15), Coincident Bonus (+10), Touch Count (+5), RVOL (+20), EMA Cross (+10), VWAP Alignment (+10), RSI (+5), ATR (+5).
+* Delivery architecture: Stream 60-second MTF Scanner state updates via existing Redis WebSocket infrastructure (`/ws/alerts`).
+* Authored architectural decision record in [ADR 0007](file:///home/jackc/projects/homma-research/docs/adr/0007-mtf-sr-momentum-scanner.md).
+
+
 ## [2026-07-26] Alert Review System (/alert-review) Refactor: Top 10 Gainers & Searchable Stock View
 
 ### Summary

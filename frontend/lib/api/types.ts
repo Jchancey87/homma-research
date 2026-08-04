@@ -57,6 +57,24 @@ export interface LatestGainersSummary {
   gainers: Array<Omit<Gainer, 'id' | 'date' | 'created_at' | 'market_cap'>>
 }
 
+export interface MTFInPlayItem {
+  ticker: string
+  score: number
+  tier: 'HIGH_CONVICTION' | 'IN_PLAY' | 'NORMAL'
+  mtf_in_play: boolean
+  high_conviction: boolean
+  is_coincident: boolean
+  price: number
+  sr_price: number | null
+  sr_type: string
+  signals: string[]
+}
+
+export interface MTFScannerData {
+  timestamp: string | null
+  in_play: MTFInPlayItem[]
+}
+
 export interface GainerRow {
   ticker: string
   gap_pct: number | null

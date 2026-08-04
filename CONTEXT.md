@@ -14,6 +14,9 @@ This document provides concise definitions of project-specific terms to ensure a
 * **Trading Session:** A single market day, divided into three phases (all US/Eastern): Pre-market 04:00–09:30, Regular 09:30–16:00, Post-market 16:00–20:00. AIP state, RVOL baselines, and HOD are all scoped per Trading Session and reset at the start of each new one.
   _Avoid_: "session" alone (ambiguous with agent session in AGENT_MEMORY.md)
 
+* **MTF_IN_PLAY (Multi-Timeframe In Play):** A dynamic scanner state assigned to a symbol when its Multi-Timeframe S/R Momentum score reaches 60+. Distinct from the session-scoped AIP (Already In Play) alert-suppression flag.
+  _Avoid_: "In Play" (without specifying MTF context) or "AIP"
+
 * **HOD / NEAR_HOD_RADAR:** High of Day. `NEAR_HOD_RADAR` fires when a 1m candle completes with close exceeding the previous Trading Session high with RVOL >= 1.5.
 * **VWAP Hysteresis:** State machine ('above' / 'below') tracking price relative to Volume Weighted Average Price with a 2.0% buffer to eliminate chatter on noise ticks.
 

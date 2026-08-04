@@ -20,7 +20,8 @@ from validation import normalize_ticker
 from validation.schemas import SignalCreateBody
 
 log = logging.getLogger(__name__)
-router = APIRouter(tags=["market_data"])
+router = APIRouter(prefix="/api", tags=["market_data"])
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════

@@ -138,6 +138,9 @@ class SchwabStreamer:
         self.config_service = "placeholder"
         self.fired_alerts_session = defaultdict(list)
         self.ticker_group_ids = {}
+        self.mtf_sr_cache = {}          # symbol -> dict of computed S/R levels
+        self.mtf_in_play_active = []    # list of active MTF_IN_PLAY dicts
+
 
         
     def _volume_tod_multiplier(self, now_et=None):
@@ -1166,6 +1169,7 @@ class SchwabStreamer:
         # 6. Launch background tasks
         asyncio.create_task(self.update_subscriptions())
         asyncio.create_task(self.poll_alert_config())
+        asyncio.create_task(self.run_mtf_scanner_loop())
         
         # 7. Start the stream loop (runs indefinitely)
         logger.info("Starting Level 1 streaming client...")
@@ -1211,6 +1215,85 @@ class SchwabStreamer:
 
         if last_price >= resume_price * 1.01 and current_candle_vol >= 1.5 * max(avg_20_vol, 1):
             await self.check_and_fire_alert(symbol, last_price, total_volume, rvol, gap_pct, "HALT_RESUME_MOMENTUM", high_price=last_price, low_price=resume_price)
+
+    async def run_mtf_scanner_loop(self):
+        """
+        Background task running every 60 seconds to compute MTF S/R levels and score active symbols.
+        Publishes results to Redis 'screener:alerts' / 'screener:mtf_scanner' and updates market_service cache.
+        """
+        from services.mtf_sr_service import compute_sr_levels, score_mtf_momentum
+        try:
+            from services.market_service import set_mtf_scanner_state
+        except ImportError:
+            set_mtf_scanner_state = None
+
+        logger.info("Starting Multi-Timeframe S/R Scanner loop (60s interval)...")
+        await asyncio.sleep(10)  # Initial warm-up delay
+
+        while True:
+            try:
+                symbols_to_scan = list(self.subscribed_symbols)
+                in_play_results = []
+
+                for symbol in symbols_to_scan:
+                    lp = self.last_known_price.get(symbol, 0.0)
+                    if lp <= 0:
+                        continue
+
+                    bars_1m = self.completed_bars_1m.get(symbol, [])
+                    if not bars_1m or len(bars_1m) < 5:
+                        continue
+
+                    # Synthetic / cached 5-min bars from 1-min completed bars
+                    bars_5m = []
+                    for i in range(0, len(bars_1m), 5):
+                        chunk = bars_1m[i:i+5]
+                        if chunk:
+                            bars_5m.append({
+                                'open': chunk[0]['open'],
+                                'high': max(c.get('high', c['close']) for c in chunk),
+                                'low': min(c.get('low', c['close']) for c in chunk),
+                                'close': chunk[-1]['close'],
+                                'volume': sum(c.get('volume', 0) for c in chunk)
+                            })
+
+                    # Compute or retrieve S/R levels
+                    if symbol not in self.mtf_sr_cache:
+                        fund = self.fundamentals_cache.get(symbol, {})
+                        daily_candles = [
+                            {'close': fund.get('yesterday_close', lp * 0.95), 'high': fund.get('yesterday_high', lp * 1.02), 'low': lp * 0.90}
+                        ] * 15
+                        self.mtf_sr_cache[symbol] = compute_sr_levels(daily_candles, bars_5m)
+
+                    sr_levels = self.mtf_sr_cache[symbol]
+                    res = score_mtf_momentum(symbol, sr_levels, bars_1m, lp)
+
+                    if res['mtf_in_play']:
+                        in_play_results.append(res)
+
+                # Sort by score descending
+                in_play_results.sort(key=lambda x: x['score'], reverse=True)
+                self.mtf_in_play_active = in_play_results
+
+                if set_mtf_scanner_state:
+                    set_mtf_scanner_state(in_play_results)
+
+                # Publish payload to Redis
+                try:
+                    payload = {
+                        'type': 'MTF_SCANNER_UPDATE',
+                        'timestamp': time.time(),
+                        'in_play': in_play_results
+                    }
+                    redis_client.publish('screener:alerts', json.dumps(payload))
+                except Exception as pub_err:
+                    logger.warning(f"Failed to publish MTF scanner state to Redis: {pub_err}")
+
+            except Exception as e:
+                logger.error(f"Error in MTF scanner loop iteration: {e}")
+
+            await asyncio.sleep(60)
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')

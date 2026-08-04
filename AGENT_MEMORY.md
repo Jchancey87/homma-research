@@ -5,11 +5,10 @@
 ## 🌿 Branch: main (Persistent Core Decisions)
 
 ## 👤 Session
-* **Goal:** Enhance daily chart visuals (mellow candle palette, background ticker watermark, 9/20/50 EMAs, 200 SMA status indicator).
-* **Candle Palette:** Softened bullish/bearish candles to TradingView teal-emerald (`#26a69a`) & soft crimson (`#ef5350`). Softened volume histogram bars to matching translucent fills.
-* **Ticker Watermark:** Added large centered transparent ticker symbol watermark (`text-white/[0.08]`, uppercase bold) across chart views ([MiniSessionChart.tsx](file:///home/jackc/projects/homma-research/frontend/components/MiniSessionChart.tsx), [AlertReviewDetailChart.tsx](file:///home/jackc/projects/homma-research/frontend/components/AlertReviewDetailChart.tsx), [AlertReviewMiniChart.tsx](file:///home/jackc/projects/homma-research/frontend/components/AlertReviewMiniChart.tsx), [alerts/page.tsx](file:///home/jackc/projects/homma-research/frontend/app/alerts/page.tsx)).
-* **9/20/50 EMAs & 200 SMA:** Added `ema_50` to [chart_data_service.py](file:///home/jackc/projects/homma-research/backend/services/chart_data_service.py) & client-side fallback `calcEMA` in [chart.ts](file:///home/jackc/projects/homma-research/frontend/lib/chart.ts) (EMA 9 Sky Blue `#38bdf8`, EMA 20 Gold `#f59e0b`, EMA 50 Purple `#ab47bc`, VWAP White). Added 200 SMA status indicator (`200 SMA ▲ ABOVE` / `▼ BELOW`) in chart headers.
-* **QA & Deployment:** Tested (`npx tsc` 0 errors, `pytest backend/tests/` 312 passed), committed (`6e440af`), pushed `origin/master`, deployed via `deploy.sh` (PM2 services online).
+* **Goal:** Implement Multi-Timeframe S/R Momentum Scanner (ADR 0007).
+* **MTF S/R Engine:** Core S/R calculation & 100-point confluence scoring service in `backend/services/mtf_sr_service.py`.
+* **Execution & Realtime:** Stream 60s `MTF_IN_PLAY` updates via Redis & FastAPI WebSocket.
+* **Frontend UI:** Render MTF S/R Momentum Scanner component with score highlight tiers & coincident level indicators.
 
 
 
