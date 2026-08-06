@@ -4,16 +4,9 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
-  BarChart2, LayoutDashboard, LayoutGrid, Search, Bookmark,
+  BarChart2, LayoutDashboard, Search, Bookmark,
   BookOpen, AreaChart, Rss, ChevronDown, Sun, Moon, Settings, Menu, X
 } from 'lucide-react'
-
-const primaryLinks = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/history', label: 'Command', icon: LayoutGrid },
-  { href: '/research', label: 'Research', icon: Search },
-  { href: '/watchlist', label: 'Watchlist', icon: Bookmark },
-]
 
 const journalsLinks = [
   { href: '/alerts', label: 'Alerts' },
@@ -107,50 +100,16 @@ export default function NavBar() {
 
             {/* Desktop Nav Links */}
             <div className="hidden lg:flex items-center gap-1.5">
-              {/* Primary Links */}
-              {primaryLinks.map(({ href, label, icon: Icon }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  className={getLinkClass(path === href)}
-                >
-                  <Icon size={14} />
-                  {label}
-                </Link>
-              ))}
+              {/* 1. Dashboard */}
+              <Link
+                href="/"
+                className={getLinkClass(path === '/')}
+              >
+                <LayoutDashboard size={14} />
+                Dashboard
+              </Link>
 
-              {/* Journals Dropdown */}
-              <div className="relative">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setJournalsOpen(!journalsOpen)
-                    setChartsOpen(false)
-                    setFeedsOpen(false)
-                  }}
-                  className={getLinkClass(journalsLinks.some(link => path === link.href))}
-                >
-                  <BookOpen size={14} />
-                  Journals
-                  <ChevronDown size={10} className="opacity-60" />
-                </button>
-                {journalsOpen && (
-                  <div className="absolute left-0 mt-1 w-48 bg-panel border border-border-subtle z-50 flex flex-col p-1 gap-1 shadow-lg">
-                    {journalsLinks.map(({ href, label }) => (
-                      <Link
-                        key={href}
-                        href={href}
-                        onClick={() => setJournalsOpen(false)}
-                        className={getDropdownItemClass(path === href)}
-                      >
-                        {label}
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Charts Dropdown */}
+              {/* 2. Charts Dropdown */}
               <div className="relative">
                 <button
                   onClick={(e) => {
@@ -181,7 +140,56 @@ export default function NavBar() {
                 )}
               </div>
 
-              {/* Feeds Dropdown */}
+              {/* 3. Watchlist */}
+              <Link
+                href="/watchlist"
+                className={getLinkClass(path === '/watchlist')}
+              >
+                <Bookmark size={14} />
+                Watchlist
+              </Link>
+
+              {/* 4. Journals Dropdown */}
+              <div className="relative">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setJournalsOpen(!journalsOpen)
+                    setChartsOpen(false)
+                    setFeedsOpen(false)
+                  }}
+                  className={getLinkClass(journalsLinks.some(link => path === link.href))}
+                >
+                  <BookOpen size={14} />
+                  Journals
+                  <ChevronDown size={10} className="opacity-60" />
+                </button>
+                {journalsOpen && (
+                  <div className="absolute left-0 mt-1 w-48 bg-panel border border-border-subtle z-50 flex flex-col p-1 gap-1 shadow-lg">
+                    {journalsLinks.map(({ href, label }) => (
+                      <Link
+                        key={href}
+                        href={href}
+                        onClick={() => setJournalsOpen(false)}
+                        className={getDropdownItemClass(path === href)}
+                      >
+                        {label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 5. Research */}
+              <Link
+                href="/research"
+                className={getLinkClass(path === '/research')}
+              >
+                <Search size={14} />
+                Research
+              </Link>
+
+              {/* 6. Feeds Dropdown */}
               <div className="relative">
                 <button
                   onClick={(e) => {
@@ -272,46 +280,19 @@ export default function NavBar() {
         {menuOpen && (
           <div className="lg:hidden bg-panel border-t border-border-subtle py-2 space-y-3">
             
-            {/* PRIMARY */}
+            {/* 1. DASHBOARD */}
             <div>
-              <div className="px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-text-muted font-semibold border-b border-border-subtle mb-1">
-                PRIMARY
-              </div>
-              <div className="space-y-0.5">
-                {primaryLinks.map(({ href, label, icon: Icon }) => (
-                  <Link
-                    key={href}
-                    href={href}
-                    onClick={() => setMenuOpen(false)}
-                    className={getMobileLinkClass(path === href)}
-                  >
-                    <Icon size={14} />
-                    {label}
-                  </Link>
-                ))}
-              </div>
+              <Link
+                href="/"
+                onClick={() => setMenuOpen(false)}
+                className={getMobileLinkClass(path === '/')}
+              >
+                <LayoutDashboard size={14} />
+                Dashboard
+              </Link>
             </div>
 
-            {/* JOURNALS */}
-            <div>
-              <div className="px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-text-muted font-semibold border-b border-border-subtle mb-1">
-                JOURNALS
-              </div>
-              <div className="space-y-0.5">
-                {journalsLinks.map(({ href, label }) => (
-                  <Link
-                    key={href}
-                    href={href}
-                    onClick={() => setMenuOpen(false)}
-                    className={getMobileLinkClass(path === href)}
-                  >
-                    {label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-
-            {/* CHARTS */}
+            {/* 2. CHARTS */}
             <div>
               <div className="px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-text-muted font-semibold border-b border-border-subtle mb-1">
                 CHARTS
@@ -330,7 +311,50 @@ export default function NavBar() {
               </div>
             </div>
 
-            {/* FEEDS */}
+            {/* 3. WATCHLIST */}
+            <div>
+              <Link
+                href="/watchlist"
+                onClick={() => setMenuOpen(false)}
+                className={getMobileLinkClass(path === '/watchlist')}
+              >
+                <Bookmark size={14} />
+                Watchlist
+              </Link>
+            </div>
+
+            {/* 4. JOURNALS */}
+            <div>
+              <div className="px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-text-muted font-semibold border-b border-border-subtle mb-1">
+                JOURNALS
+              </div>
+              <div className="space-y-0.5">
+                {journalsLinks.map(({ href, label }) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={() => setMenuOpen(false)}
+                    className={getMobileLinkClass(path === href)}
+                  >
+                    {label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            {/* 5. RESEARCH */}
+            <div>
+              <Link
+                href="/research"
+                onClick={() => setMenuOpen(false)}
+                className={getMobileLinkClass(path === '/research')}
+              >
+                <Search size={14} />
+                Research
+              </Link>
+            </div>
+
+            {/* 6. FEEDS */}
             <div>
               <div className="px-3 py-1 font-mono text-[9px] uppercase tracking-widest text-text-muted font-semibold border-b border-border-subtle mb-1">
                 FEEDS
@@ -355,3 +379,4 @@ export default function NavBar() {
     </nav>
   )
 }
+

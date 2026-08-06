@@ -151,7 +151,7 @@ app.include_router(continuation.router, prefix="/api")
 from .routers import chart as chart_router
 app.include_router(chart_router.router, prefix="/api")
 
-from .routers import analysis, alerts, strategies, rss, alert_config, rundown
+from .routers import analysis, alerts, strategies, rss, alert_config, rundown, ts_alerts
 from .routers import market_data
 app.include_router(analysis.router, prefix="/api")
 app.include_router(alerts.router, prefix="/api")
@@ -160,6 +160,7 @@ app.include_router(strategies.router, prefix="/api")
 app.include_router(rss.router, prefix="/api")
 app.include_router(alert_config.router, prefix="/api")
 app.include_router(rundown.router, prefix="/api")
+app.include_router(ts_alerts.router, prefix="/api")
 
 # WebSocket alert streaming
 from .websocket_alerts import router as ws_router

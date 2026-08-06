@@ -2,7 +2,28 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
-## [2026-08-04] Multi-Timeframe S/R Momentum Scanner Architecture Alignment
+## [2026-08-06] Alert System Disabled — TradeStation Import Scaffolded
+
+### Summary
+* Alert system overloaded → killed all outbound dispatch (Telegram + Redis broadcast).
+* Added `ALERTS_DISABLED = True` kill-switch in two places:
+  - [`fastapi_app/tasks/alerts.py`](file:///home/jackc/projects/homma-research/backend/fastapi_app/tasks/alerts.py) — stubs `send_telegram_message` and `send_telegram_alert_task` Celery tasks
+  - [`momentum_screener/schwab/stream_client.py`](file:///home/jackc/projects/homma-research/momentum_screener/schwab/stream_client.py) — bypasses Redis publish + Telegram in `check_and_fire_alert`; DB persistence still runs so history is preserved
+* Watchlist Telegram dispatch also suppressed (routes through `send_telegram_message` which now no-ops).
+* Created [`fastapi_app/routers/ts_alerts.py`](file:///home/jackc/projects/homma-research/backend/fastapi_app/routers/ts_alerts.py) — new import pipeline for TradeStation exported alert logs:
+  - `POST /api/ts-alerts/import/csv` — CSV upload (multipart)
+  - `POST /api/ts-alerts/import/json` — JSON array body
+  - `GET  /api/ts-alerts/fields` — field contract reference
+* Created [`sql/ts_alerts_source_migration.sql`](file:///home/jackc/projects/homma-research/backend/sql/ts_alerts_source_migration.sql) — adds `source VARCHAR(64)` column to `screener_alerts` + archive. **Run this migration before using the import endpoints.**
+* Charts will be appended to imported alerts in a future pass once chart-gen system is designed.
+
+### Re-enable checklist
+1. Flip `ALERTS_DISABLED = False` in both files above.
+2. Ensure Redis is healthy and Celery worker is running.
+3. Verify Telegram bot token + chat ID in backend `.env`.
+
+
+
 
 ### Summary
 * Completed `/grill-with-docs` domain modeling session for Multi-Timeframe S/R Momentum Scanner.

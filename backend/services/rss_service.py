@@ -175,38 +175,77 @@ def parse_xml_feed(xml_content: bytes) -> list[dict]:
 # Core Service Functions
 # ---------------------------------------------------------------------------
 
+# Categories whose articles pass through to the curated feed without a ticker match.
+# These carry broad market context (macro data, economic calendar) that is always relevant.
+_PASS_THROUGH_CATEGORIES = {"macro", "calendar"}
+
+# Categories that must match a scanner ticker OR a catalyst keyword to be published.
+_FILTERED_CATEGORIES = {"press", "sec", "earnings"}
+
+
+def _has_catalyst_keyword(text: str) -> bool:
+    """Return True if the article text contains at least one catalyst keyword."""
+    words = re.findall(r"\b\w+\b", text.lower())
+    return bool(set(words) & CATALYST_KEYWORDS)
+
+
 async def fetch_and_ingest_feeds(conn: asyncpg.Connection) -> dict[str, int]:
     """
-    Poll all active RSS sources and publish every article directly to the
-    curated feed. Ticker extraction is still performed for metadata but is
-    no longer a gate — all articles are auto-approved on ingest.
+    Poll all active RSS sources and publish articles to the curated feed.
+
+    Filter logic (per article):
+    - ``macro`` / ``calendar`` sources → always publish (broad market context).
+    - ``press`` / ``sec`` / ``earnings`` sources → publish only when the article
+      matches a scanner ticker (today's or yesterday's daily_gainers + watchlist)
+      OR contains at least one catalyst keyword.
+    - Unknown categories fall back to the catalyst-keyword gate.
+
+    Ticker tagging is always attempted for metadata regardless of publish decision.
     """
     log.info("[rss_service] Starting feed ingestion...")
 
-    # Best-effort ticker tagging against watchlist + recent gainers
+    # ── Target tickers: watchlist + last 2 trading days of scanner ───────────
     watchlist_rows = await conn.fetch("SELECT ticker FROM watchlist")
-    gainers_rows = await conn.fetch("SELECT DISTINCT ticker FROM daily_gainers")
-    target_tickers = {r["ticker"].upper() for r in watchlist_rows} | {r["ticker"].upper() for r in gainers_rows}
+    gainers_rows = await conn.fetch(
+        """
+        SELECT DISTINCT ticker FROM daily_gainers
+        WHERE date IN (
+            SELECT DISTINCT date FROM daily_gainers
+            ORDER BY date DESC
+            LIMIT 2
+        )
+        """
+    )
+    target_tickers = (
+        {r["ticker"].upper() for r in watchlist_rows}
+        | {r["ticker"].upper() for r in gainers_rows}
+    )
 
     fundamentals_rows = await conn.fetch(
         "SELECT symbol, company_name FROM stock_fundamentals WHERE symbol = ANY($1)",
-        list(target_tickers)
+        list(target_tickers),
     )
     ticker_to_company = {r["symbol"].upper(): r["company_name"] for r in fundamentals_rows}
 
     sources = await db_rss.list_rss_sources(conn)
     active_sources = [s for s in sources if s["is_active"]]
 
-    stats = {"processed": 0, "inserted": 0, "auto_approved": 0}
+    stats = {"processed": 0, "inserted": 0, "auto_approved": 0, "skipped_no_match": 0}
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    # SEC requires a specific, identifying User-Agent per their crawler policy.
+    # All other sources use a browser UA to avoid being blocked.
+    _DEFAULT_UA = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         " (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-    async with httpx.AsyncClient(timeout=10.0, headers=headers) as client:
+    )
+    _SEC_UA = "homma-research/1.0 contact@hommaresearch.com"
+
+    async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
         for src in active_sources:
+            category = (src.get("category") or "").lower()
+            ua = _SEC_UA if category == "sec" else _DEFAULT_UA
             try:
-                res = await client.get(src["feed_url"], follow_redirects=True)
+                res = await client.get(src["feed_url"], headers={"User-Agent": ua})
                 if res.status_code != 200:
                     log.warning(f"[rss_service] Feed {src['name']} returned HTTP {res.status_code}")
                     continue
@@ -214,9 +253,9 @@ async def fetch_and_ingest_feeds(conn: asyncpg.Connection) -> dict[str, int]:
                 articles = parse_xml_feed(res.content)
                 for art in articles:
                     stats["processed"] += 1
-
-                    # Best-effort ticker tagging (informational only)
                     text_to_search = f"{art['title']} {art['description']}".upper()
+
+                    # ── Ticker detection ──────────────────────────────────────
                     detected = []
                     for ticker in target_tickers:
                         is_common = ticker in COMMON_WORDS_OR_ABBREVIATIONS or len(ticker) <= 2
@@ -239,7 +278,30 @@ async def fetch_and_ingest_feeds(conn: asyncpg.Connection) -> dict[str, int]:
                                     detected.append(ticker)
                                     break
 
-                    # All articles go straight to the curated feed
+                    # ── Publish gate ──────────────────────────────────────────
+                    if category in _PASS_THROUGH_CATEGORIES:
+                        # Broad macro/calendar: always publish
+                        should_publish = True
+                    else:
+                        # Press/SEC/earnings/unknown: must match scanner or catalyst
+                        should_publish = bool(detected) or _has_catalyst_keyword(text_to_search)
+
+                    if not should_publish:
+                        # Still store in pool as 'pending' for audit; skip curated feed
+                        await db_rss.insert_rss_feed_pool_item(
+                            conn,
+                            source_id=src["id"],
+                            guid=art["guid"],
+                            title=art["title"],
+                            description=art["description"],
+                            link=art["link"],
+                            published_at=art["published_at"],
+                            detected_tickers=detected,
+                            status="pending",
+                        )
+                        stats["skipped_no_match"] += 1
+                        continue
+
                     inserted = await db_rss.insert_rss_feed_pool_item(
                         conn,
                         source_id=src["id"],
@@ -275,8 +337,8 @@ async def fetch_and_ingest_feeds(conn: asyncpg.Connection) -> dict[str, int]:
 
     log.info(
         "[rss_service] Feed ingestion complete. "
-        "Processed=%d Inserted=%d Auto-Approved=%d",
-        stats["processed"], stats["inserted"], stats["auto_approved"]
+        "Processed=%d Inserted=%d Auto-Approved=%d Skipped(no-match)=%d",
+        stats["processed"], stats["inserted"], stats["auto_approved"], stats["skipped_no_match"],
     )
     return stats
 

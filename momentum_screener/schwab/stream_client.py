@@ -35,6 +35,12 @@ from backend.services.alert_detection_service import (
 logger = logging.getLogger(__name__)
 
 
+# ── Kill switch ────────────────────────────────────────────────────────────
+# Set True to disable all alert dispatch (Redis broadcast + Telegram).
+# DB persistence is still written so history is preserved.
+# Flip to False to re-enable when the new TradeStation import system is ready.
+ALERTS_DISABLED: bool = True
+
 # Decoupled database and configuration defaults from backend
 ALERT_MIN_PCT_INCREASE = float(os.getenv("ALERT_MIN_PCT_INCREASE", "0.03"))
 DATABASE_URL = os.getenv(
@@ -766,17 +772,24 @@ class SchwabStreamer:
                 'stop_price': round(stop_price, 2),
                 'stop_risk_pct': round(stop_risk_pct, 2)
             }
-            redis_client.publish('screener:alerts', json.dumps(alert_payload))
-            logger.info(f"🚨 ALERT FIRED: {symbol} @ ${last_price} ({alert_type}) | RVOL: {rvol:.2f}x | Tier: {priority_tier} (Score: {priority_score})")
 
-            if priority_tier == 'Tier 1':
-                try:
-                    celery_app.send_task(
-                        "fastapi_app.tasks.alerts.send_telegram_alert_task",
-                        args=[alert_payload]
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to dispatch Telegram Celery task for {symbol}: {e}")
+            if ALERTS_DISABLED:
+                logger.info(
+                    "[ALERTS_DISABLED] Redis publish + Telegram skipped for %s (%s)",
+                    symbol, alert_type
+                )
+            else:
+                redis_client.publish('screener:alerts', json.dumps(alert_payload))
+                logger.info(f"🚨 ALERT FIRED: {symbol} @ ${last_price} ({alert_type}) | RVOL: {rvol:.2f}x | Tier: {priority_tier} (Score: {priority_score})")
+
+                if priority_tier == 'Tier 1':
+                    try:
+                        celery_app.send_task(
+                            "fastapi_app.tasks.alerts.send_telegram_alert_task",
+                            args=[alert_payload]
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to dispatch Telegram Celery task for {symbol}: {e}")
             return True
         else:
             if result != 'ERROR':

@@ -17,11 +17,20 @@ from validation import EASTERN_TZ, validate_safe_url
 
 logger = get_task_logger(__name__)
 
+# ── Kill switch ────────────────────────────────────────────────────────────
+# Set to True to disable all alert dispatch (Telegram + Redis broadcast).
+# Flip to False to re-enable when the new import-based system is ready.
+ALERTS_DISABLED: bool = True
+
 
 def send_telegram_message(message: str) -> bool:
     """
     Directly sends a raw markdown message to Telegram (synchronous helper).
     """
+    if ALERTS_DISABLED:
+        logger.info("[ALERTS_DISABLED] Telegram message suppressed: %.80s...", message)
+        return False
+
     token = settings.telegram_bot_token
     chat_id = settings.telegram_chat_id
 
@@ -229,6 +238,13 @@ def send_telegram_alert_task(alert_data: dict) -> dict:
     Sends a real-time breakout alert notification to Telegram via Bot API.
     Body formatting is driven by ALERT_TYPE_META; see _format_alert_message.
     """
+    if ALERTS_DISABLED:
+        logger.info(
+            "[ALERTS_DISABLED] Telegram alert suppressed for %s (%s)",
+            alert_data.get("symbol"), alert_data.get("alert_type")
+        )
+        return {"status": "skipped", "reason": "alerts_disabled"}
+
     token = settings.telegram_bot_token
     chat_id = settings.telegram_chat_id
 

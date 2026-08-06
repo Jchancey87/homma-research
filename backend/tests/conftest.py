@@ -133,8 +133,10 @@ def mock_external_apis():
     from unittest.mock import patch, MagicMock
     import pandas as pd
 
-    # Mock Telegram calls
-    with patch("fastapi_app.tasks.alerts.send_telegram_message", return_value=True), \
+    # Mock Telegram calls and disable alert kill-switch for unit tests
+    with patch("fastapi_app.tasks.alerts.ALERTS_DISABLED", False), \
+         patch("momentum_screener.schwab.stream_client.ALERTS_DISABLED", False), \
+         patch("fastapi_app.tasks.alerts.send_telegram_message", return_value=True), \
          patch("fastapi_app.tasks.alerts.httpx.post") as mock_tg_post:
         
         mock_response = MagicMock()

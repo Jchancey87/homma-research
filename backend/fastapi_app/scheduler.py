@@ -87,7 +87,12 @@ def _build_scheduler():
     # ── Job 7: Ingest RSS Feeds ──────────────────────────────────────────────
     scheduler.add_job(
         _ingest_rss_feeds,
-        CronTrigger(minute="*/15", timezone="UTC"),  # Every 15 minutes
+        CronTrigger(
+            day_of_week="mon-fri",
+            hour="9-16",
+            minute="*/15",
+            timezone=EASTERN_TZ,
+        ),  # Every 15 min, 9 AM–4:59 PM ET Mon–Fri
         id="ingest_rss_feeds",
         name="Ingest RSS Feeds",
         replace_existing=True,
