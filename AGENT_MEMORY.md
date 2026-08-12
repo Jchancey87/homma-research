@@ -2,13 +2,15 @@
 
 > ⚠️ STRICT CONSTRAINT: Keep under 500 tokens. Prune/delete stale info.
 
-## 🌿 Branch: main (Persistent Core Decisions)
+## 🌿 Branch: master (Persistent Core Decisions)
+* **Sector Relative Strength (OneOption strategy concept):** Replaced `MarketRegimeCard` with `SectorStrengthCard` measuring 11 GICS sector SPDR ETFs vs SPY intraday. Powered by `services/sector_strength_service.py` (`build_sector_strength`) and `/api/market/sector-strength`.
 * **MTF S/R Scanner Engine (ADR 0007):** Stateless S/R calculation and 100-point rebalanced confluence matrix in `backend/services/mtf_sr_service.py`. Generates Tier 1 Daily, Tier 2 5-min, and Coincident levels. Streamed via Schwab Streamer loop to Redis & `/api/market/mtf-scanner`. Rendered in `MTFScannerWidget.tsx`.
 * **Alert System DISABLED (2026-08-06):** `ALERTS_DISABLED = True` in `stream_client.py` (skips Redis publish + Telegram) and `tasks/alerts.py` (no-ops both Celery tasks). DB writes still run. Flip both flags to `False` to re-enable. Migration needed before TS import: `sql/ts_alerts_source_migration.sql`.
 * **TradeStation Import:** `POST /api/ts-alerts/import/csv` and `/json` in `fastapi_app/routers/ts_alerts.py`. Populates `screener_alerts` with `source='tradestation'`. Charts TBD.
 
 ## 👤 Session
-* **Status:** Complete. Alert system disabled, TS import scaffolded.
+* **Status:** Complete. Implemented Sector Relative Strength card and service, fixed Schwab streamer crash backoff. All tests passing (568/568 backend, next build green).
+
 
 ### 1. Codebase Architecture Refactoring (Chunks 1–5 Completed)
 - **Chunk 1 (Alert Engine)**: Decoupled alert detection into pure, stateless `backend/services/alert_detection_service.py` (ADR-0001). `stream_client.py` handles downstream DB/Redis/Telegram side-effects.

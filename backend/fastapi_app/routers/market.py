@@ -97,6 +97,38 @@ async def market_breadth():
 
 
 # ---------------------------------------------------------------------------
+# GET /market/sector-strength
+# ---------------------------------------------------------------------------
+
+_sector_strength_cache: dict = {"data": None, "fetched_at": 0}
+_sector_strength_lock = asyncio.Lock()
+SECTOR_STRENGTH_TTL = 60  # 60 seconds
+
+@router.get("/sector-strength")
+async def sector_strength():
+    """Sector ETF relative strength vs SPY — cached for 60 seconds."""
+    async with _sector_strength_lock:
+        now = time.time()
+        if _sector_strength_cache["data"] and (now - _sector_strength_cache["fetched_at"]) < SECTOR_STRENGTH_TTL:
+            return _sector_strength_cache["data"]
+
+    from services.sector_strength_service import build_sector_strength
+
+    data = await build_sector_strength(
+        get_live_quotes,
+        polygon_api_key=settings.polygon_api_key
+    )
+
+    result = _clean_nans(data)
+
+    async with _sector_strength_lock:
+        _sector_strength_cache["data"] = result
+        _sector_strength_cache["fetched_at"] = time.time()
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # GET /market/mtf-scanner
 # ---------------------------------------------------------------------------
 

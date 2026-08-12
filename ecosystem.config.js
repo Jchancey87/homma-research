@@ -87,6 +87,7 @@ module.exports = {
       autorestart: true,
       max_restarts: 10,
       restart_delay: 10000,
+      exp_backoff_restart: 5000,
       env: {
         PYTHONPATH: "/opt/trading-journal:/opt/trading-journal/backend",
       },

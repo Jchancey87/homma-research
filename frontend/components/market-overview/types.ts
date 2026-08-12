@@ -1,6 +1,6 @@
 import { CommandSummaryData } from '@/lib/api'
 
-export type CardId = 'regime' | 'breadth' | 'liquidity' | 'risk'
+export type CardId = 'sector_strength' | 'breadth' | 'liquidity' | 'risk'
 
 export interface CardBaseProps {
   expanded: boolean

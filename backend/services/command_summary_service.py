@@ -574,6 +574,12 @@ async def build_command_summary(
     async def _halt_rate():
         return await fetch_halt_rate_fn()
 
+    async def _sector_strength():
+        from services.sector_strength_service import build_sector_strength
+        return await build_sector_strength(
+            get_live_quotes_fn, polygon_api_key=polygon_api_key
+        )
+
     # Gather all
     try:
         (
@@ -585,6 +591,7 @@ async def build_command_summary(
             live_data,
             halt_tickers,
             halt_rate,
+            sector_strength_data,
         ) = await asyncio.gather(
             _indices_and_vix(),
             _macro(),
@@ -594,6 +601,7 @@ async def build_command_summary(
             _gainers(),
             _halts(),
             _halt_rate(),
+            _sector_strength(),
         )
     except Exception as exc:
         log.error("[cmd-summary] gather failed: %s", exc)
@@ -611,6 +619,7 @@ async def build_command_summary(
         live_data = {"gainers": []}
         halt_tickers = []
         halt_rate = 0.0
+        sector_strength_data = None
 
     gainers_list = live_data.get("gainers", [])
 
@@ -760,6 +769,7 @@ async def build_command_summary(
             "confluence_score": confluence_score,
         },
         "macro": macro_map,
+        "sector_strength": sector_strength_data,
         "fetched_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "cache_ttl_s": 60,
     }

@@ -459,6 +459,24 @@ export interface MacroItem {
   chg_pct: number | null
 }
 
+export interface SectorStrengthItem {
+  sector: string
+  etf: string
+  price: number | null
+  chg_pct: number | null
+  rs_vs_spy: number | null
+  status: 'leading' | 'lagging' | 'inline'
+}
+
+export interface SectorStrengthData {
+  spy: { price: number | null; chg_pct: number | null }
+  sectors: SectorStrengthItem[]
+  leading_count: number
+  lagging_count: number
+  market_tone: 'bullish' | 'bearish' | 'mixed' | 'rotation'
+  benchmark: string
+}
+
 export interface CommandSummaryData {
   regime: {
     tag: 'risk_on' | 'neutral' | 'risk_off'
@@ -521,6 +539,7 @@ export interface CommandSummaryData {
     gold?: MacroItem
     put_call_ratio?: number | null
   }
+  sector_strength?: SectorStrengthData
   fetched_at: string
   cache_ttl_s: number
 }

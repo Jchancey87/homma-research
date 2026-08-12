@@ -1310,8 +1310,22 @@ class SchwabStreamer:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
-    streamer = SchwabStreamer()
     try:
+        streamer = SchwabStreamer()
         asyncio.run(streamer.run())
     except KeyboardInterrupt:
         logger.info("Streamer stopped by user.")
+    except Exception as e:
+        err_str = str(e).lower()
+        if "token" in err_str or "auth" in err_str or isinstance(e, FileNotFoundError):
+            logger.critical(
+                f"🚨 SCHWAB AUTH FAILURE: {e}\n"
+                "Schwab OAuth token is missing or expired. Please run 'python3 schwab_auth_setup.py' to re-authenticate.\n"
+                "Pausing 60s before exiting to prevent PM2 crash-cycling..."
+            )
+            time.sleep(60)
+        else:
+            logger.error(f"Streamer process exited with error: {e}")
+            time.sleep(10)
+        sys.exit(1)
+

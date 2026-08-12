@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { getCommandSummary, CommandSummaryData } from '@/lib/api'
-import MarketRegimeCard from './market-overview/MarketRegimeCard'
+import SectorStrengthCard from './market-overview/SectorStrengthCard'
 import SmallCapBreadthCard from './market-overview/SmallCapBreadthCard'
 import LiquidityFloatCard from './market-overview/LiquidityFloatCard'
 import RiskAnomaliesCard from './market-overview/RiskAnomaliesCard'
@@ -94,11 +94,10 @@ export default function CommandSummaryStrip() {
   return (
     <div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-transparent">
-        <MarketRegimeCard
-          data={data.regime}
-          macro={data.macro}
-          expanded={expanded === 'regime'}
-          onToggle={() => toggle('regime')}
+        <SectorStrengthCard
+          data={data.sector_strength}
+          expanded={expanded === 'sector_strength'}
+          onToggle={() => toggle('sector_strength')}
         />
 
         <SmallCapBreadthCard
