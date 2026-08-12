@@ -3,16 +3,32 @@ fastapi_app/scheduler.py
 APScheduler (asyncio backend) integration for Phase 3.
 
 Registered jobs:
-  1. nightly_gainer_ingest  — 4:15 PM ET Mon-Fri
-  2. expire_continuation_picks — daily at midnight UTC (keeps active list clean)
-  3. research_cache_refresh  — placeholder (research router not yet ported)
+  1. nightly_gainer_ingest       — 8:05 PM ET Mon-Fri
+  2. expire_continuation_picks    — 4:00 AM UTC daily
+  3. research_cache_refresh       — 5:00 AM UTC daily
+  4. premarket_gappers_summary    — 9:10 AM ET Mon-Fri
+  5. nightly_alerts_backfill      — 8:10 PM ET Mon-Fri
+  6. update_continuation_perf     — 8:15 PM ET Mon-Fri
+  7. daily_analysis_report        — 8:20 PM ET Mon-Fri (Nightly AI Report & Email)
+  8. ingest_rss_feeds            — Every 15 min 9am-5pm ET Mon-Fri
+  9. daily_market_rundown         — 8:30 AM ET Mon-Fri
 
 Start/stop is hooked into the FastAPI lifespan in main.py.
 """
 from __future__ import annotations
 
+import os
+import sys
 import logging
 from datetime import datetime, timezone
+
+# Ensure repo root and backend directory are on sys.path for background threads/jobs
+_backend = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
+_repo = os.path.dirname(_backend)
+if _repo not in sys.path:
+    sys.path.insert(0, _repo)
+if _backend not in sys.path:
+    sys.path.insert(0, _backend)
 
 from validation import EASTERN_TZ
 
@@ -84,7 +100,17 @@ def _build_scheduler():
         misfire_grace_time=1800,  # 30 min
     )
 
-    # ── Job 7: Ingest RSS Feeds ──────────────────────────────────────────────
+    # ── Job 7: Daily Analysis Report & Email ─────────────────────────────
+    scheduler.add_job(
+        _daily_analysis_report,
+        CronTrigger(day_of_week="mon-fri", hour=20, minute=20, timezone=EASTERN_TZ),  # 8:20 PM ET
+        id="daily_analysis_report",
+        name="Daily Analysis Report Email",
+        replace_existing=True,
+        misfire_grace_time=1800,  # 30 min
+    )
+
+    # ── Job 8: Ingest RSS Feeds ──────────────────────────────────────────────
     scheduler.add_job(
         _ingest_rss_feeds,
         CronTrigger(
@@ -98,7 +124,7 @@ def _build_scheduler():
         replace_existing=True,
     )
 
-    # ── Job 8: Daily Market Rundown ──────────────────────────────────────────
+    # ── Job 9: Daily Market Rundown ──────────────────────────────────────────
     scheduler.add_job(
         _daily_market_rundown,
         CronTrigger(day_of_week="mon-fri", hour=8, minute=30, timezone=EASTERN_TZ),  # 8:30 AM ET
@@ -162,13 +188,32 @@ async def _expire_continuation_picks() -> None:
                        deactivated_at = NOW(),
                        deactivated_reason = 'auto-expired (>3 days)'
                    WHERE is_active = TRUE
-                     AND date::date < (CURRENT_DATE - INTERVAL '3 days')"""
+                     AND date::date < (CURRENT_DATE - INTERVAL '3 days')::date"""
             )
         # result is e.g. "UPDATE 5"
         count = result.split()[-1] if result else "?"
         log.info("[scheduler] expire_continuation_picks — deactivated %s rows", count)
     except Exception as exc:
         log.exception("[scheduler] expire_continuation_picks failed: %s", exc)
+
+
+async def _daily_analysis_report() -> None:
+    """Run daily_analysis_report off-thread to generate 8 PM report and send email."""
+    import asyncio
+
+    log.info("[scheduler] daily_analysis_report starting")
+    try:
+        eastern = EASTERN_TZ
+        target_date = datetime.now(eastern).strftime("%Y-%m-%d")
+
+        def _run() -> None:
+            from jobs.daily_analysis_report import run_report_for_date
+            run_report_for_date(target_date, dry_run=False)
+
+        await asyncio.to_thread(_run)
+        log.info("[scheduler] daily_analysis_report done for date=%s", target_date)
+    except Exception as exc:
+        log.exception("[scheduler] daily_analysis_report failed: %s", exc)
 
 
 async def _research_cache_refresh() -> None:

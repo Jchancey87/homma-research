@@ -47,18 +47,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger(__name__)
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Generate and email deep daily analysis report')
-    from datetime import datetime
-    eastern = EASTERN_TZ
-    default_date = datetime.now(eastern).strftime('%Y-%m-%d')
-    parser.add_argument('--date', default=default_date, help='YYYY-MM-DD')
-    parser.add_argument('--dry-run', action='store_true', help='Print report instead of emailing')
-    args = parser.parse_args()
-
-    target_date = args.date
-    dry_run = args.dry_run
-
+def run_report_for_date(target_date: str, dry_run: bool = False):
     log.info(f"Starting daily analysis report for {target_date} (dry_run={dry_run})")
 
     # 1. Fetch Top 10 Gainers from DB
@@ -96,6 +85,18 @@ def main():
         return
 
     send_email(target_date, full_report_md)
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Generate and email deep daily analysis report')
+    from datetime import datetime
+    eastern = EASTERN_TZ
+    default_date = datetime.now(eastern).strftime('%Y-%m-%d')
+    parser.add_argument('--date', default=default_date, help='YYYY-MM-DD')
+    parser.add_argument('--dry-run', action='store_true', help='Print report instead of emailing')
+    args = parser.parse_args()
+
+    run_report_for_date(args.date, dry_run=args.dry_run)
 
 
 def parse_and_save_top_picks(continuation_md: str, date_str: str, gainers: list[dict]):
