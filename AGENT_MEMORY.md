@@ -9,7 +9,11 @@
 * **TradeStation Import:** `POST /api/ts-alerts/import/csv` and `/json` in `fastapi_app/routers/ts_alerts.py`. Populates `screener_alerts` with `source='tradestation'`. Charts TBD.
 
 ## 👤 Session
-* **Status:** Complete. Restored top navigation link for Command Center (`/history`) in `NavBar.tsx`. Enriched Command Center (`frontend/app/history/page.tsx`) with 1-minute intraday charts for every historical appearance date, per-date inline chart toggles, 1m Chart Gallery drawer mode, and a global 1m Chart Grid page view. All TypeScript (`npx tsc`) and Python backend tests (`pytest`) green.
+* **Status:** Complete.
+* **Command Center History Fix:** Fixed `sys.path` in `backend/fastapi_app/scheduler.py` so background scheduler worker threads can import `momentum_screener` root package without throwing `ModuleNotFoundError`. Backfilled all missing dates (2026-07-30 through 2026-08-12) into `daily_gainers` table. Command Center table now shows complete history up to today.
+* **Daily 8 PM Email Report Fix:** Registered `_daily_analysis_report` in `backend/fastapi_app/scheduler.py` at 8:20 PM ET Mon-Fri (right after nightly gainer ingest). Refactored `backend/jobs/daily_analysis_report.py` to expose `run_report_for_date`. Verified email dispatch cleanly.
+* **Stale Continuation Expiration Query Fix:** Fixed SQL type error in `_expire_continuation_picks` (`date::date < (CURRENT_DATE - INTERVAL '3 days')::date`).
+* **Deploy & Verification:** 34 backend unit tests passing, Next.js build green, pushed to `master`, and deployed to PM2 production.
 
 
 ### 1. Codebase Architecture Refactoring (Chunks 1–5 Completed)
