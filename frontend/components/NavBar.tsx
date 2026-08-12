@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
   BarChart2, LayoutDashboard, Search, Bookmark,
-  BookOpen, AreaChart, Rss, ChevronDown, Sun, Moon, Settings, Menu, X
+  BookOpen, AreaChart, Rss, ChevronDown, Sun, Moon, Settings, Menu, X, LayoutGrid
 } from 'lucide-react'
 
 const journalsLinks = [
@@ -107,6 +107,15 @@ export default function NavBar() {
               >
                 <LayoutDashboard size={14} />
                 Dashboard
+              </Link>
+
+              {/* Command Center */}
+              <Link
+                href="/history"
+                className={getLinkClass(path === '/history')}
+              >
+                <LayoutGrid size={14} />
+                Command Center
               </Link>
 
               {/* 2. Charts Dropdown */}
@@ -289,6 +298,18 @@ export default function NavBar() {
               >
                 <LayoutDashboard size={14} />
                 Dashboard
+              </Link>
+            </div>
+
+            {/* COMMAND CENTER */}
+            <div>
+              <Link
+                href="/history"
+                onClick={() => setMenuOpen(false)}
+                className={getMobileLinkClass(path === '/history')}
+              >
+                <LayoutGrid size={14} />
+                Command Center
               </Link>
             </div>
 

@@ -9,7 +9,7 @@
 * **TradeStation Import:** `POST /api/ts-alerts/import/csv` and `/json` in `fastapi_app/routers/ts_alerts.py`. Populates `screener_alerts` with `source='tradestation'`. Charts TBD.
 
 ## 👤 Session
-* **Status:** Complete. Implemented Sector Relative Strength card and service, fixed Schwab streamer crash backoff. All tests passing (568/568 backend, next build green).
+* **Status:** Complete. Restored top navigation link for Command Center (`/history`) in `NavBar.tsx`. Enriched Command Center (`frontend/app/history/page.tsx`) with 1-minute intraday charts for every historical appearance date, per-date inline chart toggles, 1m Chart Gallery drawer mode, and a global 1m Chart Grid page view. All TypeScript (`npx tsc`) and Python backend tests (`pytest`) green.
 
 
 ### 1. Codebase Architecture Refactoring (Chunks 1–5 Completed)

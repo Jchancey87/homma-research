@@ -1,14 +1,16 @@
 'use client'
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, Fragment } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   getTickerHistory, getTickerAppearances, getSectors, getGainersExportUrl,
   TickerHistoryItem, TickerAppearance,
 } from '@/lib/api'
 import HeatMap from '@/components/HeatMap'
+import MiniSessionChart from '@/components/MiniSessionChart'
 import {
   Search, ChevronDown, ChevronUp, ExternalLink,
   BarChart2, RefreshCw, ArrowUpDown, LayoutGrid, Download,
+  Activity, Grid, Table,
 } from 'lucide-react'
 import { fmt1, fmtFloat } from '@/lib/format'
 
@@ -37,6 +39,8 @@ function TickerDetail({
 }) {
   const [rows, setRows] = useState<TickerAppearance[]>([])
   const [loading, setLoading] = useState(true)
+  const [viewMode, setViewMode] = useState<'table' | 'gallery'>('table')
+  const [openChartDate, setOpenChartDate] = useState<string | null>(null)
 
   useEffect(() => {
     getTickerAppearances(ticker, period === 'all' ? undefined : period)
@@ -49,75 +53,178 @@ function TickerDetail({
   )
 
   return (
-    <div className="px-4 pb-3">
-      <div className="bg-[#050505] border border-[#262626] overflow-hidden w-full rounded-none">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-[#262626]">
-              <th className="px-3 py-2 text-left text-[10px] font-mono text-gray-600 uppercase tracking-wider">Date</th>
-              <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-600 uppercase tracking-wider">Gap %</th>
-              <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-600 uppercase tracking-wider">Float</th>
-              <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-600 uppercase tracking-wider">RVOL</th>
-              <th className="px-3 py-2 text-left text-[10px] font-mono text-gray-600 uppercase tracking-wider">Catalyst</th>
-              <th className="px-3 py-2"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(r => (
-              <tr key={r.date} className="border-b border-[#1a1a1a] hover:bg-[#0a0a0a] transition-colors">
-                <td className="px-3 py-2 font-mono text-xs text-gray-400">{r.date}</td>
-                <td className="px-3 py-2 text-right font-mono text-xs text-[#00ff00] font-bold">
-                  +{fmt1(r.gap_pct)}%
-                </td>
-                <td className="px-3 py-2 text-right font-mono text-xs text-gray-500">
-                  {fmtFloat(r.float_shares)}
-                </td>
-                <td className="px-3 py-2 text-right font-mono text-xs">
-                  <span className={r.rvol_15m != null && r.rvol_15m >= 5 ? 'text-amber-400' : 'text-gray-500'}>
-                    {fmt1(r.rvol_15m)}x
-                  </span>
-                </td>
-                <td className="px-3 py-2 max-w-xs">
-                  {r.news_fresh != null && (
-                    <span className={`mr-2 px-1.5 py-0.5 font-mono text-[10px] border rounded-none ${
-                      r.news_fresh
-                        ? 'bg-emerald-950/20 text-[#00ff00] border-[#00ff00]/25'
-                        : 'bg-[#111] text-gray-500 border-[#262626]'
-                    }`}>
-                      {r.news_fresh ? '🗞 Fresh' : 'Stale'}
-                    </span>
-                  )}
-                  <span className="font-mono text-[10px] px-1.5 py-0.5 border border-[#262626] bg-[#111] text-gray-500 rounded-none">
-                    {r.news_headline || '—'}
-                  </span>
-                </td>
-                <td className="px-3 py-2">
-                  <div className="flex items-center gap-1.5 justify-end">
-                    <button
-                      id={`research-${ticker}-${r.date}`}
-                      onClick={() => onResearch(ticker, r.date)}
-                      className="font-mono text-[10px] text-[#00f0ff] border border-[#00f0ff]/30 px-1.5 py-0.5 hover:bg-[#00f0ff]/5 transition-colors rounded-none flex items-center gap-1"
-                      title="Open Research"
-                    >
-                      <ExternalLink size={11} />
-                      <span>Research</span>
-                    </button>
-                    <button
-                      id={`chart-${ticker}-${r.date}`}
-                      onClick={() => window.open(`/daily-charts?date=${r.date}`, '_blank')}
-                      className="font-mono text-[10px] text-gray-600 border border-[#262626] px-1.5 py-0.5 hover:text-white transition-colors rounded-none flex items-center gap-1"
-                      title="Open Daily Charts"
-                    >
-                      <BarChart2 size={11} />
-                      <span>Chart</span>
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <div className="px-4 pb-3 pt-2 space-y-2">
+      {/* View Switcher Header */}
+      <div className="flex items-center justify-between border-b border-[#262626] pb-1.5">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider">
+            {ticker} Historical Run Logs ({rows.length})
+          </span>
+        </div>
+        <div className="flex items-center bg-black border border-[#262626]">
+          <button
+            onClick={() => setViewMode('table')}
+            className={`px-2 py-0.5 text-[10px] font-mono flex items-center gap-1 transition-colors ${
+              viewMode === 'table' ? 'bg-emerald-950/20 text-[#00ff00] font-bold' : 'text-gray-500 hover:text-white'
+            }`}
+          >
+            <Table size={11} /> Table
+          </button>
+          <button
+            onClick={() => setViewMode('gallery')}
+            className={`px-2 py-0.5 text-[10px] font-mono flex items-center gap-1 border-l border-[#262626] transition-colors ${
+              viewMode === 'gallery' ? 'bg-emerald-950/20 text-[#00ff00] font-bold' : 'text-gray-500 hover:text-white'
+            }`}
+          >
+            <Activity size={11} /> 1m Chart Gallery
+          </button>
+        </div>
       </div>
+
+      {viewMode === 'table' ? (
+        <div className="bg-[#050505] border border-[#262626] overflow-hidden w-full rounded-none">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-[#262626]">
+                <th className="px-3 py-2 text-left text-[10px] font-mono text-gray-600 uppercase tracking-wider">Date</th>
+                <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-600 uppercase tracking-wider">Gap %</th>
+                <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-600 uppercase tracking-wider">Float</th>
+                <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-600 uppercase tracking-wider">RVOL</th>
+                <th className="px-3 py-2 text-left text-[10px] font-mono text-gray-600 uppercase tracking-wider">Catalyst</th>
+                <th className="px-3 py-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => {
+                const isChartOpen = openChartDate === r.date
+                return (
+                  <Fragment key={r.date}>
+                    <tr className="border-b border-[#1a1a1a] hover:bg-[#0a0a0a] transition-colors">
+                      <td className="px-3 py-2 font-mono text-xs text-gray-400">{r.date}</td>
+                      <td className="px-3 py-2 text-right font-mono text-xs text-[#00ff00] font-bold">
+                        +{fmt1(r.gap_pct)}%
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono text-xs text-gray-500">
+                        {fmtFloat(r.float_shares)}
+                      </td>
+                      <td className="px-3 py-2 text-right font-mono text-xs">
+                        <span className={r.rvol_15m != null && r.rvol_15m >= 5 ? 'text-amber-400' : 'text-gray-500'}>
+                          {fmt1(r.rvol_15m)}x
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 max-w-xs">
+                        {r.news_fresh != null && (
+                          <span className={`mr-2 px-1.5 py-0.5 font-mono text-[10px] border rounded-none ${
+                            r.news_fresh
+                              ? 'bg-emerald-950/20 text-[#00ff00] border-[#00ff00]/25'
+                              : 'bg-[#111] text-gray-500 border-[#262626]'
+                          }`}>
+                            {r.news_fresh ? '🗞 Fresh' : 'Stale'}
+                          </span>
+                        )}
+                        <span className="font-mono text-[10px] px-1.5 py-0.5 border border-[#262626] bg-[#111] text-gray-500 rounded-none">
+                          {r.news_headline || '—'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-1.5 justify-end">
+                          <button
+                            id={`chart-toggle-${ticker}-${r.date}`}
+                            onClick={() => setOpenChartDate(isChartOpen ? null : r.date)}
+                            className={`font-mono text-[10px] border px-1.5 py-0.5 transition-colors rounded-none flex items-center gap-1 ${
+                              isChartOpen
+                                ? 'bg-emerald-950/30 text-[#00ff00] border-[#00ff00]/50'
+                                : 'text-gray-400 border-[#262626] hover:text-white hover:border-gray-500'
+                            }`}
+                            title="Toggle 1-Minute Price Action Chart"
+                          >
+                            <Activity size={11} />
+                            <span>{isChartOpen ? 'Close 1m' : '1m Chart'}</span>
+                          </button>
+                          <button
+                            id={`research-${ticker}-${r.date}`}
+                            onClick={() => onResearch(ticker, r.date)}
+                            className="font-mono text-[10px] text-[#00f0ff] border border-[#00f0ff]/30 px-1.5 py-0.5 hover:bg-[#00f0ff]/5 transition-colors rounded-none flex items-center gap-1"
+                            title="Open Research"
+                          >
+                            <ExternalLink size={11} />
+                            <span>Research</span>
+                          </button>
+                          <button
+                            id={`chart-${ticker}-${r.date}`}
+                            onClick={() => window.open(`/daily-charts?date=${r.date}`, '_blank')}
+                            className="font-mono text-[10px] text-gray-600 border border-[#262626] px-1.5 py-0.5 hover:text-white transition-colors rounded-none flex items-center gap-1"
+                            title="Open Daily Charts"
+                          >
+                            <BarChart2 size={11} />
+                            <span>Daily</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {isChartOpen && (
+                      <tr>
+                        <td colSpan={6} className="p-2 bg-black border-b border-[#262626]">
+                          <div className="border border-[#262626] p-1 bg-[#050505]">
+                            <div className="flex items-center justify-between px-2 py-1 bg-black border-b border-[#262626] mb-1">
+                              <span className="font-mono text-[10px] font-bold text-[#00ff00] flex items-center gap-1">
+                                <Activity size={10} /> 1-Minute Intraday Price Action — {ticker} ({r.date})
+                              </span>
+                              <span className="font-mono text-[10px] text-gray-500">
+                                Gap +{fmt1(r.gap_pct)}% · RVOL {fmt1(r.rvol_15m)}x
+                              </span>
+                            </div>
+                            <MiniSessionChart
+                              ticker={ticker}
+                              date={r.date}
+                              gapPct={r.gap_pct}
+                              float={r.float_shares}
+                              rvol={r.rvol_15m}
+                              height={280}
+                              onExpand={(t) => window.open(`/charts?ticker=${t}&date=${r.date}`, '_blank')}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+          {rows.map(r => (
+            <div key={r.date} className="bg-black border border-[#262626] p-2 space-y-1.5">
+              <div className="flex items-center justify-between border-b border-[#1a1a1a] pb-1 font-mono text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-white">{ticker}</span>
+                  <span className="text-gray-500 text-[11px]">{r.date}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[#00ff00] font-bold">+{fmt1(r.gap_pct)}%</span>
+                  {r.rvol_15m != null && <span className="text-amber-400 text-[11px]">{fmt1(r.rvol_15m)}x RVOL</span>}
+                </div>
+              </div>
+              {r.news_headline && (
+                <div className="font-mono text-[10px] text-gray-400 bg-[#0a0a0a] p-1 border border-[#1a1a1a] truncate">
+                  🗞 {r.news_headline}
+                </div>
+              )}
+              <MiniSessionChart
+                ticker={ticker}
+                date={r.date}
+                gapPct={r.gap_pct}
+                float={r.float_shares}
+                rvol={r.rvol_15m}
+                height={260}
+                onExpand={(t) => window.open(`/charts?ticker=${t}&date=${r.date}`, '_blank')}
+              />
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -235,12 +342,13 @@ function SortTh({
 export default function HistoryPage() {
   const router = useRouter()
 
-  const [items,    setItems]    = useState<TickerHistoryItem[]>([])
-  const [sectors,  setSectors]  = useState<string[]>([])
-  const [loading,  setLoading]  = useState(true)
-  const [period,   setPeriod]   = useState<Period>('week')
-  const [sort,     setSort]     = useState<SortKey>('last_seen')
-  const [search,   setSearch]   = useState('')
+  const [items,          setItems]          = useState<TickerHistoryItem[]>([])
+  const [sectors,        setSectors]        = useState<string[]>([])
+  const [loading,        setLoading]        = useState(true)
+  const [period,         setPeriod]         = useState<Period>('week')
+  const [sort,           setSort]           = useState<SortKey>('last_seen')
+  const [search,         setSearch]         = useState('')
+  const [globalViewMode, setGlobalViewMode] = useState<'table' | 'grid'>('table')
 
   const [date,      setDate]     = useState('')
   const [minGap,    setMinGap]   = useState('')
@@ -300,7 +408,31 @@ export default function HistoryPage() {
             {!loading && `${items.length} ticker${items.length !== 1 ? 's' : ''}${date ? ` on ${date}` : period !== 'all' ? ` · ${PERIOD_LABELS[period].toLowerCase()}` : ''}`}
           </p>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
+          {/* Global View Mode Switcher */}
+          <div className="flex items-center bg-black border border-[#262626]">
+            <button
+              onClick={() => setGlobalViewMode('table')}
+              className={`px-2.5 py-1 text-[11px] font-mono flex items-center gap-1.5 transition-colors ${
+                globalViewMode === 'table' ? 'bg-emerald-950/20 text-[#00ff00] font-bold' : 'text-gray-500 hover:text-white'
+              }`}
+              title="Table List View"
+            >
+              <Table size={12} />
+              <span>Table</span>
+            </button>
+            <button
+              onClick={() => setGlobalViewMode('grid')}
+              className={`px-2.5 py-1 text-[11px] font-mono flex items-center gap-1.5 border-l border-[#262626] transition-colors ${
+                globalViewMode === 'grid' ? 'bg-emerald-950/20 text-[#00ff00] font-bold' : 'text-gray-500 hover:text-white'
+              }`}
+              title="1-Minute Intraday Chart Grid View"
+            >
+              <Grid size={12} />
+              <span>1m Chart Grid</span>
+            </button>
+          </div>
+
           <a
             href={getGainersExportUrl({ date, min_gap: minGap, max_float: maxFloat, min_rvol: minRvol, sector, min_price: minPrice, max_price: maxPrice })}
             download="history_export.csv"
@@ -442,71 +574,123 @@ export default function HistoryPage() {
         </div>
       </details>
 
-      {/* Table */}
-      <div className="bg-black border border-[#262626] overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-[#050505] border-b border-[#262626]">
-            <tr>
-              <th className="px-3 py-2 text-left text-[10px] font-mono text-gray-500 uppercase tracking-wider">Ticker</th>
-              <SortTh label="×" sortKey="appearances" current={sort} onSort={handleSort} />
-              <th className="px-3 py-2 text-left text-[10px] font-mono text-gray-500 uppercase tracking-wider hidden md:table-cell">
-                First Seen
-              </th>
-              <SortTh label="Last Seen"  sortKey="last_seen"    current={sort} onSort={handleSort} />
-              <SortTh label="Avg Gap"    sortKey="avg_gap"      current={sort} onSort={handleSort} />
-              <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-500 uppercase tracking-wider hidden lg:table-cell">
-                Best Gap
-              </th>
-              <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-500 uppercase tracking-wider hidden lg:table-cell">
-                Avg RVOL
-              </th>
-              <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-500 uppercase tracking-wider hidden xl:table-cell">
-                Avg Float
-              </th>
-              <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-500 uppercase tracking-wider">
-                Close
-              </th>
-              <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-500 uppercase tracking-wider hidden sm:table-cell">
-                Mkt Cap
-              </th>
-              <th className="px-3 py-2 w-8" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              Array.from({ length: 12 }).map((_, i) => (
-                <tr key={i} className="border-b border-[#1a1a1a]">
-                  {Array.from({ length: 9 }).map((_, j) => (
-                    <td key={j} className="px-3 py-2">
-                      <div className="animate-pulse bg-[#111] h-3 w-16 rounded-none" />
-                    </td>
-                  ))}
-                </tr>
-              ))
-            ) : items.length === 0 ? (
+      {/* Main View: Table or Grid */}
+      {globalViewMode === 'table' ? (
+        <div className="bg-black border border-[#262626] overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-[#050505] border-b border-[#262626]">
               <tr>
-                <td colSpan={9}>
-                  <div className="flex flex-col items-center justify-center py-16 gap-2 bg-[#050505]">
-                    <BarChart2 size={24} className="text-gray-700" />
-                    <span className="text-gray-500 text-xs uppercase tracking-wider font-mono">
-                      No tickers found{search ? ` matching "${search}"` : ' for this period'}
+                <th className="px-3 py-2 text-left text-[10px] font-mono text-gray-500 uppercase tracking-wider">Ticker</th>
+                <SortTh label="×" sortKey="appearances" current={sort} onSort={handleSort} />
+                <th className="px-3 py-2 text-left text-[10px] font-mono text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                  First Seen
+                </th>
+                <SortTh label="Last Seen"  sortKey="last_seen"    current={sort} onSort={handleSort} />
+                <SortTh label="Avg Gap"    sortKey="avg_gap"      current={sort} onSort={handleSort} />
+                <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-500 uppercase tracking-wider hidden lg:table-cell">
+                  Best Gap
+                </th>
+                <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-500 uppercase tracking-wider hidden lg:table-cell">
+                  Avg RVOL
+                </th>
+                <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-500 uppercase tracking-wider hidden xl:table-cell">
+                  Avg Float
+                </th>
+                <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-500 uppercase tracking-wider">
+                  Close
+                </th>
+                <th className="px-3 py-2 text-right text-[10px] font-mono text-gray-500 uppercase tracking-wider hidden sm:table-cell">
+                  Mkt Cap
+                </th>
+                <th className="px-3 py-2 w-8" />
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                Array.from({ length: 12 }).map((_, i) => (
+                  <tr key={i} className="border-b border-[#1a1a1a]">
+                    {Array.from({ length: 9 }).map((_, j) => (
+                      <td key={j} className="px-3 py-2">
+                        <div className="animate-pulse bg-[#111] h-3 w-16 rounded-none" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : items.length === 0 ? (
+                <tr>
+                  <td colSpan={9}>
+                    <div className="flex flex-col items-center justify-center py-16 gap-2 bg-[#050505]">
+                      <BarChart2 size={24} className="text-gray-700" />
+                      <span className="text-gray-500 text-xs uppercase tracking-wider font-mono">
+                        No tickers found{search ? ` matching "${search}"` : ' for this period'}
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                items.map(item => (
+                  <TickerRow
+                    key={item.ticker}
+                    item={item}
+                    period={period}
+                    onResearch={handleResearch}
+                  />
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {loading ? (
+            Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-72 bg-[#050505] border border-[#262626] animate-pulse p-4" />
+            ))
+          ) : items.length === 0 ? (
+            <div className="col-span-full py-16 flex flex-col items-center justify-center bg-[#050505] border border-[#262626]">
+              <BarChart2 size={24} className="text-gray-700 mb-2" />
+              <span className="text-gray-500 text-xs font-mono">No tickers found for this filter</span>
+            </div>
+          ) : (
+            items.map(item => (
+              <div key={item.ticker} className="bg-[#050505] border border-[#262626] p-2 space-y-2">
+                <div className="flex items-center justify-between border-b border-[#1a1a1a] pb-1.5 font-mono text-xs">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-white text-sm">{item.ticker}</span>
+                    {item.sector && <span className="text-[10px] text-gray-500 hidden sm:inline">{item.sector}</span>}
+                    <span className="px-1.5 py-0.5 text-[10px] bg-emerald-950/20 text-[#00ff00] border border-[#00ff00]/25 font-bold">
+                      {item.appearances}× runs
                     </span>
                   </div>
-                </td>
-              </tr>
-            ) : (
-              items.map(item => (
-                <TickerRow
-                  key={item.ticker}
-                  item={item}
-                  period={period}
-                  onResearch={handleResearch}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[#00ff00] font-bold">+{fmt1(item.avg_gap_pct)}%</span>
+                    <button
+                      onClick={() => handleResearch(item.ticker, item.last_seen)}
+                      className="text-[10px] text-[#00f0ff] border border-[#00f0ff]/30 px-1.5 py-0.5 hover:bg-[#00f0ff]/5 flex items-center gap-1"
+                    >
+                      <ExternalLink size={10} /> Research
+                    </button>
+                  </div>
+                </div>
+                <div className="text-[10px] font-mono text-gray-500 flex items-center justify-between px-1">
+                  <span>Last: {item.last_seen}</span>
+                  <span>RVOL: {fmt1(item.avg_rvol)}x</span>
+                  <span>Float: {fmtFloat(item.avg_float_m != null ? item.avg_float_m * 1e6 : null)}</span>
+                </div>
+                <MiniSessionChart
+                  ticker={item.ticker}
+                  date={date || item.last_seen}
+                  gapPct={item.avg_gap_pct}
+                  float={item.avg_float_m != null ? item.avg_float_m * 1e6 : null}
+                  rvol={item.avg_rvol}
+                  height={260}
+                  onExpand={(t) => window.open(`/charts?ticker=${t}&date=${date || item.last_seen}`, '_blank')}
                 />
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
       {/* Legend */}
       <div className="flex items-center gap-4 px-1 font-mono text-[10px] text-gray-600">
@@ -518,7 +702,7 @@ export default function HistoryPage() {
           <span className="w-5 h-5 rounded-full bg-sky-500/20 inline-flex items-center justify-center text-sky-400 font-bold text-[10px]">2</span>
           2–4 appearances
         </span>
-        <span>Click any row to expand individual appearances · click Research to open full analysis</span>
+        <span>Click any row to expand appearances · use [1m Chart] or Gallery Mode to view 1-minute price action</span>
       </div>
     </div>
   )
