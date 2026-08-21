@@ -10,11 +10,12 @@
 
 ## 👤 Session
 * **Status:** Complete.
-* **Stale Screener & MTF Cache Fixes:**
-  - Added 60-second TTL invalidation (`SLOW_REFRESH_SECONDS`) to `ScreenerCache` in `backend/services/screener_cache.py` and `backend/services/live_screener.py` so candidate discovery refreshes automatically.
-  - Updated `LiveGainers.tsx` to poll candidate re-ranking every 15s even when WebSocket is connected, falling back to 3s when disconnected.
-  - Bridged `MTF_SCANNER_UPDATE` Redis messages into `market_service` in `backend/fastapi_app/websocket_alerts.py`.
-  - All 43 backend unit tests and Next.js frontend build passing.
+* **August 2026 Gainers Ingestion & Enrichment:**
+  - Fixed candidate sourcing in `backend/jobs/ingest_gainers.py` using Polygon Grouped Daily API for historical dates + Schwab fundamentals/news/metrics fallback.
+  - Parallelized ticker enrichment with `ThreadPoolExecutor(max_workers=8)`.
+  - Backfilled and fully enriched all 14 trading dates in August 2026 (2026-08-03 through 2026-08-20, total 449 gainers).
+  - Command Center summary table and daily gainers endpoints now show complete, rich top gainers (27–44 qualified stocks per day) with float, catalyst, ATR-14, SMA-20/50, and RS vs SPY.
+
 
 
 

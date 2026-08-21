@@ -95,30 +95,31 @@ def main():
 def fetch_gainers(target_date: str) -> list[dict]:
     """
     Full enrichment pipeline:
-      1. Polygon Snapshot → ticker list
-      2. Polygon Grouped Daily → OHLCV for all tickers in one call
-      3. FMP profile → float, sector (yfinance fallback for float)
-      4. Polygon News → headline
-      5. Filter and return qualified gainers
+      1. Sourcing candidates (Polygon Grouped Daily for historical dates, Schwab movers for live)
+      2. Polygon Grouped Daily → OHLCV for all tickers
+      3. FMP / Schwab profile → float, sector, market cap, avg_volume
+      4. News & Catalyst classification
+      5. Technical metrics (1-min VWAP, ATR-14, SMA-20, SMA-50)
     """
-    # Step 1 — ticker candidates from Polygon snapshot
-    raw_snapshot = _get_polygon_snapshot()
+    raw_snapshot, grouped = _get_candidates_for_date(target_date)
     if not raw_snapshot:
-        log.error("Polygon snapshot returned no tickers — aborting")
+        log.error(f"No candidate tickers found for {target_date} — aborting")
         return []
 
-    log.info(f"Polygon snapshot: {len(raw_snapshot)} tickers")
+    log.info(f"Candidate tickers for {target_date}: {len(raw_snapshot)}")
+    from concurrent.futures import ThreadPoolExecutor
 
-    # Step 2 — Schwab "grouped" daily (stub, returns {})
-    grouped = _get_schwab_grouped_daily(target_date)
-    log.info(f"Schwab grouped daily: {len(grouped)} bars for {target_date}")
+    def _safe_enrich(snap):
+        try:
+            return _enrich_ticker(snap, grouped, target_date)
+        except Exception as e:
+            log.warning(f"Error enriching {snap.get('ticker')}: {e}")
+            return None
 
-    # Step 3–5 — enrich each ticker
-    gainers = []
-    for snap in raw_snapshot:
-        result = _enrich_ticker(snap, grouped, target_date)
-        if result:
-            gainers.append(result)
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        results = list(executor.map(_safe_enrich, raw_snapshot))
+
+    gainers = [r for r in results if r is not None]
 
     # Sort descending by extended change percent
     gainers.sort(key=lambda x: x['extended_change_pct'], reverse=True)
@@ -126,7 +127,7 @@ def fetch_gainers(target_date: str) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
-# Step 1 — Polygon Snapshot (top gainers, extended hours aware)
+# Step 1 — Candidates & Grouped Daily
 # ---------------------------------------------------------------------------
 
 def _get_polygon_snapshot() -> list[dict]:
@@ -135,16 +136,73 @@ def _get_polygon_snapshot() -> list[dict]:
     return snaps[:POLYGON_SNAPSHOT_LIMIT]
 
 
-# ---------------------------------------------------------------------------
-# Step 2 — Schwab Daily Bars (Per-ticker fallback)
-# ---------------------------------------------------------------------------
-
-def _get_schwab_grouped_daily(date: str) -> dict[str, dict]:
-    """
-    Schwab does not support broad grouped daily snapshots. 
-    This is kept as a stub for the enrichment logic to check.
-    """
+def _get_polygon_grouped_daily(target_date: str) -> dict[str, dict]:
+    """Fetch all US equity bars for a given date from Polygon Grouped Daily API."""
+    key = os.getenv('POLYGON_API_KEY')
+    if not key:
+        return {}
+    try:
+        import httpx
+        url = f'https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/{target_date}?adjusted=true&apiKey={key}'
+        resp = httpx.get(url, timeout=15.0)
+        if resp.status_code == 200:
+            data = resp.json()
+            return {item['T']: item for item in data.get('results', []) if 'T' in item}
+    except Exception as e:
+        log.warning(f"Polygon grouped daily fetch failed for {target_date}: {e}")
     return {}
+
+
+def _get_candidates_for_date(target_date: str) -> tuple[list[dict], dict[str, dict]]:
+    """
+    Fetch candidate snapshot list and grouped daily bars for target_date.
+    If Polygon grouped daily is available for target_date, uses it with the previous
+    trading day to discover top historical gainers.
+    Otherwise falls back to live get_gainers_snapshot().
+    """
+    grouped = _get_polygon_grouped_daily(target_date)
+    if grouped:
+        cur = datetime.strptime(target_date, '%Y-%m-%d')
+        prev_grouped = {}
+        for _ in range(5):
+            cur -= timedelta(days=1)
+            if cur.weekday() < 5:
+                prev_date = cur.strftime('%Y-%m-%d')
+                prev_grouped = _get_polygon_grouped_daily(prev_date)
+                if prev_grouped:
+                    break
+
+        candidates = []
+        if prev_grouped:
+            for ticker, bar in grouped.items():
+                if len(ticker) > 5 or '/' in ticker or '.' in ticker:
+                    continue
+                prev_bar = prev_grouped.get(ticker)
+                if not prev_bar:
+                    continue
+                prev_c = prev_bar.get('c', 0)
+                open_px = bar.get('o', 0)
+                close_px = bar.get('c', 0)
+                vol = bar.get('v', 0)
+                if prev_c <= 0 or close_px < MIN_PRICE or close_px > MAX_PRICE or vol < 50000:
+                    continue
+                gap_pct = ((open_px - prev_c) / prev_c) * 100.0
+                ext_pct = ((close_px - prev_c) / prev_c) * 100.0
+                if gap_pct >= MIN_GAP_PCT or ext_pct >= MIN_GAP_PCT:
+                    score = max(gap_pct, ext_pct)
+                    snap = {
+                        'ticker': ticker,
+                        'day': bar,
+                        'prevDay': prev_bar,
+                        'lastTrade': {'p': close_px},
+                        '_score': score,
+                    }
+                    candidates.append(snap)
+            candidates.sort(key=lambda x: -x.get('_score', 0))
+            return candidates[:POLYGON_SNAPSHOT_LIMIT], grouped
+
+    raw_snapshot = _get_polygon_snapshot()
+    return raw_snapshot, grouped
 
 
 # ---------------------------------------------------------------------------
