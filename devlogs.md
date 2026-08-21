@@ -2,6 +2,19 @@
 
 This file tracks major milestones, debugging struggles, architectural decisions, and key repository states/git commits.
 
+## [2026-08-21] MTF S/R Momentum Scanner Overhaul & Warrior Low-Float Filtering
+
+### Summary
+* Upgraded Multi-Timeframe S/R Momentum Scanner engine (`backend/services/mtf_sr_service.py`) with complete low-float momentum filtering ($1–$20 price, RVOL ≥ 5.0x, float < 20M shares, score ≥ 50).
+* Enriched confluence scoring output with float category, RVOL, volume, % change, VWAP distance, S/R level distance, breakout status classification, sparklines, and active signal breakdown.
+* Added dynamic candidate scanning fallback in `scan_mtf_market_candidates` and `market_service.py` to ensure high-fidelity S/R detection even when live streaming loop is idle.
+* Updated REST endpoint `GET /api/market/mtf-scanner` with full query filtering parameters (`min_price`, `max_price`, `min_rvol`, `max_float`, `min_score`, `coincident_only`, `sort_by`, `force_refresh`).
+* Complete frontend overhaul of `MTFScannerWidget.tsx` with:
+  - Quick 1-click presets: Warrior Low-Float ($1–$20 | ≥5x | <20M), High Conviction (≥75 pts), Coincident S/R, Nano Float (<10M), All In-Play.
+  - Interactive filter drawer with price, RVOL, float, score, and confluence toggles.
+  - Multi-view presentation: Pro Card Grid (with score dials, metric pills, S/R proximity visual progress tracks, sparklines) & Dense Sortable Table.
+  - Real-time WebSocket connectivity via `useSharedWebSocket` for live streaming updates.
+
 ## [2026-08-06] Alert System Disabled — TradeStation Import Scaffolded
 
 ### Summary

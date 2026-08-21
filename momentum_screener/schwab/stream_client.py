@@ -1271,15 +1271,34 @@ class SchwabStreamer:
                             })
 
                     # Compute or retrieve S/R levels
+                    fund = self.fundamentals_cache.get(symbol, {})
                     if symbol not in self.mtf_sr_cache:
-                        fund = self.fundamentals_cache.get(symbol, {})
                         daily_candles = [
                             {'close': fund.get('yesterday_close', lp * 0.95), 'high': fund.get('yesterday_high', lp * 1.02), 'low': lp * 0.90}
                         ] * 15
                         self.mtf_sr_cache[symbol] = compute_sr_levels(daily_candles, bars_5m)
 
                     sr_levels = self.mtf_sr_cache[symbol]
-                    res = score_mtf_momentum(symbol, sr_levels, bars_1m, lp)
+                    float_sh = fund.get('shares_outstanding')
+                    total_vol = self.last_known_volume.get(symbol, sum(c.get('volume', 0) for c in bars_1m))
+                    vol_10d = fund.get('vol_10d_avg', 1)
+                    vol_baseline = (vol_10d / 390.0) if vol_10d > 0 else 1.0
+                    rvol_val = round(total_vol / (vol_baseline * 390.0), 2) if (vol_baseline > 0 and total_vol > 0) else 1.0
+                    y_close = fund.get('yesterday_close', 0.0)
+                    gap_val = round(((lp - y_close) / y_close) * 100.0, 2) if y_close > 0 else 0.0
+
+                    res = score_mtf_momentum(
+                        ticker=symbol,
+                        sr_levels=sr_levels,
+                        df_1min=bars_1m,
+                        last_price=lp,
+                        float_shares=float_sh,
+                        rvol=rvol_val,
+                        gap_pct=gap_val,
+                        total_volume=total_vol,
+                        company_name=fund.get('company_name'),
+                        sector=fund.get('sector')
+                    )
 
                     if res['mtf_in_play']:
                         in_play_results.append(res)

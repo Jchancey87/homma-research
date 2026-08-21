@@ -9,6 +9,7 @@ from services.mtf_sr_service import (
     find_coincident_levels,
     compute_sr_levels,
     score_mtf_momentum,
+    filter_mtf_candidates,
 )
 
 
@@ -76,11 +77,62 @@ def test_score_mtf_momentum():
         })
 
     last_price = 10.02
-    result = score_mtf_momentum("AAPL", sr_levels, df_1min, last_price)
+    result = score_mtf_momentum(
+        "AAPL",
+        sr_levels,
+        df_1min,
+        last_price,
+        float_shares=12_500_000,
+        rvol=6.5,
+        gap_pct=18.5,
+        total_volume=2_500_000,
+        company_name="Apple Inc",
+        sector="Technology"
+    )
 
     assert result['ticker'] == "AAPL"
+    assert result['company_name'] == "Apple Inc"
     assert result['score'] >= 50
     assert result['mtf_in_play'] is True
+    assert result['rvol'] == 6.5
+    assert result['float_shares'] == 12_500_000
+    assert result['float_category'] == "Micro (<20M)"
     assert 'DAILY_SR_TEST' in result['signals']
     assert '5MIN_SR_TEST' in result['signals']
     assert 'COINCIDENT_LEVEL' in result['signals']
+    assert result['breakout_status'] == 'COINCIDENT_CONFLUENCE'
+
+
+def test_filter_mtf_candidates():
+    items = [
+        # Pass all ($1-$20, >= 5x rvol, <= 20M float, >= 50 score)
+        {'ticker': 'QUAL1', 'price': 4.50, 'rvol': 7.2, 'float_shares': 8_000_000, 'score': 80, 'is_coincident': True},
+        # Fail price (> $20)
+        {'ticker': 'FAIL_PRICE', 'price': 25.00, 'rvol': 8.0, 'float_shares': 5_000_000, 'score': 85, 'is_coincident': False},
+        # Fail price (< $1)
+        {'ticker': 'FAIL_PENNY', 'price': 0.75, 'rvol': 12.0, 'float_shares': 2_000_000, 'score': 90, 'is_coincident': False},
+        # Fail RVOL (< 5x)
+        {'ticker': 'FAIL_RVOL', 'price': 5.00, 'rvol': 3.2, 'float_shares': 4_000_000, 'score': 70, 'is_coincident': False},
+        # Fail float (> 20M)
+        {'ticker': 'FAIL_FLOAT', 'price': 6.50, 'rvol': 6.0, 'float_shares': 35_000_000, 'score': 75, 'is_coincident': False},
+        # Fail score (< 50)
+        {'ticker': 'FAIL_SCORE', 'price': 3.20, 'rvol': 5.5, 'float_shares': 6_000_000, 'score': 40, 'is_coincident': False},
+        # Pass 2
+        {'ticker': 'QUAL2', 'price': 12.80, 'rvol': 5.1, 'float_shares': 15_000_000, 'score': 65, 'is_coincident': False},
+    ]
+
+    filtered = filter_mtf_candidates(
+        items,
+        min_price=1.0,
+        max_price=20.0,
+        min_rvol=5.0,
+        max_float=20_000_000,
+        min_score=50
+    )
+    assert len(filtered) == 2
+    assert [x['ticker'] for x in filtered] == ['QUAL1', 'QUAL2']
+
+    # Test coincident only filter
+    coincident_filtered = filter_mtf_candidates(items, min_price=1.0, max_price=20.0, min_rvol=5.0, max_float=20_000_000, min_score=50, coincident_only=True)
+    assert len(coincident_filtered) == 1
+    assert coincident_filtered[0]['ticker'] == 'QUAL1'

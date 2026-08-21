@@ -133,10 +133,28 @@ async def sector_strength():
 # ---------------------------------------------------------------------------
 
 @router.get("/mtf-scanner")
-async def get_mtf_scanner_results():
-    """Get current MTF S/R Momentum Scanner active tickers (score >= 50)."""
+async def get_mtf_scanner_results(
+    min_price: float = Query(1.0, description="Minimum stock price ($)"),
+    max_price: float = Query(20.0, description="Maximum stock price ($)"),
+    min_rvol: float = Query(5.0, description="Minimum Relative Volume (RVOL)"),
+    max_float: Optional[float] = Query(20_000_000, description="Maximum float shares"),
+    min_score: int = Query(50, description="Minimum Confluence Score"),
+    coincident_only: bool = Query(False, description="Filter for Coincident S/R levels only"),
+    sort_by: str = Query("score", description="Sort field: score, rvol, float, gain, price"),
+    force_refresh: bool = Query(False, description="Force dynamic candidate scan refresh"),
+):
+    """Get current MTF S/R Momentum Scanner active tickers with customizable filters."""
     from services.market_service import get_mtf_scanner_state
-    return await get_mtf_scanner_state()
+    return await get_mtf_scanner_state(
+        min_price=min_price,
+        max_price=max_price,
+        min_rvol=min_rvol,
+        max_float=max_float,
+        min_score=min_score,
+        coincident_only=coincident_only,
+        sort_by=sort_by,
+        force_refresh=force_refresh,
+    )
 
 
 # ---------------------------------------------------------------------------

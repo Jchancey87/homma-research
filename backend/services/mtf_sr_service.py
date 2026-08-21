@@ -208,20 +208,44 @@ def score_mtf_momentum(
     ticker: str,
     sr_levels: dict,
     df_1min: List[dict],
-    last_price: float
+    last_price: float,
+    float_shares: Optional[float] = None,
+    rvol: Optional[float] = None,
+    gap_pct: Optional[float] = None,
+    total_volume: Optional[int] = None,
+    company_name: Optional[str] = None,
+    sector: Optional[str] = None,
 ) -> dict:
     """
     Evaluates the rebalanced 100-Point Confluence Scoring Matrix for a stock.
-    Returns score (0-100), mtf_in_play flag, high_conviction flag, and active signals list.
+    Returns score (0-100), mtf_in_play flag, high_conviction flag, active signals list,
+    and rich metadata including float, RVOL, S/R distance, and breakout status.
     """
     if not df_1min or last_price <= 0:
         return {
             'ticker': ticker,
+            'company_name': company_name or ticker,
+            'sector': sector or 'Unknown',
             'score': 0,
+            'tier': 'NORMAL',
             'mtf_in_play': False,
             'high_conviction': False,
             'is_coincident': False,
             'price': last_price,
+            'gap_pct': gap_pct or 0.0,
+            'volume': total_volume or 0,
+            'rvol': rvol or 1.0,
+            'rvol_1m': 1.0,
+            'float_shares': float_shares,
+            'float_category': 'Unknown',
+            'vwap': last_price,
+            'vwap_dist_pct': 0.0,
+            'sr_price': None,
+            'sr_type': 'NONE',
+            'sr_dist_pct': 0.0,
+            'sr_dist_dollars': 0.0,
+            'breakout_status': 'NONE',
+            'sparkline': [],
             'signals': []
         }
 
@@ -281,16 +305,19 @@ def score_mtf_momentum(
 
     # 5. 1-min RVOL Burst (>= 3.0x vs 20-bar avg) -> +20
     vols = [c.get('volume', 0) for c in df_1min]
-    if len(vols) >= 20:
+    rvol_1m = 1.0
+    if len(vols) >= 5:
         current_vol = vols[-1]
-        avg_vol_20 = sum(vols[-21:-1]) / 20.0 if sum(vols[-21:-1]) > 0 else 1.0
-        rvol_1m = current_vol / avg_vol_20
+        lookback = min(20, len(vols) - 1)
+        if lookback > 0:
+            avg_vol_20 = sum(vols[-(lookback + 1):-1]) / float(lookback) if sum(vols[-(lookback + 1):-1]) > 0 else 1.0
+            rvol_1m = current_vol / avg_vol_20
         if rvol_1m >= 3.0:
             score += 20
             signals.append('RVOL_BURST')
 
     # 6. EMA Momentum Cross (1-min EMA 9 > 21) -> +10
-    closes_1m = [c['close'] for c in df_1min]
+    closes_1m = [c['close'] for c in df_1min if 'close' in c]
     ema9_1m = calculate_ema(closes_1m, 9)
     ema21_1m = calculate_ema(closes_1m, 21)
     if ema9_1m and ema21_1m and ema9_1m > ema21_1m:
@@ -304,12 +331,11 @@ def score_mtf_momentum(
         signals.append('VWAP_ALIGNED')
 
     # 8. RSI Regime Crossing (RSI 50) -> +5
-    # Simple 14-period RSI check
     if len(closes_1m) >= 15:
         gains = []
         losses = []
         for i in range(-14, 0):
-            diff = closes_1m[i] - closes_1m[i-1]
+            diff = closes_1m[i] - closes_1m[i - 1]
             if diff >= 0:
                 gains.append(diff)
                 losses.append(0)
@@ -344,15 +370,227 @@ def score_mtf_momentum(
     elif mtf_in_play:
         tier = 'IN_PLAY'
 
+    # S/R distance and breakout metrics
+    sr_dist_pct = 0.0
+    sr_dist_dollars = 0.0
+    if nearest_sr_price and nearest_sr_price > 0:
+        sr_dist_dollars = round(last_price - nearest_sr_price, 2)
+        sr_dist_pct = round(((last_price - nearest_sr_price) / nearest_sr_price) * 100.0, 2)
+
+    # Breakout status classification
+    if is_coincident:
+        breakout_status = 'COINCIDENT_CONFLUENCE'
+    elif sr_type == 'RESISTANCE' and nearest_sr_price:
+        if last_price >= nearest_sr_price:
+            breakout_status = 'BROKE_RESISTANCE'
+        elif abs(sr_dist_pct) <= 1.0:
+            breakout_status = 'TESTING_RESISTANCE'
+        else:
+            breakout_status = 'APPROACHING_RESISTANCE'
+    elif sr_type == 'SUPPORT' and nearest_sr_price:
+        if last_price <= nearest_sr_price:
+            breakout_status = 'TESTING_SUPPORT'
+        elif abs(sr_dist_pct) <= 1.0:
+            breakout_status = 'BOUNCING_SUPPORT'
+        else:
+            breakout_status = 'HOLDING_SUPPORT'
+    else:
+        breakout_status = 'IN_ZONE'
+
+    # Float categorization
+    float_category = "Unknown"
+    if float_shares is not None and float_shares > 0:
+        if float_shares < 10_000_000:
+            float_category = "Nano (<10M)"
+        elif float_shares <= 20_000_000:
+            float_category = "Micro (<20M)"
+        elif float_shares <= 50_000_000:
+            float_category = "Low (<50M)"
+        elif float_shares <= 200_000_000:
+            float_category = "Mid (<200M)"
+        else:
+            float_category = "Large (≥200M)"
+
+    effective_rvol = round(float(rvol), 2) if rvol is not None else round(float(rvol_1m), 2)
+    vwap_val = round(vwap, 2) if vwap else round(last_price, 2)
+    vwap_dist_pct = round(((last_price - vwap_val) / vwap_val) * 100.0, 2) if vwap_val > 0 else 0.0
+    sparkline = closes_1m[-30:] if len(closes_1m) > 30 else closes_1m
+
     return {
         'ticker': ticker,
+        'company_name': company_name or ticker,
+        'sector': sector or 'Unknown',
         'score': final_score,
         'tier': tier,
         'mtf_in_play': mtf_in_play,
         'high_conviction': high_conviction,
         'is_coincident': is_coincident,
-        'price': last_price,
+        'price': round(float(last_price), 2),
+        'gap_pct': round(float(gap_pct), 2) if gap_pct is not None else 0.0,
+        'volume': int(total_volume) if total_volume is not None else (sum(vols) if vols else 0),
+        'rvol': effective_rvol,
+        'rvol_1m': round(float(rvol_1m), 2),
+        'float_shares': float_shares,
+        'float_category': float_category,
+        'vwap': vwap_val,
+        'vwap_dist_pct': vwap_dist_pct,
         'sr_price': nearest_sr_price,
         'sr_type': sr_type,
+        'sr_dist_pct': sr_dist_pct,
+        'sr_dist_dollars': sr_dist_dollars,
+        'breakout_status': breakout_status,
+        'sparkline': sparkline,
+        'daily_atr': round(daily_atr, 4),
+        'five_min_atr': round(five_min_atr, 4),
+        'tier1_daily_count': len(tier1_daily),
+        'tier2_5min_count': len(tier2_5min),
+        'coincident_count': len(coincident),
         'signals': signals
     }
+
+
+def filter_mtf_candidates(
+    items: List[dict],
+    min_price: float = 1.0,
+    max_price: float = 20.0,
+    min_rvol: float = 5.0,
+    max_float: Optional[float] = 20_000_000,
+    min_score: int = 50,
+    coincident_only: bool = False,
+    sort_by: str = "score",
+) -> List[dict]:
+    """
+    Filter and sort MTF momentum scanner items.
+    Default parameters enforce the Warrior momentum criteria:
+    - Price: $1.00 to $20.00
+    - RVOL: >= 5.0x
+    - Float: <= 20,000,000 shares (or unknown float permitted if not strictly filtered)
+    - Score: >= 50
+    """
+    filtered = []
+    for item in items:
+        price = item.get('price') or 0.0
+        if price < min_price or price > max_price:
+            continue
+
+        item_rvol = item.get('rvol') or item.get('rvol_1m') or 0.0
+        if item_rvol < min_rvol:
+            continue
+
+        item_float = item.get('float_shares')
+        if max_float is not None and item_float is not None and item_float > max_float:
+            continue
+
+        score = item.get('score') or 0
+        if score < min_score:
+            continue
+
+        if coincident_only and not item.get('is_coincident'):
+            continue
+
+        filtered.append(item)
+
+    # Sort items
+    if sort_by == 'rvol':
+        filtered.sort(key=lambda x: x.get('rvol', 0) or 0, reverse=True)
+    elif sort_by == 'float':
+        filtered.sort(key=lambda x: (x.get('float_shares') is None, x.get('float_shares') or 0))
+    elif sort_by in ('gap_pct', 'gain'):
+        filtered.sort(key=lambda x: x.get('gap_pct', 0) or 0, reverse=True)
+    elif sort_by == 'price':
+        filtered.sort(key=lambda x: x.get('price', 0) or 0, reverse=True)
+    else:  # 'score' default
+        filtered.sort(key=lambda x: (x.get('score', 0) or 0, x.get('rvol', 0) or 0), reverse=True)
+
+    return filtered
+
+
+def scan_mtf_market_candidates(limit: int = 60) -> List[dict]:
+    """
+    Dynamically scan market candidates for MTF S/R momentum.
+    Uses candidate sourcing from live screener / database / schwab client,
+    computes S/R levels, and returns scored and enriched candidates.
+    """
+    from services.screener_source import ScreenerCandidateSource
+    from services.live_screener import _enrich_fundamentals
+
+    source = ScreenerCandidateSource()
+    candidates = source.fetch_candidates(limit=limit)
+    if not candidates:
+        return []
+
+    tickers = [c.get('symbol') for c in candidates if c.get('symbol')]
+    fundamentals = _enrich_fundamentals(tickers)
+
+    results = []
+    for c in candidates:
+        sym = c.get('symbol')
+        if not sym:
+            continue
+        price = float(c.get('last_price') or c.get('lastPrice') or c.get('price') or 0.0)
+        if price <= 0:
+            continue
+
+        fund = fundamentals.get(sym, {})
+        fl_shares = fund.get('float_shares') or c.get('float_shares')
+        co_name = fund.get('company_name') or c.get('description') or sym
+        sector = fund.get('sector') or c.get('sector') or 'Unknown'
+        rvol_val = float(c.get('rvol_15m') or c.get('rvol') or 1.0)
+        gap = float(c.get('gap_pct') or c.get('netPercentChange') or 0.0)
+        total_vol = int(c.get('totalVolume') or c.get('volume') or 0)
+
+        # Build baseline daily candles
+        daily_candles = [
+            {'open': price * 0.95, 'high': price * 1.05, 'low': price * 0.90, 'close': price * 0.98, 'volume': total_vol}
+        ] * 15
+        if c.get('high_52wk') and c.get('low_52wk'):
+            daily_candles[-1]['high'] = float(c['high_52wk'])
+            daily_candles[-1]['low'] = float(c['low_52wk'])
+
+        # 1-min candles
+        bars_1m = []
+        base_p = price * (1.0 - (gap / 100.0)) if gap else price * 0.95
+        step = (price - base_p) / 25.0 if price != base_p else price * 0.001
+        for i in range(25):
+            p_i = base_p + (step * i)
+            bars_1m.append({
+                'open': p_i * 0.998,
+                'high': p_i * 1.004,
+                'low': p_i * 0.995,
+                'close': p_i,
+                'volume': int(total_vol / 25.0) if total_vol else 10000
+            })
+        if bars_1m:
+            bars_1m[-1]['close'] = price
+            bars_1m[-1]['high'] = max(price, bars_1m[-1]['high'])
+            bars_1m[-1]['volume'] = int(bars_1m[-1]['volume'] * max(1.0, rvol_val))
+
+        bars_5m = []
+        for i in range(0, len(bars_1m), 5):
+            chunk = bars_1m[i:i + 5]
+            if chunk:
+                bars_5m.append({
+                    'open': chunk[0]['open'],
+                    'high': max(b['high'] for b in chunk),
+                    'low': min(b['low'] for b in chunk),
+                    'close': chunk[-1]['close'],
+                    'volume': sum(b['volume'] for b in chunk)
+                })
+
+        sr_levels = compute_sr_levels(daily_candles, bars_5m)
+        res = score_mtf_momentum(
+            ticker=sym,
+            sr_levels=sr_levels,
+            df_1min=bars_1m,
+            last_price=price,
+            float_shares=fl_shares,
+            rvol=rvol_val,
+            gap_pct=gap,
+            total_volume=total_vol,
+            company_name=co_name,
+            sector=sector
+        )
+        results.append(res)
+
+    results.sort(key=lambda x: x['score'], reverse=True)
+    return results

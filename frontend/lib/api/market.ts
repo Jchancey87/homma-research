@@ -9,6 +9,7 @@ import {
   Observation,
   MarketBreadthData,
   MTFScannerData,
+  MTFFilters,
   EconomicEvent,
   MomentumBreadthData,
   CommandSummaryData,
@@ -29,8 +30,8 @@ export const getEconomicCalendar = () =>
 export const getMarketBreadth = () =>
   api.get<MarketBreadthData>('/api/market/breadth').then(r => r.data)
 
-export const getMTFScanner = () =>
-  api.get<MTFScannerData>('/api/market/mtf-scanner').then(r => r.data)
+export const getMTFScanner = (filters?: MTFFilters) =>
+  api.get<MTFScannerData>('/api/market/mtf-scanner', { params: filters }).then(r => r.data)
 
 export const getMomentumBreadth = (priceFilter = true) =>
   api.get<MomentumBreadthData>('/api/market/momentum-breadth', {

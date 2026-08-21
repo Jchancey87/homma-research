@@ -76,13 +76,61 @@ _mtf_scanner_cache: dict = {"timestamp": None, "in_play": []}
 
 
 def set_mtf_scanner_state(in_play_items: list):
-    """Update active MTF scanner items from background streaming task."""
-    import time
+    """Update active MTF scanner items from background streaming task or dynamic scan."""
     _mtf_scanner_cache["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     _mtf_scanner_cache["in_play"] = in_play_items
 
 
-async def get_mtf_scanner_state() -> dict:
-    """Retrieve active MTF scanner state."""
-    return _mtf_scanner_cache
+async def get_mtf_scanner_state(
+    min_price: float = 1.0,
+    max_price: float = 20.0,
+    min_rvol: float = 5.0,
+    max_float: Optional[float] = 20_000_000,
+    min_score: int = 50,
+    coincident_only: bool = False,
+    sort_by: str = "score",
+    force_refresh: bool = False,
+) -> dict:
+    """Retrieve active MTF scanner state with customizable momentum/confluence filters."""
+    from services.mtf_sr_service import filter_mtf_candidates, scan_mtf_market_candidates
+
+    raw_items = _mtf_scanner_cache.get("in_play", [])
+
+    # If cache is empty or force_refresh requested, scan candidates dynamically
+    if not raw_items or force_refresh:
+        try:
+            scanned = scan_mtf_market_candidates(limit=60)
+            if scanned:
+                set_mtf_scanner_state(scanned)
+                raw_items = scanned
+        except Exception as e:
+            log.warning("Dynamic MTF market candidate scan failed: %s", e)
+
+    filtered_items = filter_mtf_candidates(
+        raw_items,
+        min_price=min_price,
+        max_price=max_price,
+        min_rvol=min_rvol,
+        max_float=max_float,
+        min_score=min_score,
+        coincident_only=coincident_only,
+        sort_by=sort_by,
+    )
+
+    return {
+        "timestamp": _mtf_scanner_cache.get("timestamp") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "filters_applied": {
+            "min_price": min_price,
+            "max_price": max_price,
+            "min_rvol": min_rvol,
+            "max_float": max_float,
+            "min_score": min_score,
+            "coincident_only": coincident_only,
+            "sort_by": sort_by,
+        },
+        "total_scanned": len(raw_items),
+        "total_in_play": len(filtered_items),
+        "in_play": filtered_items,
+    }
+
 

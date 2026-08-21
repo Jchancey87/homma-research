@@ -26,7 +26,7 @@ async function MTFScannerPanel() {
     scannerData = await getMTFScanner()
   } catch {}
 
-  return <MTFScannerWidget items={scannerData.in_play} />
+  return <MTFScannerWidget initialData={scannerData} items={scannerData.in_play} />
 }
 
 // ── Dashboard Header ──────────────────────────────────────────────────────────

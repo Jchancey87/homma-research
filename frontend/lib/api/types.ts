@@ -59,19 +59,52 @@ export interface LatestGainersSummary {
 
 export interface MTFInPlayItem {
   ticker: string
+  company_name?: string
+  sector?: string
   score: number
   tier: 'HIGH_CONVICTION' | 'IN_PLAY' | 'NORMAL'
   mtf_in_play: boolean
   high_conviction: boolean
   is_coincident: boolean
   price: number
+  gap_pct?: number
+  volume?: number
+  rvol?: number
+  rvol_1m?: number
+  float_shares?: number | null
+  float_category?: string
+  vwap?: number
+  vwap_dist_pct?: number
   sr_price: number | null
   sr_type: string
+  sr_dist_pct?: number
+  sr_dist_dollars?: number
+  breakout_status?: string
+  sparkline?: number[]
+  daily_atr?: number
+  five_min_atr?: number
+  tier1_daily_count?: number
+  tier2_5min_count?: number
+  coincident_count?: number
   signals: string[]
+}
+
+export interface MTFFilters {
+  min_price?: number
+  max_price?: number
+  min_rvol?: number
+  max_float?: number | null
+  min_score?: number
+  coincident_only?: boolean
+  sort_by?: string
+  force_refresh?: boolean
 }
 
 export interface MTFScannerData {
   timestamp: string | null
+  filters_applied?: MTFFilters
+  total_scanned?: number
+  total_in_play?: number
   in_play: MTFInPlayItem[]
 }
 
