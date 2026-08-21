@@ -10,10 +10,13 @@
 
 ## 👤 Session
 * **Status:** Complete.
-* **Command Center History Fix:** Fixed `sys.path` in `backend/fastapi_app/scheduler.py` so background scheduler worker threads can import `momentum_screener` root package without throwing `ModuleNotFoundError`. Backfilled all missing dates (2026-07-30 through 2026-08-12) into `daily_gainers` table. Command Center table now shows complete history up to today.
-* **Daily 8 PM Email Report Fix:** Registered `_daily_analysis_report` in `backend/fastapi_app/scheduler.py` at 8:20 PM ET Mon-Fri (right after nightly gainer ingest). Refactored `backend/jobs/daily_analysis_report.py` to expose `run_report_for_date`. Verified email dispatch cleanly.
-* **Stale Continuation Expiration Query Fix:** Fixed SQL type error in `_expire_continuation_picks` (`date::date < (CURRENT_DATE - INTERVAL '3 days')::date`).
-* **Deploy & Verification:** 34 backend unit tests passing, Next.js build green, pushed to `master`, and deployed to PM2 production.
+* **Stale Screener & MTF Cache Fixes:**
+  - Added 60-second TTL invalidation (`SLOW_REFRESH_SECONDS`) to `ScreenerCache` in `backend/services/screener_cache.py` and `backend/services/live_screener.py` so candidate discovery refreshes automatically.
+  - Updated `LiveGainers.tsx` to poll candidate re-ranking every 15s even when WebSocket is connected, falling back to 3s when disconnected.
+  - Bridged `MTF_SCANNER_UPDATE` Redis messages into `market_service` in `backend/fastapi_app/websocket_alerts.py`.
+  - All 43 backend unit tests and Next.js frontend build passing.
+
+
 
 
 ### 1. Codebase Architecture Refactoring (Chunks 1–5 Completed)

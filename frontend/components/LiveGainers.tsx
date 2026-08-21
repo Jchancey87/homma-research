@@ -91,6 +91,7 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = EMP
   const [watchlist, setWatchlist]     = useState<WatchlistItem[]>(initialWatchlist)
   const [watchlistLoading, setWatchlistLoading] = useState(false)
   const wsConnectedRef = useRef(wsConnected)
+  const lastPolledRef = useRef<number>(Date.now())
   useEffect(() => { wsConnectedRef.current = wsConnected }, [wsConnected])
   const [priceFilterEnabled, setPriceFilterEnabled] = useState(true)
 
@@ -140,8 +141,14 @@ export default function LiveGainers({ initialSnap = null, initialWatchlist = EMP
     const startPolling = () => {
       if (timerRef.current) clearInterval(timerRef.current)
       timerRef.current = setInterval(() => {
-        if (document.visibilityState === 'visible' && !wsConnectedRef.current) {
-          fetchData()
+        if (document.visibilityState === 'visible') {
+          const isWs = wsConnectedRef.current
+          const now = Date.now()
+          // Poll every 3s if WS disconnected (price + list), or every 15s if WS connected (candidate discovery + re-rank)
+          if (!isWs || (now - lastPolledRef.current >= 15000)) {
+            lastPolledRef.current = now
+            fetchData()
+          }
         }
       }, 3000)
     }

@@ -43,14 +43,22 @@ async def redis_subscriber():
                     payload = None
                     
                     if channel == 'screener:alerts':
-                        msg_dict = {"type": "alert", "data": parsed_data}
-                        # Keep backward compatibility by embedding symbol and alert_type at root
-                        if isinstance(parsed_data, dict):
-                            if "symbol" in parsed_data:
-                                msg_dict["symbol"] = parsed_data["symbol"]
-                            if "alert_type" in parsed_data:
-                                msg_dict["alert_type"] = parsed_data["alert_type"]
-                        payload = json.dumps(msg_dict)
+                        if isinstance(parsed_data, dict) and parsed_data.get('type') == 'MTF_SCANNER_UPDATE':
+                            try:
+                                from services.market_service import set_mtf_scanner_state
+                                set_mtf_scanner_state(parsed_data.get('in_play', []))
+                            except Exception as mtf_err:
+                                logger.warning("Failed to update MTF scanner state in market_service: %s", mtf_err)
+                            payload = json.dumps(parsed_data)
+                        else:
+                            msg_dict = {"type": "alert", "data": parsed_data}
+                            # Keep backward compatibility by embedding symbol and alert_type at root
+                            if isinstance(parsed_data, dict):
+                                if "symbol" in parsed_data:
+                                    msg_dict["symbol"] = parsed_data["symbol"]
+                                if "alert_type" in parsed_data:
+                                    msg_dict["alert_type"] = parsed_data["alert_type"]
+                            payload = json.dumps(msg_dict)
                         
                     elif channel == 'screener:quotes':
                         if isinstance(parsed_data, dict):

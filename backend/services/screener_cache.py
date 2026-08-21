@@ -28,13 +28,16 @@ class ScreenerCache:
         self._minute_cache: Dict[str, tuple] = {}   # ticker -> (ts, metrics_dict)
         self._daily_cache: Dict[str, tuple] = {}    # ticker -> (ts, data_dict)
         self._last_update_ts: Dict[str, float] = {} # ticker -> timestamp of last update
+        self._last_refresh_ts: float = 0.0          # timestamp of last full REST refresh
 
-    def get_cache_snapshot(self) -> dict:
+    def get_cache_snapshot(self, ttl_seconds: Optional[float] = None) -> dict:
         with self._cache_lock:
             if self._cache['gainers']:
+                if ttl_seconds is not None:
+                    if time.time() - self._last_refresh_ts > ttl_seconds:
+                        return {}
                 return dict(self._cache)
             return {}
-
 
     def update_cache(self, gainers: List[dict], session: str = "REGULAR") -> dict:
         now = time.time()
@@ -43,6 +46,7 @@ class ScreenerCache:
             self._cache['gainers'] = gainers
             self._cache['fetched_at'] = iso_now
             self._cache['session'] = session
+            self._last_refresh_ts = now
             for g in gainers:
                 t = g.get('ticker')
                 if t:

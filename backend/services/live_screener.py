@@ -163,7 +163,7 @@ def _enrich_fundamentals(tickers: List[str]) -> Dict[str, dict]:
 
 def refresh_cache(force: bool = False) -> dict:
     """Full pipeline refresh: candidate sourcing -> quotes -> metrics -> cache update."""
-    existing = screener_cache.get_cache_snapshot()
+    existing = screener_cache.get_cache_snapshot(ttl_seconds=SLOW_REFRESH_SECONDS)
     if existing and not force:
         return existing
 

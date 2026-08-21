@@ -63,6 +63,12 @@ def test_screener_cache_thread_safety():
     assert snapshot['gainers'][0]['last_price'] == 160.0
     assert snapshot['gainers'][0]['gap_pct'] == 60.0
 
+    # TTL validation: within TTL returns snapshot, beyond TTL returns empty
+    assert cache.get_cache_snapshot(ttl_seconds=60.0) != {}
+    cache._last_refresh_ts = time.time() - 61.0
+    assert cache.get_cache_snapshot(ttl_seconds=60.0) == {}
+
+
 
 def test_live_screener_orchestrator():
     """Verify live_screener orchestrator returns structured gainers payload."""
